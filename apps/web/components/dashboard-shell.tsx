@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import {
   ArrowRight,
@@ -63,7 +64,11 @@ export type DashboardData = {
   reports: DashboardReport[];
 };
 
-const navigation = [
+const navigation: Array<{
+  href: Route;
+  label: string;
+  icon: typeof LayoutDashboard;
+}> = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/assessments", label: "Assessments", icon: ShieldCheck },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
