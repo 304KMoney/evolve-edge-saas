@@ -1,0 +1,323 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  ANALYST
+  MEMBER
+  VIEWER
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  PAUSED
+}
+
+enum AssessmentStatus {
+  DRAFT
+  INTAKE_IN_PROGRESS
+  INTAKE_SUBMITTED
+  ANALYSIS_QUEUED
+  ANALYSIS_RUNNING
+  REPORT_DRAFT_READY
+  REPORT_PUBLISHED
+  ARCHIVED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum FindingSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RecommendationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ReportStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
+}
+
+model User {
+  id             String               @id @default(cuid())
+  email          String               @unique
+  firstName      String?
+  lastName       String?
+  authProviderId String?              @unique
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  memberships    OrganizationMember[]
+  createdReports Report[]             @relation("ReportCreatedBy")
+  auditLogs      AuditLog[]
+}
+
+model Organization {
+  id                  String                  @id @default(cuid())
+  name                String
+  slug                String                  @unique
+  industry            String?
+  sizeBand            String?
+  country             String?
+  regulatoryProfile   Json?
+  aiUsageSummary      String?
+  currentPostureScore Int?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  members             OrganizationMember[]
+  subscriptions       Subscription[]
+  assessments         Assessment[]
+  reports             Report[]
+  frameworkSelections OrganizationFramework[]
+  vendors             Vendor[]
+  models              AIModel[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  role           UserRole
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model Plan {
+  id                     String         @id @default(cuid())
+  code                   String         @unique
+  name                   String
+  billingInterval        String
+  priceCents             Int
+  activeAssessmentsLimit Int
+  seatsLimit             Int
+  frameworksLimit        Int
+  features               Json
+  subscriptions          Subscription[]
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  organizationId       String
+  planId               String
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  organization         Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                 Plan               @relation(fields: [planId], references: [id])
+}
+
+model Framework {
+  id            String                  @id @default(cuid())
+  code          String                  @unique
+  name          String
+  category      String
+  version       String?
+  controls      FrameworkControl[]
+  organizations OrganizationFramework[]
+}
+
+model FrameworkControl {
+  id          String    @id @default(cuid())
+  frameworkId String
+  code        String
+  title       String
+  description String?
+  framework   Framework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+
+  @@unique([frameworkId, code])
+}
+
+model OrganizationFramework {
+  id             String       @id @default(cuid())
+  organizationId String
+  frameworkId    String
+  selectedAt     DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  framework      Framework    @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, frameworkId])
+}
+
+model Assessment {
+  id              String              @id @default(cuid())
+  organizationId  String
+  name            String
+  status          AssessmentStatus    @default(DRAFT)
+  postureScore    Int?
+  riskLevel       String?
+  intakeVersion   Int                 @default(1)
+  submittedAt     DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sections        AssessmentSection[]
+  evidenceFiles   EvidenceFile[]
+  analysisJobs    AnalysisJob[]
+  findings        Finding[]
+  recommendations Recommendation[]
+  reports         Report[]
+}
+
+model AssessmentSection {
+  id          String     @id @default(cuid())
+  assessmentId String
+  key         String
+  title       String
+  status      String
+  orderIndex  Int
+  responses   Json?
+  completedAt DateTime?
+  assessment  Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, key])
+}
+
+model EvidenceFile {
+  id           String     @id @default(cuid())
+  assessmentId String
+  fileName     String
+  storageKey   String
+  mimeType     String?
+  uploadedAt   DateTime   @default(now())
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
+
+model AnalysisJob {
+  id           String     @id @default(cuid())
+  assessmentId String
+  provider     String
+  status       JobStatus  @default(QUEUED)
+  jobType      String
+  inputPayload Json
+  outputPayload Json?
+  errorMessage String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
+
+model Finding {
+  id                 String          @id @default(cuid())
+  assessmentId       String
+  title              String
+  summary            String
+  severity           FindingSeverity
+  riskDomain         String
+  impactedFrameworks Json
+  score              Int?
+  sortOrder          Int             @default(0)
+  assessment         Assessment      @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
+
+model Recommendation {
+  id               String                 @id @default(cuid())
+  assessmentId     String
+  title            String
+  description      String
+  priority         RecommendationPriority
+  ownerRole        String?
+  effort           String?
+  targetTimeline   String?
+  relatedFindingIds Json?
+  sortOrder        Int                    @default(0)
+  assessment       Assessment             @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id              String       @id @default(cuid())
+  organizationId  String
+  assessmentId    String
+  createdByUserId String?
+  title           String
+  versionLabel    String
+  status          ReportStatus @default(DRAFT)
+  reportJson      Json
+  pdfUrl          String?
+  publishedAt     DateTime?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assessment      Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  createdBy       User?        @relation("ReportCreatedBy", fields: [createdByUserId], references: [id])
+}
+
+model Vendor {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  category       String?
+  riskNotes      String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AIModel {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  provider       String
+  usageContext   String?
+  riskNotes      String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id             String       @id @default(cuid())
+  organizationId String
+  type           String
+  title          String
+  body           String
+  actionUrl      String?
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id])
+}

@@ -1,0 +1,2302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Security Quick Audit Framework | Evolve Edge AI Security</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+  :root {
+    --navy:       #070E1B;
+    --navy-mid:   #0D1A30;
+    --navy-light: #132240;
+    --blue:       #1A6EF5;
+    --blue-light: #3D8EFF;
+    --blue-glow:  rgba(26,110,245,0.18);
+    --cyan:       #00D4FF;
+    --gold:       #FFB800;
+    --gold-light: #FFD060;
+    --red:        #FF4D6D;
+    --green:      #00C896;
+    --purple:     #8B5CF6;
+    --orange:     #FF7043;
+    --white:      #FFFFFF;
+    --grey-100:   #F4F6FA;
+    --grey-200:   #E2E8F0;
+    --grey-400:   #94A3B8;
+    --grey-600:   #475569;
+    --text-body:  #CBD5E1;
+    --text-muted: #64748B;
+    --border:     rgba(255,255,255,0.07);
+    --card-bg:    rgba(255,255,255,0.035);
+    --radius:     14px;
+    --radius-lg:  22px;
+    --shadow:     0 8px 40px rgba(0,0,0,0.45);
+    --shadow-sm:  0 2px 12px rgba(0,0,0,0.3);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; font-size: 16px; }
+
+  body {
+    background: var(--navy);
+    color: var(--text-body);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* ── PRINT ── */
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; color: #111; }
+    .cover { background: #0D1A30 !important; }
+    .page-break { page-break-before: always; }
+    .card, .step-card, .risk-card, .vendor-card { break-inside: avoid; }
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--navy-mid); }
+  ::-webkit-scrollbar-thumb { background: var(--blue); border-radius: 4px; }
+
+  /* ══════════════════════════════════════════
+     COVER PAGE
+  ══════════════════════════════════════════ */
+  .cover {
+    position: relative;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #060C1A 0%, #0D1A30 45%, #0A1520 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 40px;
+    overflow: hidden;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 55% at 50% 0%, rgba(26,110,245,0.22) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 30% at 80% 80%, rgba(0,212,255,0.12) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .cover-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(26,110,245,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26,110,245,0.06) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+  }
+
+  .cover-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(26,110,245,0.15);
+    border: 1px solid rgba(26,110,245,0.4);
+    color: var(--cyan);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 6px 18px;
+    border-radius: 100px;
+    margin-bottom: 32px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cover-icon-ring {
+    position: relative;
+    z-index: 1;
+    width: 110px;
+    height: 110px;
+    margin: 0 auto 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cover-icon-ring::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--blue), var(--cyan), var(--blue));
+    animation: spin 8s linear infinite;
+    padding: 3px;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .cover-icon-ring .ring-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0D1A30, #132240);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.6rem;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 0 40px rgba(26,110,245,0.4);
+  }
+
+  .cover h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2.2rem, 5vw, 3.8rem);
+    font-weight: 800;
+    line-height: 1.15;
+    color: var(--white);
+    position: relative;
+    z-index: 1;
+    margin-bottom: 8px;
+  }
+
+  .cover h1 span {
+    background: linear-gradient(90deg, var(--blue-light), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .cover-subtitle {
+    font-size: 1.05rem;
+    color: var(--text-body);
+    max-width: 620px;
+    margin: 18px auto 44px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cover-meta {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 52px;
+  }
+
+  .cover-meta-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .cover-meta-item .meta-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.7rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, var(--gold), var(--gold-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .cover-meta-item .meta-lbl {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .cover-divider {
+    width: 1px;
+    height: 40px;
+    background: var(--border);
+    align-self: center;
+  }
+
+  .cover-info-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    max-width: 680px;
+    width: 100%;
+    margin-bottom: 52px;
+  }
+
+  .cover-info-box {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    text-align: left;
+  }
+
+  .cover-info-box .box-icon {
+    font-size: 1.4rem;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .cover-info-box .box-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+
+  .cover-info-box .box-val {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--white);
+  }
+
+  .cover-org {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(26,110,245,0.1);
+    border: 1px solid rgba(26,110,245,0.25);
+    border-radius: 100px;
+    padding: 10px 24px;
+  }
+
+  .cover-org .org-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .5; transform: scale(1.4); }
+  }
+
+  .cover-org span { font-size: 0.82rem; color: var(--cyan); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  /* ── FILL FIELDS (cover) ── */
+  .cover-fields {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    max-width: 560px;
+    width: 100%;
+    margin: 36px auto 0;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    text-align: left;
+  }
+
+  .field-group label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+
+  .field-group input, .field-group select, .field-group textarea {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 9px 13px;
+    color: var(--white);
+    font-family: inherit;
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+    width: 100%;
+  }
+
+  .field-group input:focus, .field-group select:focus, .field-group textarea:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(26,110,245,0.18);
+  }
+
+  .field-group select option { background: #0D1A30; }
+
+  /* ══════════════════════════════════════════
+     LAYOUT WRAPPER
+  ══════════════════════════════════════════ */
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ══════════════════════════════════════════
+     SECTION HEADERS
+  ══════════════════════════════════════════ */
+  .section {
+    padding: 72px 0 0;
+  }
+
+  .section-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 12px;
+  }
+
+  .section-label::before {
+    content: '';
+    display: block;
+    width: 24px;
+    height: 2px;
+    background: var(--cyan);
+    border-radius: 2px;
+  }
+
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 800;
+    color: var(--white);
+    line-height: 1.2;
+    margin-bottom: 14px;
+  }
+
+  .section-title span {
+    background: linear-gradient(90deg, var(--blue-light), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .section-desc {
+    font-size: 0.98rem;
+    color: var(--text-body);
+    max-width: 680px;
+    margin-bottom: 36px;
+    line-height: 1.75;
+  }
+
+  /* ══════════════════════════════════════════
+     CARDS
+  ══════════════════════════════════════════ */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 28px 30px;
+    margin-bottom: 20px;
+    backdrop-filter: blur(8px);
+    transition: border-color .25s, transform .25s;
+  }
+
+  .card:hover { border-color: rgba(26,110,245,0.3); transform: translateY(-2px); }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .card-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--white);
+  }
+
+  .card-sub {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  /* ══════════════════════════════════════════
+     ALERT / CALLOUT BOXES
+  ══════════════════════════════════════════ */
+  .alert {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    margin-bottom: 28px;
+    border-left: 4px solid;
+  }
+
+  .alert-red    { background: rgba(255,77,109,0.08); border-color: var(--red); }
+  .alert-gold   { background: rgba(255,184,0,0.08);  border-color: var(--gold); }
+  .alert-blue   { background: rgba(26,110,245,0.08); border-color: var(--blue); }
+  .alert-green  { background: rgba(0,200,150,0.08);  border-color: var(--green); }
+  .alert-purple { background: rgba(139,92,246,0.08); border-color: var(--purple); }
+
+  .alert-icon { font-size: 1.35rem; line-height: 1; margin-top: 2px; flex-shrink: 0; }
+  .alert-title { font-weight: 700; color: var(--white); font-size: 0.95rem; margin-bottom: 4px; }
+  .alert-body  { font-size: 0.88rem; color: var(--text-body); line-height: 1.65; }
+
+  /* ══════════════════════════════════════════
+     RISK CARDS (industry columns)
+  ══════════════════════════════════════════ */
+  .risk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 18px;
+    margin-bottom: 32px;
+  }
+
+  .risk-card {
+    border-radius: var(--radius);
+    padding: 24px 22px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid transparent;
+    transition: transform .25s;
+  }
+
+  .risk-card:hover { transform: translateY(-3px); }
+
+  .risk-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 2px 2px 0 0;
+  }
+
+  .risk-card.legal    { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.2); }
+  .risk-card.legal::before { background: var(--purple); }
+  .risk-card.finance  { background: rgba(255,184,0,0.08); border-color: rgba(255,184,0,0.2); }
+  .risk-card.finance::before { background: var(--gold); }
+  .risk-card.health   { background: rgba(255,77,109,0.09); border-color: rgba(255,77,109,0.2); }
+  .risk-card.health::before { background: var(--red); }
+  .risk-card.dev      { background: rgba(0,200,150,0.08); border-color: rgba(0,200,150,0.2); }
+  .risk-card.dev::before { background: var(--green); }
+
+  .risk-card .rc-icon { font-size: 1.8rem; margin-bottom: 12px; }
+  .risk-card .rc-title { font-weight: 700; color: var(--white); font-size: 0.95rem; margin-bottom: 8px; }
+  .risk-card .rc-desc { font-size: 0.82rem; color: var(--text-body); line-height: 1.6; }
+  .risk-card .rc-tag {
+    display: inline-block;
+    margin-top: 12px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 100px;
+  }
+
+  .risk-card.legal  .rc-tag { background: rgba(139,92,246,0.18); color: #C4B5FD; }
+  .risk-card.finance .rc-tag { background: rgba(255,184,0,0.18); color: var(--gold-light); }
+  .risk-card.health  .rc-tag { background: rgba(255,77,109,0.18); color: #FF8FA3; }
+  .risk-card.dev     .rc-tag { background: rgba(0,200,150,0.18); color: #5EEAD4; }
+
+  /* ══════════════════════════════════════════
+     COMPLIANCE BADGES
+  ══════════════════════════════════════════ */
+  .compliance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .compliance-badge {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+    transition: border-color .2s, transform .2s;
+    cursor: default;
+  }
+
+  .compliance-badge:hover { border-color: var(--blue); transform: translateY(-2px); }
+  .compliance-badge .cb-name { font-family: 'Syne', sans-serif; font-size: 1.2rem; font-weight: 800; color: var(--white); margin-bottom: 4px; }
+  .compliance-badge .cb-full { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
+  .compliance-badge .cb-dot { width: 8px; height: 8px; border-radius: 50%; margin: 10px auto 0; }
+
+  /* ══════════════════════════════════════════
+     STEP CARDS (numbered)
+  ══════════════════════════════════════════ */
+  .step-card {
+    position: relative;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: var(--radius-lg);
+    padding: 34px 36px 34px 90px;
+    margin-bottom: 28px;
+    overflow: hidden;
+    transition: border-color .25s;
+  }
+
+  .step-card:hover { border-color: rgba(26,110,245,0.35); }
+
+  .step-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--blue), var(--cyan));
+    border-radius: 4px 0 0 4px;
+  }
+
+  .step-number {
+    position: absolute;
+    left: 28px;
+    top: 34px;
+    font-family: 'Syne', sans-serif;
+    font-size: 2.8rem;
+    font-weight: 800;
+    line-height: 1;
+    background: linear-gradient(135deg, rgba(26,110,245,0.35), rgba(0,212,255,0.25));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .step-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--white);
+    margin-bottom: 8px;
+  }
+
+  .step-desc {
+    font-size: 0.9rem;
+    color: var(--text-body);
+    margin-bottom: 24px;
+    line-height: 1.7;
+  }
+
+  /* ══════════════════════════════════════════
+     CHECKLIST ITEMS
+  ══════════════════════════════════════════ */
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    padding: 12px 16px;
+    transition: background .2s, border-color .2s;
+    cursor: pointer;
+  }
+
+  .checklist-item:hover { background: rgba(26,110,245,0.07); border-color: rgba(26,110,245,0.2); }
+
+  .checklist-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--blue);
+    cursor: pointer;
+    flex-shrink: 0;
+    border-radius: 4px;
+  }
+
+  .checklist-item .ci-label {
+    font-size: 0.88rem;
+    color: var(--text-body);
+    flex: 1;
+    line-height: 1.5;
+  }
+
+  .checklist-item .ci-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 100px;
+    flex-shrink: 0;
+  }
+
+  .badge-high   { background: rgba(255,77,109,0.18);  color: #FF8FA3; }
+  .badge-medium { background: rgba(255,184,0,0.18);   color: var(--gold-light); }
+  .badge-low    { background: rgba(0,200,150,0.18);   color: #5EEAD4; }
+  .badge-info   { background: rgba(26,110,245,0.18);  color: #93C5FD; }
+
+  /* ══════════════════════════════════════════
+     DATA EXPOSURE TABLE
+  ══════════════════════════════════════════ */
+  .exposure-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 28px;
+    font-size: 0.88rem;
+  }
+
+  .exposure-table th {
+    background: rgba(26,110,245,0.12);
+    color: var(--cyan);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 13px 16px;
+    text-align: left;
+    border-bottom: 1px solid rgba(26,110,245,0.2);
+  }
+
+  .exposure-table td {
+    padding: 13px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    vertical-align: middle;
+  }
+
+  .exposure-table tr:hover td { background: rgba(26,110,245,0.05); }
+
+  .exposure-table .data-type { font-weight: 600; color: var(--white); }
+  .exposure-table .data-ex { color: var(--text-muted); font-size: 0.82rem; }
+
+  .exposure-table input[type="text"],
+  .exposure-table select {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--white);
+    font-family: inherit;
+    font-size: 0.82rem;
+    outline: none;
+    width: 100%;
+    transition: border-color .2s;
+  }
+
+  .exposure-table input[type="text"]:focus,
+  .exposure-table select:focus { border-color: var(--blue); }
+  .exposure-table select option { background: #0D1A30; }
+
+  .risk-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 3px 10px;
+    border-radius: 100px;
+  }
+  .risk-dot::before { content: '●'; font-size: 0.55rem; }
+  .risk-critical { background: rgba(255,77,109,0.15); color: #FF8FA3; }
+  .risk-high     { background: rgba(255,112,67,0.15); color: #FFAB91; }
+  .risk-medium   { background: rgba(255,184,0,0.15);  color: var(--gold-light); }
+  .risk-low      { background: rgba(0,200,150,0.15);  color: #5EEAD4; }
+
+  /* ══════════════════════════════════════════
+     VENDOR EVALUATION CARDS
+  ══════════════════════════════════════════ */
+  .vendor-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius-lg);
+    padding: 28px 30px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .vendor-card::after {
+    content: 'VENDOR ASSESSMENT';
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    color: rgba(255,255,255,0.12);
+    text-transform: uppercase;
+  }
+
+  .vendor-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .vendor-question {
+    margin-bottom: 18px;
+  }
+
+  .vq-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 10px;
+  }
+
+  .vq-label .vq-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(26,110,245,0.2);
+    border: 1px solid rgba(26,110,245,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    color: var(--cyan);
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  .radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .radio-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 7px 14px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-body);
+    transition: all .2s;
+  }
+
+  .radio-option:hover { background: rgba(26,110,245,0.1); border-color: var(--blue); color: var(--white); }
+
+  .radio-option input[type="radio"] {
+    accent-color: var(--blue);
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+  }
+
+  /* ══════════════════════════════════════════
+     SCORE METER
+  ══════════════════════════════════════════ */
+  .score-panel {
+    background: linear-gradient(135deg, rgba(26,110,245,0.08), rgba(0,212,255,0.05));
+    border: 1px solid rgba(26,110,245,0.2);
+    border-radius: var(--radius-lg);
+    padding: 30px 32px;
+    margin: 32px 0;
+    text-align: center;
+  }
+
+  .score-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--white);
+    margin-bottom: 20px;
+  }
+
+  .score-track {
+    height: 12px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 100px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    position: relative;
+  }
+
+  .score-track .score-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-top: 6px;
+  }
+
+  .score-zones {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 22px;
+  }
+
+  .score-zone {
+    padding: 14px;
+    border-radius: var(--radius);
+    text-align: center;
+  }
+
+  .zone-critical { background: rgba(255,77,109,0.1);  border: 1px solid rgba(255,77,109,0.2); }
+  .zone-moderate { background: rgba(255,184,0,0.1);   border: 1px solid rgba(255,184,0,0.2); }
+  .zone-secure   { background: rgba(0,200,150,0.1);   border: 1px solid rgba(0,200,150,0.2); }
+
+  .score-zone .sz-range { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 800; color: var(--white); }
+  .score-zone .sz-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-top: 2px; }
+  .zone-critical .sz-label { color: #FF8FA3; }
+  .zone-moderate .sz-label { color: var(--gold-light); }
+  .zone-secure   .sz-label { color: #5EEAD4; }
+  .score-zone .sz-desc { font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4; }
+
+  /* ══════════════════════════════════════════
+     ACTION PLAN TABLE
+  ══════════════════════════════════════════ */
+  .action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .action-item {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    transition: border-color .2s, transform .2s;
+  }
+
+  .action-item:hover { border-color: rgba(26,110,245,0.3); transform: translateY(-2px); }
+
+  .action-item .ai-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+
+  .action-item .ai-content { flex: 1; }
+  .action-item .ai-title { font-weight: 700; color: var(--white); font-size: 0.9rem; margin-bottom: 5px; }
+  .action-item .ai-desc  { font-size: 0.8rem; color: var(--text-muted); line-height: 1.55; }
+
+  .action-item .ai-input {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 7px;
+    padding: 7px 10px;
+    color: var(--white);
+    font-family: inherit;
+    font-size: 0.8rem;
+    outline: none;
+    width: 100%;
+    margin-top: 8px;
+    transition: border-color .2s;
+  }
+
+  .action-item .ai-input:focus { border-color: var(--blue); }
+
+  /* ══════════════════════════════════════════
+     FOOTER
+  ══════════════════════════════════════════ */
+  .doc-footer {
+    margin-top: 80px;
+    padding: 36px 0;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .footer-brand { font-size: 0.78rem; color: var(--text-muted); }
+  .footer-brand strong { color: var(--cyan); }
+
+  .footer-disclaimer { font-size: 0.72rem; color: var(--text-muted); max-width: 480px; line-height: 1.55; }
+
+  /* ══════════════════════════════════════════
+     FLOATING NAV (TOC)
+  ══════════════════════════════════════════ */
+  .toc {
+    position: fixed;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+  }
+
+  .toc a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: color .2s;
+    justify-content: flex-end;
+  }
+
+  .toc a:hover { color: var(--white); }
+
+  .toc a .toc-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background .2s, width .2s;
+    flex-shrink: 0;
+  }
+
+  .toc a:hover .toc-dot { background: var(--cyan); width: 16px; border-radius: 4px; }
+  .toc a .toc-label { display: none; }
+  .toc a:hover .toc-label { display: block; }
+
+  @media (max-width: 1200px) { .toc { display: none; } }
+
+  /* ══════════════════════════════════════════
+     PRINT BUTTON
+  ══════════════════════════════════════════ */
+  .print-btn {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    background: linear-gradient(135deg, var(--blue), var(--cyan));
+    color: var(--white);
+    border: none;
+    border-radius: 50px;
+    padding: 12px 22px;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 24px rgba(26,110,245,0.5);
+    transition: transform .2s, box-shadow .2s;
+    z-index: 200;
+  }
+
+  .print-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(26,110,245,0.6); }
+
+  /* ══════════════════════════════════════════
+     DIVIDER
+  ══════════════════════════════════════════ */
+  .hr {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(26,110,245,0.3), transparent);
+    border: none;
+    margin: 48px 0;
+  }
+
+  /* ══════════════════════════════════════════
+     STAT ROW
+  ══════════════════════════════════════════ */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .stat-box {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: var(--radius);
+    padding: 22px 20px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .25s;
+  }
+
+  .stat-box:hover { border-color: rgba(26,110,245,0.3); }
+
+  .stat-box .stat-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--white);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .stat-box .stat-val.gold { color: var(--gold); }
+  .stat-box .stat-val.red  { color: var(--red); }
+  .stat-box .stat-val.cyan { color: var(--cyan); }
+  .stat-box .stat-val.green { color: var(--green); }
+
+  .stat-box .stat-lbl {
+    font-size: 0.73rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+
+  /* Responsive tweaks */
+  @media (max-width: 640px) {
+    .cover-fields { grid-template-columns: 1fr; }
+    .action-grid { grid-template-columns: 1fr; }
+    .vendor-header { grid-template-columns: 1fr; }
+    .step-card { padding: 28px 22px 28px 70px; }
+    .step-number { font-size: 2.2rem; left: 18px; }
+  }
+
+  /* ── textarea ── */
+  textarea.fill-area {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--white);
+    font-family: inherit;
+    font-size: 0.85rem;
+    resize: vertical;
+    outline: none;
+    transition: border-color .2s;
+    min-height: 80px;
+    margin-top: 6px;
+  }
+
+  textarea.fill-area:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(26,110,245,0.15); }
+
+  /* table wrapper */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    margin-bottom: 28px;
+  }
+
+  .table-wrap .exposure-table { margin: 0; }
+</style>
+</head>
+<body>
+
+<!-- ══ FLOATING NAV ══ -->
+<nav class="toc no-print">
+  <a href="#cover">      <span class="toc-label">Cover</span><span class="toc-dot"></span></a>
+  <a href="#problem">    <span class="toc-label">Problem</span><span class="toc-dot"></span></a>
+  <a href="#risks">      <span class="toc-label">Risks</span><span class="toc-dot"></span></a>
+  <a href="#compliance"> <span class="toc-label">Compliance</span><span class="toc-dot"></span></a>
+  <a href="#step1">      <span class="toc-label">Step 1</span><span class="toc-dot"></span></a>
+  <a href="#step2">      <span class="toc-label">Step 2</span><span class="toc-dot"></span></a>
+  <a href="#step3">      <span class="toc-label">Step 3</span><span class="toc-dot"></span></a>
+  <a href="#action">     <span class="toc-label">Action Plan</span><span class="toc-dot"></span></a>
+</nav>
+
+<!-- ══ PRINT BUTTON ══ -->
+<button class="print-btn no-print" onclick="window.print()">
+  <i class="fas fa-print"></i> Print / Save PDF
+</button>
+
+<!-- ══════════════════════════════════════════
+     COVER PAGE
+══════════════════════════════════════════ -->
+<section class="cover" id="cover">
+  <div class="cover-grid"></div>
+
+  <div class="cover-badge">
+    <i class="fas fa-shield-halved"></i>
+    Evolve Edge AI Security
+  </div>
+
+  <div class="cover-icon-ring">
+    <div class="ring-inner">🛡️</div>
+  </div>
+
+  <h1>AI Security<br><span>Quick Audit</span> Framework</h1>
+  <p class="cover-subtitle">Identify AI Risks, Protect Sensitive Data, and Strengthen Compliance — Designed to be completed in <strong style="color:var(--cyan)">Under 60 Minutes</strong></p>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <span class="meta-val">60</span>
+      <span class="meta-lbl">Minutes or Less</span>
+    </div>
+    <div class="cover-divider"></div>
+    <div class="cover-meta-item">
+      <span class="meta-val">3</span>
+      <span class="meta-lbl">Audit Steps</span>
+    </div>
+    <div class="cover-divider"></div>
+    <div class="cover-meta-item">
+      <span class="meta-val">4</span>
+      <span class="meta-lbl">Compliance Frameworks</span>
+    </div>
+    <div class="cover-divider"></div>
+    <div class="cover-meta-item">
+      <span class="meta-val">5</span>
+      <span class="meta-lbl">Risk Categories</span>
+    </div>
+  </div>
+
+  <div class="cover-info-grid">
+    <div class="cover-info-box">
+      <span class="box-icon">🏢</span>
+      <div class="box-title">Organization</div>
+      <input type="text" placeholder="Your Company Name" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:5px 10px;color:#fff;font-family:inherit;font-size:0.82rem;outline:none;width:100%;margin-top:4px;">
+    </div>
+    <div class="cover-info-box">
+      <span class="box-icon">👤</span>
+      <div class="box-title">Auditor Name</div>
+      <input type="text" placeholder="Full Name / Title" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:5px 10px;color:#fff;font-family:inherit;font-size:0.82rem;outline:none;width:100%;margin-top:4px;">
+    </div>
+    <div class="cover-info-box">
+      <span class="box-icon">📅</span>
+      <div class="box-title">Audit Date</div>
+      <input type="date" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:5px 10px;color:#fff;font-family:inherit;font-size:0.82rem;outline:none;width:100%;margin-top:4px;">
+    </div>
+    <div class="cover-info-box">
+      <span class="box-icon">📊</span>
+      <div class="box-title">Industry</div>
+      <select style="background:rgba(13,26,48,0.95);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:5px 10px;color:#fff;font-family:inherit;font-size:0.82rem;outline:none;width:100%;margin-top:4px;">
+        <option value="">Select Industry…</option>
+        <option>Legal & Compliance</option>
+        <option>Financial Services</option>
+        <option>Healthcare</option>
+        <option>Software / Technology</option>
+        <option>Consulting</option>
+        <option>Other</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="cover-org">
+    <span class="org-dot"></span>
+    <span>Prepared by Evolve Edge AI Security</span>
+  </div>
+</section>
+
+
+<!-- ══ MAIN CONTENT ══ -->
+<div class="container">
+
+  <!-- ══════════════════════════════════════════
+       SECTION 1 — THE GOVERNANCE PROBLEM
+  ══════════════════════════════════════════ -->
+  <section class="section" id="problem">
+    <p class="section-label">Section 01</p>
+    <h2 class="section-title">The AI <span>Governance Problem</span></h2>
+    <p class="section-desc">
+      AI adoption is outpacing security and compliance programs across every industry. Employees are already using AI tools — often without formal oversight, procurement approval, or governance policies in place. The result is a dangerous gap between capability and control.
+    </p>
+
+    <div class="alert alert-red">
+      <div class="alert-icon">⚠️</div>
+      <div>
+        <div class="alert-title">Shadow AI Is Already in Your Organization</div>
+        <div class="alert-body">Research shows the majority of employees use AI tools before security teams are even aware. These "shadow AI" deployments bypass standard procurement, legal review, and data governance checks — creating invisible attack surfaces and compliance exposure.</div>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-val red">73%</div>
+        <div class="stat-lbl">of employees use AI tools without IT approval</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val gold">$4.2M</div>
+        <div class="stat-lbl">Average cost of a data breach in 2024</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val cyan">60%</div>
+        <div class="stat-lbl">of orgs lack an AI governance policy</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val green">&lt;60<span style="font-size:1rem">min</span></div>
+        <div class="stat-lbl">to complete this full audit</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background:rgba(26,110,245,0.15);">💻</div>
+          <div>
+            <div class="card-title">Common AI Use Cases</div>
+            <div class="card-sub">How employees are using AI today</div>
+          </div>
+        </div>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--blue);font-size:0.7rem;">◆</span> Document drafting &amp; legal workflows
+          </li>
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--blue);font-size:0.7rem;">◆</span> Financial analysis &amp; reporting
+          </li>
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--blue);font-size:0.7rem;">◆</span> Coding assistance &amp; development
+          </li>
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--blue);font-size:0.7rem;">◆</span> Customer support automation
+          </li>
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--blue);font-size:0.7rem;">◆</span> HR &amp; recruitment screening
+          </li>
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--blue);font-size:0.7rem;">◆</span> Marketing content generation
+          </li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background:rgba(255,77,109,0.15);">🚨</div>
+          <div>
+            <div class="card-title">Resulting Exposures</div>
+            <div class="card-sub">Security &amp; compliance risks created</div>
+          </div>
+        </div>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--red);font-size:0.7rem;">◆</span> Sensitive data leakage to external systems
+          </li>
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--red);font-size:0.7rem;">◆</span> Intellectual property theft risk
+          </li>
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--red);font-size:0.7rem;">◆</span> Regulatory &amp; compliance violations
+          </li>
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--red);font-size:0.7rem;">◆</span> Model training on proprietary data
+          </li>
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--red);font-size:0.7rem;">◆</span> Unvetted third-party data processing
+          </li>
+          <li style="display:flex;align-items:center;gap:10px;font-size:0.87rem;color:var(--text-body);">
+            <span style="color:var(--red);font-size:0.7rem;">◆</span> Contractual liability with clients
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;">
+      <div class="field-group">
+        <label>📝 Your Organization's Current AI Usage — Notes</label>
+        <textarea class="fill-area" placeholder="List known AI tools currently used in your organization (e.g., ChatGPT, Copilot, Gemini, internal tools, etc.)…"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <hr class="hr">
+
+  <!-- ══════════════════════════════════════════
+       SECTION 2 — HIDDEN RISKS
+  ══════════════════════════════════════════ -->
+  <section class="section" id="risks">
+    <p class="section-label">Section 02</p>
+    <h2 class="section-title">The <span>Hidden Risks</span> of AI Adoption</h2>
+    <p class="section-desc">
+      Across industries, uncontrolled AI usage introduces sector-specific vulnerabilities. Understanding your industry's unique risk profile is the first step toward meaningful governance.
+    </p>
+
+    <div class="risk-grid">
+      <div class="risk-card legal">
+        <div class="rc-icon">⚖️</div>
+        <div class="rc-title">Legal &amp; Compliance</div>
+        <div class="rc-desc">Attorneys submitting privileged communications and confidential case materials into AI drafting tools expose client data to external cloud systems without client consent or bar compliance review.</div>
+        <span class="rc-tag">Privilege at Risk</span>
+      </div>
+      <div class="risk-card finance">
+        <div class="rc-icon">💰</div>
+        <div class="rc-title">Financial Services</div>
+        <div class="rc-desc">Analysts uploading transaction records, proprietary financial models, and M&amp;A data into AI reporting tools risk leaking material non-public information and trade secrets.</div>
+        <span class="rc-tag">MNPI Exposure</span>
+      </div>
+      <div class="risk-card health">
+        <div class="rc-icon">🏥</div>
+        <div class="rc-title">Healthcare</div>
+        <div class="rc-desc">Processing protected patient information (PHI) through consumer-grade AI systems violates HIPAA and may trigger mandatory breach notification requirements and OCR audits.</div>
+        <span class="rc-tag">HIPAA Violation</span>
+      </div>
+      <div class="risk-card dev">
+        <div class="rc-icon">👨‍💻</div>
+        <div class="rc-title">Software Development</div>
+        <div class="rc-desc">Developers pasting proprietary source code, API keys, credentials, or architecture details into AI coding assistants risk permanent exposure through model training datasets.</div>
+        <span class="rc-tag">IP Leakage</span>
+      </div>
+    </div>
+
+    <div class="alert alert-gold">
+      <div class="alert-icon">🔍</div>
+      <div>
+        <div class="alert-title">The Model Training Problem</div>
+        <div class="alert-body">Many consumer-grade AI tools use your inputs to train and improve their models <em>by default</em>. This means your confidential client data, financial models, patient records, or source code can become part of a vendor's training dataset — accessible in some form to other users or future model versions. Always verify your vendor's data usage policy before deployment.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:rgba(255,112,67,0.15);">🎯</div>
+        <div>
+          <div class="card-title">Industry Risk Self-Assessment</div>
+          <div class="card-sub">Identify which risk categories apply to your organization</div>
+        </div>
+      </div>
+      <div class="checklist">
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span class="ci-label">Our legal/compliance team uses AI for document drafting or case research</span>
+          <span class="ci-badge badge-high">High Risk</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span class="ci-label">Financial analysts use AI tools for reporting, modeling, or analysis</span>
+          <span class="ci-badge badge-high">High Risk</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span class="ci-label">Healthcare staff process any patient data through AI-powered tools</span>
+          <span class="ci-badge badge-high">High Risk</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span class="ci-label">Developers use AI coding assistants with access to production codebases</span>
+          <span class="ci-badge badge-medium">Medium Risk</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span class="ci-label">HR uses AI for resume screening or employee performance evaluation</span>
+          <span class="ci-badge badge-medium">Medium Risk</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span class="ci-label">Customer support uses AI with access to CRM or account data</span>
+          <span class="ci-badge badge-medium">Medium Risk</span>
+        </label>
+        <label class="checklist-item">
+          <input type="checkbox">
+          <span class="ci-label">Marketing uses AI to generate content involving customer or campaign data</span>
+          <span class="ci-badge badge-low">Lower Risk</span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <hr class="hr">
+
+  <!-- ══════════════════════════════════════════
+       SECTION 3 — COMPLIANCE
+  ══════════════════════════════════════════ -->
+  <section class="section page-break" id="compliance">
+    <p class="section-label">Section 03</p>
+    <h2 class="section-title">Regulatory &amp; <span>Compliance Implications</span></h2>
+    <p class="section-desc">
+      AI tools are not exempt from compliance obligations. Every major regulatory framework applies to how you process, transmit, and store data — regardless of whether a third-party AI vendor is involved. You remain the data controller.
+    </p>
+
+    <div class="compliance-grid">
+      <div class="compliance-badge">
+        <div class="cb-name">GDPR</div>
+        <div class="cb-full">General Data Protection Regulation</div>
+        <div class="cb-dot" style="background:var(--blue); box-shadow: 0 0 8px var(--blue);"></div>
+      </div>
+      <div class="compliance-badge">
+        <div class="cb-name">HIPAA</div>
+        <div class="cb-full">Health Insurance Portability &amp; Accountability Act</div>
+        <div class="cb-dot" style="background:var(--red); box-shadow: 0 0 8px var(--red);"></div>
+      </div>
+      <div class="compliance-badge">
+        <div class="cb-name">SOC 2</div>
+        <div class="cb-full">Service Organization Control 2 — Type II</div>
+        <div class="cb-dot" style="background:var(--green); box-shadow: 0 0 8px var(--green);"></div>
+      </div>
+      <div class="compliance-badge">
+        <div class="cb-name">ISO 27001</div>
+        <div class="cb-full">International Information Security Standard</div>
+        <div class="cb-dot" style="background:var(--gold); box-shadow: 0 0 8px var(--gold);"></div>
+      </div>
+      <div class="compliance-badge">
+        <div class="cb-name">CCPA</div>
+        <div class="cb-full">California Consumer Privacy Act</div>
+        <div class="cb-dot" style="background:var(--purple); box-shadow: 0 0 8px var(--purple);"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:rgba(255,77,109,0.15);">⚡</div>
+        <div>
+          <div class="card-title">What's at Stake</div>
+          <div class="card-sub">Consequences of non-compliance with AI governance</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div style="background:rgba(255,77,109,0.07);border:1px solid rgba(255,77,109,0.15);border-radius:10px;padding:16px 18px;">
+          <div style="font-size:1.5rem;margin-bottom:8px;">💸</div>
+          <div style="font-weight:700;color:var(--white);font-size:0.88rem;margin-bottom:4px;">Financial Penalties</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.55;">Fines ranging from thousands to <strong style="color:var(--red)">millions of dollars</strong> depending on framework and severity of breach</div>
+        </div>
+        <div style="background:rgba(255,184,0,0.07);border:1px solid rgba(255,184,0,0.15);border-radius:10px;padding:16px 18px;">
+          <div style="font-size:1.5rem;margin-bottom:8px;">📋</div>
+          <div style="font-weight:700;color:var(--white);font-size:0.88rem;margin-bottom:4px;">Mandatory Notifications</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.55;">Required breach notification to affected parties and regulatory bodies within strict timelines</div>
+        </div>
+        <div style="background:rgba(139,92,246,0.07);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:16px 18px;">
+          <div style="font-size:1.5rem;margin-bottom:8px;">🔍</div>
+          <div style="font-weight:700;color:var(--white);font-size:0.88rem;margin-bottom:4px;">Regulatory Audits</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.55;">Triggered investigations and audits that consume significant internal resources and legal fees</div>
+        </div>
+        <div style="background:rgba(0,200,150,0.07);border:1px solid rgba(0,200,150,0.15);border-radius:10px;padding:16px 18px;">
+          <div style="font-size:1.5rem;margin-bottom:8px;">🤝</div>
+          <div style="font-weight:700;color:var(--white);font-size:0.88rem;margin-bottom:4px;">Reputational &amp; Contractual Damage</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);line-height:1.55;">Loss of client trust and potential contractual liability with enterprise customers</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;">
+      <div class="field-group">
+        <label>🏛️ Which compliance frameworks apply to your organization? (check all that apply)</label>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+        <label style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--text-body);transition:all .2s;">
+          <input type="checkbox" style="accent-color:var(--blue);"> GDPR
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--text-body);">
+          <input type="checkbox" style="accent-color:var(--blue);"> HIPAA
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--text-body);">
+          <input type="checkbox" style="accent-color:var(--blue);"> SOC 2 Type II
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--text-body);">
+          <input type="checkbox" style="accent-color:var(--blue);"> ISO 27001
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--text-body);">
+          <input type="checkbox" style="accent-color:var(--blue);"> CCPA
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--text-body);">
+          <input type="checkbox" style="accent-color:var(--blue);"> PCI-DSS
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <hr class="hr">
+
+  <!-- ══════════════════════════════════════════
+       STEP 1 — MAP AI USAGE
+  ══════════════════════════════════════════ -->
+  <section class="section page-break" id="step1">
+    <p class="section-label">Audit Step 01 — ⏱ ~15 Minutes</p>
+    <h2 class="section-title"><span>Map</span> Your AI Usage</h2>
+    <p class="section-desc">
+      You cannot govern what you cannot see. Begin the audit by cataloguing every AI tool currently in use across your organization — including tools deployed without IT or security approval.
+    </p>
+
+    <div class="step-card">
+      <div class="step-number">01</div>
+      <div class="step-title">AI Tool Inventory Checklist</div>
+      <p class="step-desc">Review each department and identify all AI tools in active use. Check every item that applies to your organization, then add unlisted tools in the notes field below.</p>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">📂 Document &amp; Productivity</div>
+        <div class="checklist">
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">ChatGPT / ChatGPT Enterprise (OpenAI)</span>
+            <span class="ci-badge badge-high">Verify Data Policy</span>
+          </label>
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">Microsoft Copilot / Copilot 365</span>
+            <span class="ci-badge badge-medium">Enterprise Tier</span>
+          </label>
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">Google Gemini / Workspace AI</span>
+            <span class="ci-badge badge-medium">Enterprise Tier</span>
+          </label>
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">Notion AI</span>
+            <span class="ci-badge badge-medium">Review Settings</span>
+          </label>
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">Other document AI tools</span>
+            <span class="ci-badge badge-info">List Below</span>
+          </label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">💻 Developer &amp; Code Tools</div>
+        <div class="checklist">
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">GitHub Copilot</span>
+            <span class="ci-badge badge-medium">Review IP Policy</span>
+          </label>
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">Cursor / Windsurf / Codeium</span>
+            <span class="ci-badge badge-high">Check Training Opt-out</span>
+          </label>
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">AWS CodeWhisperer / Google Duet</span>
+            <span class="ci-badge badge-low">Cloud-native</span>
+          </label>
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">Claude / Anthropic APIs</span>
+            <span class="ci-badge badge-info">API Terms</span>
+          </label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">📊 Business Intelligence &amp; Analytics</div>
+        <div class="checklist">
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">Salesforce Einstein AI</span>
+            <span class="ci-badge badge-low">CRM Native</span>
+          </label>
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">Tableau AI / Power BI Copilot</span>
+            <span class="ci-badge badge-medium">Data Access</span>
+          </label>
+          <label class="checklist-item">
+            <input type="checkbox">
+            <span class="ci-label">Custom LLM integrations / internal AI tools</span>
+            <span class="ci-badge badge-high">Full Audit Required</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="field-group" style="margin-top:8px;">
+        <label>📋 Additional AI Tools Not Listed Above</label>
+        <textarea class="fill-area" placeholder="List any additional AI tools your team uses that are not captured above…"></textarea>
+      </div>
+
+      <div class="field-group" style="margin-top:14px;">
+        <label>📌 Departments with highest AI tool usage in your organization</label>
+        <textarea class="fill-area" style="min-height:60px;" placeholder="e.g., Legal (3 tools), Finance (2 tools), Engineering (4 tools)…"></textarea>
+      </div>
+    </div>
+
+    <div class="alert alert-blue">
+      <div class="alert-icon">💡</div>
+      <div>
+        <div class="alert-title">Pro Tip: Survey Your Teams</div>
+        <div class="alert-body">The most effective way to discover shadow AI is a simple anonymous survey. Ask employees: "What AI tools do you use in your daily work?" — the results are often surprising. Consider a 5-minute Teams/Slack poll before completing this audit step.</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="hr">
+
+  <!-- ══════════════════════════════════════════
+       STEP 2 — DATA EXPOSURE ANALYSIS
+  ══════════════════════════════════════════ -->
+  <section class="section page-break" id="step2">
+    <p class="section-label">Audit Step 02 — ⏱ ~20 Minutes</p>
+    <h2 class="section-title">Data <span>Exposure Analysis</span></h2>
+    <p class="section-desc">
+      Now that you've mapped AI tool usage, determine whether sensitive data is flowing into external AI systems. For each high-risk data category, assess current exposure level and document findings.
+    </p>
+
+    <div class="step-card">
+      <div class="step-number">02</div>
+      <div class="step-title">High-Risk Data Category Assessment</div>
+      <p class="step-desc">For each sensitive data type below, evaluate whether it is currently being processed by any AI tool in your environment. Use the dropdowns to assign exposure level and notes column for details.</p>
+
+      <div class="table-wrap">
+        <table class="exposure-table">
+          <thead>
+            <tr>
+              <th style="width:28%;">Data Category</th>
+              <th style="width:22%;">Examples</th>
+              <th style="width:18%;">Exposure Level</th>
+              <th style="width:32%;">AI Tools Involved / Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="data-type">🔴 Client &amp; Customer PII</div>
+              </td>
+              <td><span class="data-ex">Names, SSNs, emails, addresses, account numbers</span></td>
+              <td>
+                <select>
+                  <option value="">Assess…</option>
+                  <option>✅ Not Exposed</option>
+                  <option>⚠️ Potentially Exposed</option>
+                  <option>🔴 Confirmed Exposed</option>
+                  <option>❓ Unknown</option>
+                </select>
+              </td>
+              <td><input type="text" placeholder="Tool names / notes…"></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="data-type">🟠 Financial Records</div>
+              </td>
+              <td><span class="data-ex">Transaction data, financial models, balance sheets</span></td>
+              <td>
+                <select>
+                  <option value="">Assess…</option>
+                  <option>✅ Not Exposed</option>
+                  <option>⚠️ Potentially Exposed</option>
+                  <option>🔴 Confirmed Exposed</option>
+                  <option>❓ Unknown</option>
+                </select>
+              </td>
+              <td><input type="text" placeholder="Tool names / notes…"></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="data-type">🟣 Confidential Legal Docs</div>
+              </td>
+              <td><span class="data-ex">Privileged communications, case files, contracts</span></td>
+              <td>
+                <select>
+                  <option value="">Assess…</option>
+                  <option>✅ Not Exposed</option>
+                  <option>⚠️ Potentially Exposed</option>
+                  <option>🔴 Confirmed Exposed</option>
+                  <option>❓ Unknown</option>
+                </select>
+              </td>
+              <td><input type="text" placeholder="Tool names / notes…"></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="data-type">🔵 Intellectual Property</div>
+              </td>
+              <td><span class="data-ex">Source code, trade secrets, product roadmaps</span></td>
+              <td>
+                <select>
+                  <option value="">Assess…</option>
+                  <option>✅ Not Exposed</option>
+                  <option>⚠️ Potentially Exposed</option>
+                  <option>🔴 Confirmed Exposed</option>
+                  <option>❓ Unknown</option>
+                </select>
+              </td>
+              <td><input type="text" placeholder="Tool names / notes…"></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="data-type">🩺 Healthcare / PHI</div>
+              </td>
+              <td><span class="data-ex">Patient records, diagnoses, insurance data</span></td>
+              <td>
+                <select>
+                  <option value="">Assess…</option>
+                  <option>✅ Not Exposed</option>
+                  <option>⚠️ Potentially Exposed</option>
+                  <option>🔴 Confirmed Exposed</option>
+                  <option>❓ Unknown</option>
+                </select>
+              </td>
+              <td><input type="text" placeholder="Tool names / notes…"></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="data-type">👥 Employee / HR Data</div>
+              </td>
+              <td><span class="data-ex">Performance reviews, salaries, personal files</span></td>
+              <td>
+                <select>
+                  <option value="">Assess…</option>
+                  <option>✅ Not Exposed</option>
+                  <option>⚠️ Potentially Exposed</option>
+                  <option>🔴 Confirmed Exposed</option>
+                  <option>❓ Unknown</option>
+                </select>
+              </td>
+              <td><input type="text" placeholder="Tool names / notes…"></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="data-type">🔑 Credentials &amp; Secrets</div>
+              </td>
+              <td><span class="data-ex">API keys, passwords, connection strings</span></td>
+              <td>
+                <select>
+                  <option value="">Assess…</option>
+                  <option>✅ Not Exposed</option>
+                  <option>⚠️ Potentially Exposed</option>
+                  <option>🔴 Confirmed Exposed</option>
+                  <option>❓ Unknown</option>
+                </select>
+              </td>
+              <td><input type="text" placeholder="Tool names / notes…"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="field-group">
+        <label>📊 Step 2 Summary — Key Findings &amp; Observations</label>
+        <textarea class="fill-area" placeholder="Summarize your data exposure findings here. Which categories are most at risk? What immediate actions are needed?…"></textarea>
+      </div>
+    </div>
+
+    <div class="score-panel">
+      <div class="score-title">📊 Exposure Risk Scoring Guide</div>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:20px;">Count your assessed exposures above to determine your overall data risk level</p>
+      <div class="score-zones">
+        <div class="score-zone zone-critical">
+          <div class="sz-range">3–7</div>
+          <div class="sz-label">🔴 Critical</div>
+          <div class="sz-desc">Immediate remediation required. Halt unsanctioned AI use pending policy rollout.</div>
+        </div>
+        <div class="score-zone zone-moderate">
+          <div class="sz-range">1–2</div>
+          <div class="sz-label">🟡 Elevated</div>
+          <div class="sz-desc">Moderate risk. Address exposed categories within 30 days. Begin vendor vetting.</div>
+        </div>
+        <div class="score-zone zone-secure">
+          <div class="sz-range">0</div>
+          <div class="sz-label">🟢 Managed</div>
+          <div class="sz-desc">Good posture. Continue to monitor and formalize governance policies.</div>
+        </div>
+      </div>
+      <div style="margin-top:22px;display:flex;align-items:center;gap:14px;">
+        <div style="font-size:0.82rem;color:var(--text-muted);font-weight:600;">My Exposure Score:</div>
+        <input type="number" min="0" max="7" placeholder="0"
+          style="width:70px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 12px;color:var(--white);font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;text-align:center;outline:none;">
+        <div style="font-size:0.8rem;color:var(--text-muted);">confirmed or potential exposures (out of 7)</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="hr">
+
+  <!-- ══════════════════════════════════════════
+       STEP 3 — VENDOR RISK EVALUATION
+  ══════════════════════════════════════════ -->
+  <section class="section page-break" id="step3">
+    <p class="section-label">Audit Step 03 — ⏱ ~25 Minutes</p>
+    <h2 class="section-title">Vendor <span>Risk Evaluation</span></h2>
+    <p class="section-desc">
+      AI platforms must be vetted with the same rigor as any enterprise software. Use the forms below to evaluate each AI vendor against four critical security criteria. Complete one form per vendor.
+    </p>
+
+    <div class="alert alert-purple">
+      <div class="alert-icon">🛡️</div>
+      <div>
+        <div class="alert-title">Vendor Evaluation Protocol</div>
+        <div class="alert-body">For each AI tool identified in Step 1, complete a vendor assessment using the four critical questions below. Focus first on tools with access to high-risk data categories identified in Step 2. A "Fail" on any question requires immediate review of that tool's deployment.</div>
+      </div>
+    </div>
+
+    <!-- VENDOR CARD 1 -->
+    <div class="vendor-card">
+      <div class="vendor-header">
+        <div class="field-group">
+          <label>🏢 Vendor / Tool Name</label>
+          <input type="text" placeholder="e.g., ChatGPT Enterprise">
+        </div>
+        <div class="field-group">
+          <label>📌 Primary Use Case</label>
+          <input type="text" placeholder="e.g., Document drafting">
+        </div>
+        <div class="field-group">
+          <label>🗂️ Data Categories Involved</label>
+          <input type="text" placeholder="e.g., Legal docs, PII">
+        </div>
+      </div>
+
+      <div class="vendor-question">
+        <div class="vq-label"><span class="vq-num">Q1</span> Does the vendor store user input data? What are their data retention policies?</div>
+        <div class="radio-group">
+          <label class="radio-option"><input type="radio" name="v1q1" value="no"> ✅ No — Data not retained</label>
+          <label class="radio-option"><input type="radio" name="v1q1" value="limited"> ⚠️ Limited — Short-term only</label>
+          <label class="radio-option"><input type="radio" name="v1q1" value="yes"> 🔴 Yes — Data stored</label>
+          <label class="radio-option"><input type="radio" name="v1q1" value="unknown"> ❓ Unknown</label>
+        </div>
+        <input type="text" placeholder="Notes on retention policy / source of information…" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:8px 12px;color:var(--white);font-family:inherit;font-size:0.82rem;outline:none;width:100%;transition:border-color .2s;">
+      </div>
+
+      <div class="vendor-question">
+        <div class="vq-label"><span class="vq-num">Q2</span> Is submitted data used to train or improve the AI model?</div>
+        <div class="radio-group">
+          <label class="radio-option"><input type="radio" name="v1q2" value="no"> ✅ No — Opt-out confirmed</label>
+          <label class="radio-option"><input type="radio" name="v1q2" value="optout"> ⚠️ Opt-out available</label>
+          <label class="radio-option"><input type="radio" name="v1q2" value="yes"> 🔴 Yes — Used for training</label>
+          <label class="radio-option"><input type="radio" name="v1q2" value="unknown"> ❓ Unknown</label>
+        </div>
+        <input type="text" placeholder="Notes on model training policy…" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:8px 12px;color:var(--white);font-family:inherit;font-size:0.82rem;outline:none;width:100%;transition:border-color .2s;">
+      </div>
+
+      <div class="vendor-question">
+        <div class="vq-label"><span class="vq-num">Q3</span> Is data encrypted in transit and at rest?</div>
+        <div class="radio-group">
+          <label class="radio-option"><input type="radio" name="v1q3" value="both"> ✅ Both — Transit &amp; Rest</label>
+          <label class="radio-option"><input type="radio" name="v1q3" value="transit"> ⚠️ Transit only</label>
+          <label class="radio-option"><input type="radio" name="v1q3" value="neither"> 🔴 Neither confirmed</label>
+          <label class="radio-option"><input type="radio" name="v1q3" value="unknown"> ❓ Unknown</label>
+        </div>
+        <input type="text" placeholder="Encryption standard details (e.g., AES-256, TLS 1.3)…" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:8px 12px;color:var(--white);font-family:inherit;font-size:0.82rem;outline:none;width:100%;transition:border-color .2s;">
+      </div>
+
+      <div class="vendor-question">
+        <div class="vq-label"><span class="vq-num">Q4</span> What security certifications does the vendor hold?</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+          <label style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:0.82rem;color:var(--text-body);">
+            <input type="checkbox" style="accent-color:var(--green);"> SOC 2 Type II
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:0.82rem;color:var(--text-body);">
+            <input type="checkbox" style="accent-color:var(--green);"> ISO 27001
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:0.82rem;color:var(--text-body);">
+            <input type="checkbox" style="accent-color:var(--green);"> HIPAA BAA Available
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:0.82rem;color:var(--text-body);">
+            <input type="checkbox" style="accent-color:var(--green);"> GDPR DPA Signed
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:0.82rem;color:var(--text-body);">
+            <input type="checkbox" style="accent-color:var(--green);"> PCI-DSS
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:0.82rem;color:var(--text-body);">
+            <input type="checkbox" style="accent-color:var(--green);"> FedRAMP
+          </label>
+        </div>
+        <input type="text" placeholder="Certification details / documentation link / notes…" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:8px 12px;color:var(--white);font-family:inherit;font-size:0.82rem;outline:none;width:100%;transition:border-color .2s;">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px;padding-top:20px;border-top:1px solid var(--border);">
+        <div class="field-group">
+          <label>📋 Overall Vendor Assessment</label>
+          <select>
+            <option value="">Select verdict…</option>
+            <option>✅ Approved — Meets standards</option>
+            <option>⚠️ Conditional — Requires policy controls</option>
+            <option>🔴 Rejected — Does not meet standards</option>
+            <option>🔍 Under Review — Pending info</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>📅 Review / Expiry Date</label>
+          <input type="date">
+        </div>
+      </div>
+    </div>
+
+    <!-- VENDOR CARD 2 -->
+    <div class="vendor-card">
+      <div class="vendor-header">
+        <div class="field-group">
+          <label>🏢 Vendor / Tool Name</label>
+          <input type="text" placeholder="e.g., GitHub Copilot">
+        </div>
+        <div class="field-group">
+          <label>📌 Primary Use Case</label>
+          <input type="text" placeholder="e.g., Code assistance">
+        </div>
+        <div class="field-group">
+          <label>🗂️ Data Categories Involved</label>
+          <input type="text" placeholder="e.g., Source code, IP">
+        </div>
+      </div>
+
+      <div class="vendor-question">
+        <div class="vq-label"><span class="vq-num">Q1</span> Does the vendor store user input data?</div>
+        <div class="radio-group">
+          <label class="radio-option"><input type="radio" name="v2q1"> ✅ No</label>
+          <label class="radio-option"><input type="radio" name="v2q1"> ⚠️ Limited</label>
+          <label class="radio-option"><input type="radio" name="v2q1"> 🔴 Yes</label>
+          <label class="radio-option"><input type="radio" name="v2q1"> ❓ Unknown</label>
+        </div>
+        <input type="text" placeholder="Notes…" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:8px 12px;color:var(--white);font-family:inherit;font-size:0.82rem;outline:none;width:100%;">
+      </div>
+      <div class="vendor-question">
+        <div class="vq-label"><span class="vq-num">Q2</span> Is data used for model training?</div>
+        <div class="radio-group">
+          <label class="radio-option"><input type="radio" name="v2q2"> ✅ No</label>
+          <label class="radio-option"><input type="radio" name="v2q2"> ⚠️ Opt-out available</label>
+          <label class="radio-option"><input type="radio" name="v2q2"> 🔴 Yes</label>
+          <label class="radio-option"><input type="radio" name="v2q2"> ❓ Unknown</label>
+        </div>
+        <input type="text" placeholder="Notes…" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:8px 12px;color:var(--white);font-family:inherit;font-size:0.82rem;outline:none;width:100%;">
+      </div>
+      <div class="vendor-question">
+        <div class="vq-label"><span class="vq-num">Q3</span> Is data encrypted in transit and at rest?</div>
+        <div class="radio-group">
+          <label class="radio-option"><input type="radio" name="v2q3"> ✅ Both</label>
+          <label class="radio-option"><input type="radio" name="v2q3"> ⚠️ Transit only</label>
+          <label class="radio-option"><input type="radio" name="v2q3"> 🔴 Neither</label>
+          <label class="radio-option"><input type="radio" name="v2q3"> ❓ Unknown</label>
+        </div>
+        <input type="text" placeholder="Notes…" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:8px 12px;color:var(--white);font-family:inherit;font-size:0.82rem;outline:none;width:100%;">
+      </div>
+      <div class="vendor-question">
+        <div class="vq-label"><span class="vq-num">Q4</span> What certifications does the vendor hold?</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+          <label style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:0.82rem;color:var(--text-body);">
+            <input type="checkbox" style="accent-color:var(--green);"> SOC 2 Type II
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:0.82rem;color:var(--text-body);">
+            <input type="checkbox" style="accent-color:var(--green);"> ISO 27001
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:0.82rem;color:var(--text-body);">
+            <input type="checkbox" style="accent-color:var(--green);"> GDPR DPA
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:0.82rem;color:var(--text-body);">
+            <input type="checkbox" style="accent-color:var(--green);"> FedRAMP
+          </label>
+        </div>
+        <input type="text" placeholder="Notes…" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:8px 12px;color:var(--white);font-family:inherit;font-size:0.82rem;outline:none;width:100%;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px;padding-top:20px;border-top:1px solid var(--border);">
+        <div class="field-group">
+          <label>📋 Overall Vendor Assessment</label>
+          <select>
+            <option value="">Select verdict…</option>
+            <option>✅ Approved</option>
+            <option>⚠️ Conditional</option>
+            <option>🔴 Rejected</option>
+            <option>🔍 Under Review</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>📅 Review Date</label>
+          <input type="date">
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD MORE VENDOR NOTE -->
+    <div class="alert alert-blue" style="margin-top:8px;">
+      <div class="alert-icon">➕</div>
+      <div>
+        <div class="alert-title">Need More Vendor Assessment Forms?</div>
+        <div class="alert-body">Print additional copies of the Vendor Assessment section (above) for each AI tool in your inventory. The four critical questions above should be completed for every AI vendor with access to sensitive or regulated data.</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="hr">
+
+  <!-- ══════════════════════════════════════════
+       SECTION — ACTION PLAN
+  ══════════════════════════════════════════ -->
+  <section class="section page-break" id="action">
+    <p class="section-label">Section 04</p>
+    <h2 class="section-title">Your <span>Action Plan</span></h2>
+    <p class="section-desc">
+      Based on your audit findings, use this section to document your remediation priorities and assign ownership. Address critical findings first, then build toward a sustainable AI governance program.
+    </p>
+
+    <div class="action-grid">
+      <div class="action-item">
+        <div class="ai-icon" style="background:rgba(255,77,109,0.15);">🚨</div>
+        <div class="ai-content">
+          <div class="ai-title">Immediate Actions (0–7 Days)</div>
+          <div class="ai-desc">Halt confirmed high-risk AI usage, notify security team</div>
+          <textarea class="ai-input" placeholder="List your immediate priority actions…" style="min-height:70px;resize:vertical;"></textarea>
+        </div>
+      </div>
+      <div class="action-item">
+        <div class="ai-icon" style="background:rgba(255,184,0,0.15);">⚡</div>
+        <div class="ai-content">
+          <div class="ai-title">Short-Term Actions (7–30 Days)</div>
+          <div class="ai-desc">Vendor vetting, data governance policy draft</div>
+          <textarea class="ai-input" placeholder="30-day action items…" style="min-height:70px;resize:vertical;"></textarea>
+        </div>
+      </div>
+      <div class="action-item">
+        <div class="ai-icon" style="background:rgba(26,110,245,0.15);">📋</div>
+        <div class="ai-content">
+          <div class="ai-title">Medium-Term Actions (30–90 Days)</div>
+          <div class="ai-desc">AI policy rollout, employee training, monitoring setup</div>
+          <textarea class="ai-input" placeholder="90-day goals…" style="min-height:70px;resize:vertical;"></textarea>
+        </div>
+      </div>
+      <div class="action-item">
+        <div class="ai-icon" style="background:rgba(0,200,150,0.15);">🎯</div>
+        <div class="ai-content">
+          <div class="ai-title">Ongoing Governance (90+ Days)</div>
+          <div class="ai-desc">Quarterly audits, vendor re-certifications, policy updates</div>
+          <textarea class="ai-input" placeholder="Long-term governance program…" style="min-height:70px;resize:vertical;"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:8px;">
+      <div class="card-header">
+        <div class="card-icon" style="background:rgba(139,92,246,0.15);">👥</div>
+        <div>
+          <div class="card-title">Responsibility Matrix</div>
+          <div class="card-sub">Assign ownership for AI governance activities</div>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-bottom:0;">
+        <table class="exposure-table">
+          <thead>
+            <tr>
+              <th>Governance Activity</th>
+              <th>Owner / Department</th>
+              <th>Target Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="data-type">AI Tool Inventory &amp; Audit</span></td>
+              <td><input type="text" placeholder="e.g., IT Security Team"></td>
+              <td><input type="date"></td>
+              <td>
+                <select>
+                  <option>🔲 Not Started</option>
+                  <option>🔄 In Progress</option>
+                  <option>✅ Complete</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td><span class="data-type">AI Usage Policy (Draft)</span></td>
+              <td><input type="text" placeholder="e.g., Legal + Compliance"></td>
+              <td><input type="date"></td>
+              <td>
+                <select>
+                  <option>🔲 Not Started</option>
+                  <option>🔄 In Progress</option>
+                  <option>✅ Complete</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td><span class="data-type">Vendor Risk Assessments</span></td>
+              <td><input type="text" placeholder="e.g., Procurement + IT"></td>
+              <td><input type="date"></td>
+              <td>
+                <select>
+                  <option>🔲 Not Started</option>
+                  <option>🔄 In Progress</option>
+                  <option>✅ Complete</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td><span class="data-type">Employee AI Training</span></td>
+              <td><input type="text" placeholder="e.g., HR + IT Security"></td>
+              <td><input type="date"></td>
+              <td>
+                <select>
+                  <option>🔲 Not Started</option>
+                  <option>🔄 In Progress</option>
+                  <option>✅ Complete</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td><span class="data-type">Data Classification Update</span></td>
+              <td><input type="text" placeholder="e.g., Data Governance Lead"></td>
+              <td><input type="date"></td>
+              <td>
+                <select>
+                  <option>🔲 Not Started</option>
+                  <option>🔄 In Progress</option>
+                  <option>✅ Complete</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td><span class="data-type">Quarterly AI Audit Schedule</span></td>
+              <td><input type="text" placeholder="e.g., CISO / CTO"></td>
+              <td><input type="date"></td>
+              <td>
+                <select>
+                  <option>🔲 Not Started</option>
+                  <option>🔄 In Progress</option>
+                  <option>✅ Complete</option>
+                </select>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Final Summary -->
+    <div class="card" style="margin-top:24px;background:linear-gradient(135deg,rgba(26,110,245,0.07),rgba(0,212,255,0.04));">
+      <div class="card-header">
+        <div class="card-icon" style="background:rgba(26,110,245,0.18);">📝</div>
+        <div>
+          <div class="card-title">Audit Executive Summary</div>
+          <div class="card-sub">Summarize overall findings for leadership reporting</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;">
+        <div class="field-group">
+          <label>Total AI Tools Identified</label>
+          <input type="number" placeholder="0" min="0">
+        </div>
+        <div class="field-group">
+          <label>Tools Approved / Vetted</label>
+          <input type="number" placeholder="0" min="0">
+        </div>
+        <div class="field-group">
+          <label>Tools Requiring Review</label>
+          <input type="number" placeholder="0" min="0">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+        <div class="field-group">
+          <label>Overall Risk Level</label>
+          <select>
+            <option value="">Assess overall risk…</option>
+            <option>🔴 Critical — Immediate action required</option>
+            <option>🟠 High — Significant gaps present</option>
+            <option>🟡 Medium — Some controls needed</option>
+            <option>🟢 Low — Well-managed, maintain monitoring</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Next Scheduled Audit Date</label>
+          <input type="date">
+        </div>
+      </div>
+      <div class="field-group">
+        <label>📄 Executive Summary Notes</label>
+        <textarea class="fill-area" style="min-height:100px;" placeholder="Write a brief 2–3 sentence summary of your audit findings suitable for leadership review. Include top 3 risks identified and primary recommended actions…"></textarea>
+      </div>
+      <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="field-group">
+          <label>✍️ Auditor Signature / Name</label>
+          <input type="text" placeholder="Full name and title">
+        </div>
+        <div class="field-group">
+          <label>📅 Date Completed</label>
+          <input type="date">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ FOOTER ══ -->
+  <footer class="doc-footer">
+    <div class="footer-brand">
+      <strong>EVOLVE EDGE AI SECURITY</strong><br>
+      AI Security Quick Audit Framework · All Rights Reserved
+    </div>
+    <div class="footer-disclaimer">
+      This document is provided for informational and audit purposes only. It does not constitute legal advice. Organizations should consult qualified legal and compliance professionals for specific regulatory guidance applicable to their jurisdiction and industry.
+    </div>
+  </footer>
+
+</div><!-- /container -->
+
+<script>
+  // Auto-highlight checked checklist items
+  document.querySelectorAll('.checklist-item input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', function() {
+      const item = this.closest('.checklist-item');
+      if (this.checked) {
+        item.style.background = 'rgba(26,110,245,0.1)';
+        item.style.borderColor = 'rgba(26,110,245,0.35)';
+      } else {
+        item.style.background = '';
+        item.style.borderColor = '';
+      }
+    });
+  });
+
+  // Auto-color radio options on selection
+  document.querySelectorAll('.radio-option input[type="radio"]').forEach(r => {
+    r.addEventListener('change', function() {
+      const group = this.closest('.radio-group');
+      group.querySelectorAll('.radio-option').forEach(opt => {
+        opt.style.background = '';
+        opt.style.borderColor = '';
+        opt.style.color = '';
+      });
+      const selected = this.closest('.radio-option');
+      const val = this.value;
+      if (val === 'no' || val === 'both') {
+        selected.style.background = 'rgba(0,200,150,0.15)';
+        selected.style.borderColor = 'rgba(0,200,150,0.4)';
+        selected.style.color = '#5EEAD4';
+      } else if (val === 'yes') {
+        selected.style.background = 'rgba(255,77,109,0.15)';
+        selected.style.borderColor = 'rgba(255,77,109,0.4)';
+        selected.style.color = '#FF8FA3';
+      } else if (val === 'limited' || val === 'optout' || val === 'transit') {
+        selected.style.background = 'rgba(255,184,0,0.15)';
+        selected.style.borderColor = 'rgba(255,184,0,0.4)';
+        selected.style.color = '#FFD060';
+      } else {
+        selected.style.background = 'rgba(148,163,184,0.15)';
+        selected.style.borderColor = 'rgba(148,163,184,0.3)';
+        selected.style.color = '#94A3B8';
+      }
+    });
+  });
+
+  // Score input color feedback
+  const scoreInput = document.querySelector('input[type="number"][min="0"][max="7"]');
+  if(scoreInput){
+    scoreInput.addEventListener('input', function(){
+      const v = parseInt(this.value);
+      if(v >= 3) this.style.color = '#FF4D6D';
+      else if(v >= 1) this.style.color = '#FFB800';
+      else this.style.color = '#00C896';
+    });
+  }
+
+  // Smooth active TOC dot on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const tocLinks = document.querySelectorAll('.toc a');
+  window.addEventListener('scroll', () => {
+    let cur = '';
+    sections.forEach(s => {
+      if(window.scrollY >= s.offsetTop - 200) cur = s.id;
+    });
+    tocLinks.forEach(a => {
+      a.querySelector('.toc-dot').style.background =
+        a.getAttribute('href') === '#' + cur ? 'var(--cyan)' : '';
+    });
+  }, { passive: true });
+</script>
+</body>
+</html>

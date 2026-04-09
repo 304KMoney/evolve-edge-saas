@@ -1,0 +1,939 @@
+<!DOCTYPE html><!-- This site was created in Webflow. https://webflow.com --><!-- Last Published: Wed Mar 18 2026 14:48:07 GMT+0000 (Coordinated Universal Time) --><html data-wf-domain="www.punchb2b.com" data-wf-page="67e0f0d5622c48633d0f6ef8" data-wf-site="67b346878c750d15070627a5" lang="en-GB" data-wf-collection="67e0f0d5622c48633d0f6e6b" data-wf-item-slug="creating-urgency-in-b2b-sales"><head><meta charset="utf-8"/><title>Creating Urgency in B2B Sales</title><link rel="alternate" hrefLang="x-default" href="https://www.punchb2b.com/blog/creating-urgency-in-b2b-sales"/><link rel="alternate" hrefLang="en-GB" href="https://www.punchb2b.com/blog/creating-urgency-in-b2b-sales"/><link rel="alternate" hrefLang="en-US" href="https://www.punchb2b.com/en-us/blog/creating-urgency-in-b2b-sales"/><meta content="" name="description"/><meta content="Creating Urgency in B2B Sales" property="og:title"/><meta content="" property="og:description"/><meta content="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f4a8146dc9578e48849_1_Punch_Creating-Urgency-in-B2B-Sales_Banner.webp" property="og:image"/><meta content="Creating Urgency in B2B Sales" property="twitter:title"/><meta content="" property="twitter:description"/><meta content="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f4a8146dc9578e48849_1_Punch_Creating-Urgency-in-B2B-Sales_Banner.webp" property="twitter:image"/><meta property="og:type" content="website"/><meta content="summary_large_image" name="twitter:card"/><meta content="width=device-width, initial-scale=1" name="viewport"/><meta content="Webflow" name="generator"/><link href="https://cdn.prod.website-files.com/67b346878c750d15070627a5/css/punch-design.webflow.shared.a11069184.min.css" rel="stylesheet" type="text/css" integrity="sha384-oRBpGEoHBt/bIhho2PM2EusEIVXTSQ7yUMOfFBYGu59mxASQ5Yre/J8Jk5yNVfn/" crossorigin="anonymous"/><script type="text/javascript">!function(o,c){var n=c.documentElement,t=" w-mod-";n.className+=t+"js",("ontouchstart"in o||o.DocumentTouch&&c instanceof DocumentTouch)&&(n.className+=t+"touch")}(window,document);</script><link href="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67f331b6b79bb197c5b7f301_icon-style.png" rel="shortcut icon" type="image/x-icon"/><link href="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67f331c49916bdf9efa7a2ee_icon-style%20(1).png" rel="apple-touch-icon"/><link href="https://www.punchb2b.com/blog/creating-urgency-in-b2b-sales" rel="canonical"/><!-- Keep this css code to improve the font quality-->
+<style>
+  * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -o-font-smoothing: antialiased;
+  -webkit-appearance:none;
+}
+</style>
+
+
+<script>
+if (window.location.pathname.includes('en-us')) {
+  if (!sessionStorage.getItem('enUsChecked')) {
+    sessionStorage.setItem('enUsChecked', true);
+    fetch('https://ipinfo.io?token=8b79d96e05aea0')
+      .then(response => response.json())
+      .then(data => {
+        const countryCode = data.country;
+        console.log('Country code:', countryCode);
+        if (countryCode !== 'US') {
+          const newPath = window.location.pathname.replace('/en-us', '') || '/';
+          sessionStorage.setItem('redirected', true);
+          window.location.href = window.location.origin + newPath;
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching geolocation:', error);
+      });
+  }
+} else if (!sessionStorage.getItem('redirected')) {
+  fetch('https://ipinfo.io?token=8b79d96e05aea0')
+    .then(response => response.json())
+    .then(data => {
+      const countryCode = data.country;
+      console.log('Country code:', countryCode);
+      if (countryCode === 'US') {
+        sessionStorage.setItem('redirected', true);
+        window.location.href = window.location.origin + '/en-us' + window.location.pathname;
+        return;
+      }
+      sessionStorage.setItem('redirected', true);
+    })
+    .catch(error => {
+      console.error('Error fetching geolocation:', error);
+      sessionStorage.setItem('redirected', true);
+    });
+}
+</script>
+
+<script type="text/javascript">window._mfq = window._mfq || [];(function() {var mf = document.createElement("script");mf.type = "text/javascript"; mf.defer = true;mf.src = "//cdn.mouseflow.com/projects/6d001447-c558-4fb9-9add-fcb92046f5d3.js";document.getElementsByTagName("head")[0].appendChild(mf);})();</script>
+
+
+
+
+<script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init me ys Ss gs ws capture je Di xs register register_once register_for_session unregister unregister_for_session Rs getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Is ks createPersonProfile Ps bs opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing $s debug Es getPageViewId captureTraceFeedback captureTraceMetric".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    posthog.init('phc_nmWFnP0rZruR4dDv4BXG1fMOKzjkm4dj6yDvpB2Ajuf', {
+        api_host: 'https://eu.i.posthog.com',
+        person_profiles: 'identified_only', // or 'always' to create profiles for anonymous users as well
+    })
+</script>
+
+<script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups onFeatureFlags addFeatureFlagsHandler onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    posthog.init('phc_1KD7Vf3ZsVRIutNSv9VgKVyuHoNhqbDbUkLFGVNBBwG', {
+        api_host: 'https://us.i.posthog.com',
+        defaults: '2026-01-30'
+    })
+</script>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-5563TJ6');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Start Humblytics Tracking Code -->
+<script async src="https://app.humblytics.com/hmbl.min.js?id=55a5311"></script>
+<!-- End Humblytics Tracking Code -->
+
+
+<!-- Finsweet Attributes -->
+<script async type="module"
+src="https://cdn.jsdelivr.net/npm/@finsweet/attributes@2/attributes.js"
+fs-scrolldisable
+></script>
+
+<!-- [Attributes by Finsweet] Accordion -->
+<script defer src="https://cdn.jsdelivr.net/npm/@finsweet/attributes-accordion@1/accordion.js"></script><!-- [Attributes by Finsweet] Accordion -->
+<script defer src="https://cdn.jsdelivr.net/npm/@finsweet/attributes-accordion@1/accordion.js"></script>
+<!-- [Attributes by Finsweet] Table of Contents -->
+<script defer src="https://cdn.jsdelivr.net/npm/@finsweet/attributes-toc@1/toc.js"></script>
+
+<!-- <link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
+/> -->
+
+<!-- [Attributes by Finsweet] Social Share -->
+<script defer src="https://cdn.jsdelivr.net/npm/@finsweet/attributes-socialshare@1/socialshare.js"></script></head><body><div class="page-wrapper"><div data-wf--nav--variant="base" class="navbar_component"><div class="global-styles w-embed"><style>
+
+/* Ensure all elements inherit the color from its parent */
+body * {
+    color: inherit;
+}
+
+a,
+.w-input,
+.w-select,
+.w-tab-link,
+.w-nav-link,
+.w-slider-arrow-left,
+.w-slider-arrow-right,
+.w-dropdown-btn,
+.w-dropdown-toggle,
+.w-dropdown-link {
+  color: inherit;
+  text-decoration: inherit;
+  font-size: inherit;
+}
+
+/* Focus state style for keyboard navigation for the focusable elements */
+*[tabindex]:focus-visible,
+  input[type="file"]:focus-visible {
+   outline: 0.125rem solid #4d65ff;
+   outline-offset: 0.125rem;
+}
+
+/* Get rid of top margin on first element in any rich text element */
+.w-richtext > :not(div):first-child, .w-richtext > div:first-child > :first-child {
+  margin-top: 0 !important;
+}
+
+/* Get rid of bottom margin on last element in any rich text element */
+.w-richtext>:last-child, .w-richtext ol li:last-child, .w-richtext ul li:last-child {
+	margin-bottom: 0 !important;
+}
+
+/* Prevent all click and hover interaction with an element */
+.pointer-events-off {
+	pointer-events: none;
+}
+
+/* Enables all click and hover interaction with an element */
+.pointer-events-on {
+  pointer-events: auto;
+}
+
+/* Create a class of .div-square which maintains a 1:1 dimension of a div */
+.div-square::after {
+	content: "";
+	display: block;
+	padding-bottom: 100%;
+}
+
+/* Make sure containers never lose their center alignment */
+.container-medium,.container-small, .container-large {
+	margin-right: auto !important;
+  margin-left: auto !important;
+}
+
+
+/* Apply "..." after 3 lines of text */
+.text-style-3lines {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+}
+
+/* Apply "..." after 2 lines of text */
+.text-style-2lines {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+}
+
+/* Adds inline flex display */
+.display-inlineflex {
+  display: inline-flex;
+}
+
+/* These classes are never overwritten */
+.hide {
+  display: none !important;
+}
+
+@media screen and (max-width: 991px) {
+    .hide, .hide-tablet {
+        display: none !important;
+    }
+}
+  @media screen and (max-width: 767px) {
+    .hide-mobile-landscape{
+      display: none !important;
+    }
+}
+  @media screen and (max-width: 479px) {
+    .hide-mobile{
+      display: none !important;
+    }
+}
+ 
+.margin-0 {
+  margin: 0rem !important;
+}
+  
+.padding-0 {
+  padding: 0rem !important;
+}
+
+.spacing-clean {
+padding: 0rem !important;
+margin: 0rem !important;
+}
+
+.margin-top {
+  margin-right: 0rem !important;
+  margin-bottom: 0rem !important;
+  margin-left: 0rem !important;
+}
+
+.padding-top {
+  padding-right: 0rem !important;
+  padding-bottom: 0rem !important;
+  padding-left: 0rem !important;
+}
+  
+.margin-right {
+  margin-top: 0rem !important;
+  margin-bottom: 0rem !important;
+  margin-left: 0rem !important;
+}
+
+.padding-right {
+  padding-top: 0rem !important;
+  padding-bottom: 0rem !important;
+  padding-left: 0rem !important;
+}
+
+.margin-bottom {
+  margin-top: 0rem !important;
+  margin-right: 0rem !important;
+  margin-left: 0rem !important;
+}
+
+.padding-bottom {
+  padding-top: 0rem !important;
+  padding-right: 0rem !important;
+  padding-left: 0rem !important;
+}
+
+.margin-left {
+  margin-top: 0rem !important;
+  margin-right: 0rem !important;
+  margin-bottom: 0rem !important;
+}
+  
+.padding-left {
+  padding-top: 0rem !important;
+  padding-right: 0rem !important;
+  padding-bottom: 0rem !important;
+}
+  
+.margin-horizontal {
+  margin-top: 0rem !important;
+  margin-bottom: 0rem !important;
+}
+
+.padding-horizontal {
+  padding-top: 0rem !important;
+  padding-bottom: 0rem !important;
+}
+
+.margin-vertical {
+  margin-right: 0rem !important;
+  margin-left: 0rem !important;
+}
+  
+.padding-vertical {
+  padding-right: 0rem !important;
+  padding-left: 0rem !important;
+}
+
+/* Apply "..." at 100% width */
+.truncate-width,
+.truncate-width-mobile { 
+		width: 100%; 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+}
+/* Removes native scrollbar */
+.no-scrollbar {
+    -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.nav_spacer {
+    height: 64px;
+}
+
+/* Make text look crisper and more legible in all browsers */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+
+@media screen and (min-width: 994px) and (max-width: 1164px) {
+    .nav_spacer {
+        height: 96px;
+    }
+}
+
+
+/* Desktop-only styles */
+@media only screen and (min-width: 1024px) and (max-width: 1460px) {
+  [two-feature-content] {
+    width: 24vw;
+  }
+}
+
+@media only screen and (min-width: 1024px) and (max-width: 1360px) {
+  [two-feature-content] {
+    width: 22vw;
+  }
+}
+
+@media only screen and (min-width: 1024px) and (max-width: 1280px) {
+  [two-feature-content] {
+    width: 20vw;
+  }
+}
+
+@media only screen and (min-width: 1024px) and (max-width: 1180px) {
+  [two-feature-content] {
+    width: 15vw;
+  }
+}
+
+/* Optional: Mobile styles */
+@media only screen and (max-width: 1023px) {
+  [two-feature-content] {
+    /* Example mobile adjustment – you can change this value */
+    width: auto;
+  }
+}
+
+/* tooltip styles */
+/* tippy style overrides */
+.tippy-box {
+    border: 1px solid var(--color-neutral--neutral-400);
+    border-radius: 1rem;
+    color: var(--color-neutral--black-900);
+    background-color: var(--color-neutral--neutral-200);
+}
+
+.tippy-content {
+    padding: 8px 12px;
+    position: relative;
+    z-index: 2;
+    border-radius: 1rem;
+    background-color: var(--color-neutral--neutral-200);
+}
+
+.tippy-arrow {
+    position: relative;
+    z-index: 1;
+    color: var(--color-neutral--neutral-400);
+}
+
+@media screen and (min-width: 1336px){
+.calculator_summary-sticky{
+top: 92px;
+}
+}
+
+
+
+
+</style></div><div class="nav_spacer hide"></div><div class="nav_fixed"><div data-animation="default" data-collapse="medium" data-duration="400" data-easing="ease" data-easing2="ease" role="banner" class="navbar w-nav"><div class="nav_container"><div class="hide w-embed"><style>
+.navbar_menu_wrapper {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch; /* Essential for Safari mobile */
+}
+</style></div><a aria-label="home page" href="/" class="navbar_logo w-nav-brand"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 113 22" fill="none" class="svg hide-mobile-portrait"><g clip-path="url(#clip0_12834_4428)"><g><path d="M7.26945 1.97913H2.51196C1.1418 1.97913 0 3.12092 0 4.49108V18.1546C0 19.2964 0.799259 20.2479 1.94106 20.4382C2.55002 20.5143 3.15898 20.324 3.6157 19.9054C4.07242 19.4867 4.33883 18.9158 4.33883 18.3068V16.9747C4.33883 15.4904 5.55675 14.2725 7.04109 14.2344H8.06871C10.162 14.2344 11.6083 13.7016 12.7501 12.5217C13.8158 11.3419 14.3867 9.81948 14.3486 8.22096C14.4247 6.39408 13.6635 4.64332 12.3314 3.38734C11.1516 2.32167 9.81947 1.97913 7.26945 1.97913ZM7.04109 5.40452H7.23139C7.76423 5.40452 8.29707 5.48064 8.82991 5.67094C9.21051 5.78512 9.55305 5.97542 9.85753 6.24184C10.162 6.54632 10.3904 6.92692 10.4665 7.34558C10.5807 7.8023 10.5807 8.25902 10.4665 8.67768C10.2381 9.74336 9.40081 10.5426 8.33513 10.6568C7.84035 10.809 7.26945 10.809 6.77467 10.6949C6.12765 10.5807 5.51869 10.2381 5.06197 9.74336C4.64331 9.24858 4.41495 8.60156 4.45301 7.95454C4.41495 6.39408 5.40451 5.44258 7.04109 5.40452Z" fill="currentColor"></path><path d="M50.431 9.74336C50.469 8.14484 50.469 6.58438 50.3929 4.98586C50.3168 2.96868 49.7079 1.97913 48.4519 1.97913H48.1855C47.0056 1.97913 46.4347 2.74033 46.3966 4.33884C46.3586 5.67094 46.3586 7.00304 46.3205 8.33514V10.3143C46.3205 10.7329 46.1683 11.2658 45.8257 11.418C45.5593 11.5322 45.2548 11.4561 45.0265 11.2277C44.7981 11.0374 44.6459 10.809 44.5317 10.5426L41.2585 4.7575C40.5354 3.46346 39.6981 1.97913 38.0234 1.97913C37.0339 1.97913 36.1585 2.51197 35.6257 3.31122C35.0167 4.33884 35.2451 5.63288 35.2451 6.73662V15.4523C35.2451 16.518 35.1689 17.5837 35.2451 18.6113C35.2451 19.1822 35.5495 19.7151 36.0063 20.0576C36.8816 20.6666 38.0996 20.4763 38.7085 19.6009C38.7846 19.5248 38.8227 19.4486 38.8608 19.3345C39.013 19.03 39.1652 18.7636 39.1652 17.0889C39.0891 15.4523 39.1272 13.7777 39.3175 12.1411C39.3555 11.7986 39.4697 11.4941 39.6981 11.2277C40.3832 10.6187 41.0302 11.4941 41.2966 12.027L44.3033 17.4315C44.6839 18.2307 45.2168 18.9539 45.8257 19.5628C46.4728 20.1718 47.3862 20.4382 48.2616 20.2098C48.9467 19.9434 49.5176 19.4106 49.784 18.7255C50.3168 17.5076 50.2787 16.0613 50.3168 14.7673C50.3929 14.3486 50.3549 13.5113 50.431 9.74336Z" fill="currentColor"></path><path d="M62.3806 20.8569C65.6918 20.8569 68.2418 19.5248 69.612 17.0889C70.1829 16.0613 69.8023 14.7673 68.7747 14.1964C68.4702 14.0061 68.0896 13.9299 67.747 13.9299H67.5567C66.7194 13.9299 65.9582 14.4247 65.6157 15.1859C65.0067 16.518 63.903 17.165 62.2664 17.165C59.45 17.165 57.7753 14.9195 57.7753 11.1896C57.7753 7.45975 59.45 5.25228 62.3806 5.25228C63.8649 5.25228 64.9687 5.82317 65.5776 6.92691C66.1485 7.95453 67.4426 8.29707 68.4702 7.72617C68.8127 7.53587 69.1172 7.23139 69.3075 6.85079C69.6881 6.16571 69.65 5.3284 69.1933 4.68138C67.8232 2.62614 65.3873 1.5224 62.3425 1.5224C56.8238 1.5224 53.3984 5.21421 53.3984 11.1516C53.4365 17.0889 56.938 20.8569 62.3806 20.8569Z" fill="currentColor"></path><path d="M30.0675 1.78882C28.3929 1.78882 28.0504 3.38734 27.9742 4.94779C27.8981 6.20377 27.9362 7.49781 27.9362 8.75379C27.9362 9.32469 27.9742 9.81947 27.9742 10.6948C27.9742 11.6844 27.9742 12.1792 27.9362 12.5598C27.822 14.1202 27.7839 14.8814 27.2511 15.5665C26.2235 16.9367 24.2444 17.165 22.9123 16.1374C22.6839 15.9852 22.4936 15.7949 22.3414 15.5665C21.8466 14.8814 21.7705 14.1202 21.6563 12.5598C21.6182 12.1792 21.6182 11.6844 21.6182 10.6948C21.6182 9.85753 21.6182 9.32469 21.6563 8.75379C21.6943 7.49781 21.6943 6.20377 21.6182 4.94779C21.504 3.38734 21.1996 1.78882 19.5249 1.78882C17.3175 1.78882 17.3555 4.03436 17.3555 5.63287V14.2344C17.3936 15.4904 17.8122 16.7083 18.5354 17.774C18.916 18.3068 19.4107 18.8016 19.9436 19.2203C21.7705 20.5904 23.7876 20.6666 24.7772 20.6666H24.8153C25.8048 20.6666 27.8601 20.5904 29.6489 19.2203C31.2474 18.0404 32.1608 16.2135 32.237 14.2344V5.89929C32.237 4.26272 32.3892 1.78882 30.0675 1.78882Z" fill="currentColor"></path><path d="M85.7493 20.5524C86.3963 20.6285 87.0433 20.4001 87.5 19.9815C87.9948 19.5628 88.2612 18.9538 88.2612 18.3068V4.14853C88.2612 3.50151 87.9948 2.89255 87.5 2.47389C87.0433 2.05523 86.3963 1.82687 85.7493 1.90299C84.5694 2.05523 83.694 3.08285 83.7321 4.30077V6.54631C83.7321 7.76423 82.7425 8.75378 81.5246 8.75378H79.6597C78.4418 8.75378 77.4522 7.76423 77.4522 6.54631V4.30077C77.4903 3.12091 76.6149 2.09329 75.435 1.90299H75.2067C74.6358 1.90299 74.1029 2.09329 73.6843 2.47389C73.1895 2.89255 72.9231 3.50151 72.9231 4.14853V18.1546C72.885 19.3344 73.7604 20.3621 74.9402 20.5524C76.1962 20.6665 77.3 19.7912 77.4141 18.5352C77.4141 18.4591 77.4141 18.3829 77.4141 18.3068V14.9195C77.4141 13.7016 78.4037 12.712 79.6216 12.712H81.4866C82.7045 12.712 83.7321 13.7016 83.7321 14.9195V18.1927C83.694 19.3725 84.5694 20.3621 85.7493 20.5524Z" fill="currentColor"></path></g><path d="M109.157 0H108.434C107.216 0 106.188 0.875379 105.998 2.05524L104.666 9.93365C104.59 10.4665 104.095 10.809 103.562 10.6948C103.182 10.6187 102.839 10.3142 102.801 9.93365L101.507 2.05524C101.317 0.875379 100.289 0 99.0711 0H98.348C96.2166 0 94.5039 1.7127 94.5039 3.84406V17.9262C94.5039 20.0576 96.2166 21.7703 98.348 21.7703H109.157C111.288 21.7703 113.001 20.0576 113.001 17.9262V3.84406C113.001 1.75076 111.25 0 109.157 0ZM103.714 17.5837C102.458 17.5837 101.431 16.5561 101.431 15.3001C101.431 14.0441 102.458 13.0165 103.714 13.0165C104.97 13.0165 105.998 14.0441 105.998 15.3001C105.998 16.5561 104.97 17.5837 103.714 17.5837Z" fill="currentColor"></path></g></svg><div class="nav_logo-mob"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 28" fill="none" class="svg"><g clip-path="url(#clip0_13096_4770)"><g clip-path="url(#clip1_13096_4770)"><path d="M18.4453 0.5H17.5413C16.0189 0.5 14.7344 1.59422 14.4965 3.06905L12.8314 12.9171C12.7363 13.5831 12.1178 14.0113 11.4517 13.8686C10.976 13.7734 10.5478 13.3928 10.5002 12.9171L8.8827 3.06905C8.64482 1.59422 7.36029 0.5 5.83789 0.5H4.93397C2.26977 0.5 0.128906 2.64087 0.128906 5.30507V22.9078C0.128906 25.572 2.26977 27.7129 4.93397 27.7129H18.4453C21.1094 27.7129 23.2503 25.572 23.2503 22.9078V5.30507C23.2503 2.68845 21.0619 0.5 18.4453 0.5ZM11.642 22.4796C10.0721 22.4796 8.78754 21.1951 8.78754 19.6251C8.78754 18.0552 10.0721 16.7706 11.642 16.7706C13.212 16.7706 14.4965 18.0552 14.4965 19.6251C14.4965 21.1951 13.212 22.4796 11.642 22.4796Z" fill="currentColor"></path></g></g></svg></div></a><nav role="navigation" class="navbar_menu_wrapper w-nav-menu"><div class="navbar_menus-wrap"><div class="navbar_menus"><div class="nav-dropdown-hover-css w-embed"><style>
+/* CSS for dropdown hover effects - desktop only */
+@media screen and (min-width: 1024px) {
+  /* Blue dropdown hover effects */
+  .dropdown_list.is-blue {
+    transition: 0.5s ease;
+  }
+  
+  .dropdown_list.is-blue:hover {
+    background-color: #ECEEFF;
+  }
+  
+  /* Black dropdown hover effects */
+  .dropdown_list.is-blacks {
+    transition: 0.5s ease;
+  }
+  
+  .dropdown_list.is-blacks:hover {
+    background-color: #323131;
+    color: #FDFDFC;
+  }
+
+ .dropdown_list.is-blacks:hover .dropdown_icon-wrap.is-blacks {
+    background-color: #504F4E;
+    color: #B9B9B8;
+  }
+  
+    /* Orange dropdown hover effects */
+  .dropdown_list.is-orange {
+    transition: 0.5s ease;
+  }
+  
+  .dropdown_list.is-orange:hover {
+    background-color: #FFDFCF;
+    color: #323131;
+  }
+
+ .dropdown_list.is-orange:hover .dropdown_icon-wrap.is-orange {
+    background-color: #DD5F23;
+    color: #FFBE9E;
+  }
+  
+  /* Dropdown icon hover effects */
+  .dropdown_list.is-blue .dropdown_icon-wrap {
+    transition: 0.5s ease;
+  }
+  
+  .dropdown_list.is-blue:hover .dropdown_icon-wrap {
+    background-color: #3D54BD;
+  }
+  
+  /* SVG icon hover effects */
+  .dropdown_list.is-blue .svg_inside {
+    transition: 0.5s ease;
+  }
+  
+  .dropdown_list.is-blue:hover .svg_inside {
+    color: #9AAAFF;
+  }
+  
+ 
+  .dropdown_list-contents.is-blacks {
+    transition: color 0.3s ease-in-out;
+  }
+}
+
+/* Base dropdown list styling */
+.dropdown_list {
+  position: relative;
+}
+
+
+@media screen and (min-width: 1024px) {
+
+.dropdown_list-contents {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.5s cubic-bezier(0, 1, 0, 1);
+}
+
+  .dropdown_list:hover .dropdown_list-contents {
+    max-height: 1000px;
+    transition: max-height 0.5s cubic-bezier(0.5, 0, 1, 0);
+  }
+}
+</style></div><div class="hide w-embed"><style>
+.navbar_dropdown-toggle.w--open .navbar_dropdown-icon { 
+  transform: rotateZ(180deg) 
+}
+
+.navbar_dropdown-icon {
+  transition: transform 0.3s ease;
+}
+
+@media only screen and (max-width: 991px) {
+  .navbar_dropdown:has(.navbar_dropdown_toggle.w--open) { 
+    z-index: 9999 
+  }
+}
+</style></div><div class="dropdown_col-right-embed w-embed"><style>
+
+/* CSS for dropdown hover effects - desktop only *
+@media screen and (min-width: 1024px) {
+  .dropdown_list-card:hover {
+    background-color: #EDEBE8;
+    transition: 0.3s ease;
+  }
+  
+
+</style></div><div data-hover="true" data-delay="320" class="navbar_dropdown w-dropdown"><div class="navbar_dropdown-toggle w-dropdown-toggle"><div>Services</div><div class="navbar_dropdown-icon w-embed"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+  <mask id="mask0_12484_22847" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+    <rect width="24" height="24" fill="#D9D9D9"/>
+  </mask>
+  <g mask="url(#mask0_12484_22847)">
+    <path d="M12 15L7 10H17L12 15Z" fill="currentColor"/>
+  </g>
+</svg></div></div><nav class="navbar_dropdown-list w-dropdown-list"><div class="dropdown_list_container-wrap"><div class="dropdown_list_container is-service"><a href="/sdr-as-a-service" class="dropdown_list is-blue w-inline-block"><div class="dropdown_icon-wrap is-blue"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" class="svg_inside"><mask id="mask0_2427_6379" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_2427_6379)"><path d="M4.16667 17.5C3.70833 17.5 3.31597 17.3368 2.98958 17.0104C2.66319 16.684 2.5 16.2917 2.5 15.8333V4.16667C2.5 3.70833 2.66319 3.31597 2.98958 2.98958C3.31597 2.66319 3.70833 2.5 4.16667 2.5H15.8333C16.2917 2.5 16.684 2.66319 17.0104 2.98958C17.3368 3.31597 17.5 3.70833 17.5 4.16667V15.8333C17.5 16.2917 17.3368 16.684 17.0104 17.0104C16.684 17.3368 16.2917 17.5 15.8333 17.5H4.16667ZM15.8333 6.04167L10.7917 11.7083L7.5 8.41667L4.16667 11.75V14.125L7.5 10.7917L10.875 14.1667L15.8333 8.54167V6.04167Z" fill="currentColor" class="svg_inside"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">SDR as a Service</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Sales-ready meetings and full-cycle support that drives a 6-12X ROI</p></div></div></a><a href="/outsourced-abm" class="dropdown_list is-orange w-inline-block"><div class="dropdown_icon-wrap is-orange"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" class="svg_inside"><mask id="mask0_2324_20874" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_2324_20874)"><path d="M13.6667 17.5L12.5 16.3333L13.8125 15L12.5 13.6875L13.6667 12.5L15 13.8333L16.3125 12.5L17.5 13.6875L16.1667 15L17.5 16.3333L16.3125 17.5L15 16.1875L13.6667 17.5ZM5 15.8333C5.23611 15.8333 5.43403 15.7534 5.59375 15.5937C5.75347 15.434 5.83333 15.2361 5.83333 15C5.83333 14.7638 5.75347 14.5659 5.59375 14.4062C5.43403 14.2465 5.23611 14.1666 5 14.1666C4.76389 14.1666 4.56597 14.2465 4.40625 14.4062C4.24653 14.5659 4.16667 14.7638 4.16667 15C4.16667 15.2361 4.24653 15.434 4.40625 15.5937C4.56597 15.7534 4.76389 15.8333 5 15.8333ZM5 17.5C4.30556 17.5 3.71528 17.2569 3.22917 16.7708C2.74306 16.2847 2.5 15.6944 2.5 15C2.5 14.3055 2.74306 13.7152 3.22917 13.2291C3.71528 12.743 4.30556 12.5 5 12.5C5.51389 12.5 5.98264 12.6423 6.40625 12.927C6.82986 13.2118 7.13889 13.5972 7.33333 14.0833C7.875 13.9305 8.31597 13.6319 8.65625 13.1875C8.99653 12.743 9.16667 12.2361 9.16667 11.6666V8.33329C9.16667 7.18051 9.57292 6.19788 10.3854 5.38538C11.1979 4.57288 12.1806 4.16663 13.3333 4.16663H14.2917L12.9792 2.85413L14.1667 1.66663L17.5 4.99996L14.1667 8.33329L12.9792 7.16663L14.2917 5.83329H13.3333C12.6389 5.83329 12.0486 6.07635 11.5625 6.56246C11.0764 7.04857 10.8333 7.63885 10.8333 8.33329V11.6666C10.8333 12.6805 10.5069 13.5729 9.85417 14.3437C9.20139 15.1145 8.375 15.5902 7.375 15.7708C7.20833 16.2847 6.90625 16.7013 6.46875 17.0208C6.03125 17.3402 5.54167 17.5 5 17.5ZM3.66667 7.49996L2.5 6.33329L3.8125 4.99996L2.5 3.68746L3.66667 2.49996L5 3.83329L6.3125 2.49996L7.5 3.68746L6.16667 4.99996L7.5 6.33329L6.3125 7.49996L5 6.18746L3.66667 7.49996Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">ABM as a service</div><div class="dropdown_list-contents"><p class="dropdown_list-para">End-to-end account targeting that opens doors, engages buying committees, and accelerates deals.</p></div></div></a><a href="/priority-abx" class="dropdown_list is-blacks w-inline-block"><div class="dropdown_icon-wrap is-blacks"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 21 20" fill="currentColor" class="svg_inside"><g mask="url(#mask0_12650_4965)"><path d="M17.7785 10.0781C17.7785 11.947 17.7847 13.819 17.7785 15.688C17.7724 17.6825 16.4621 18.9986 14.4906 18.9986C11.6672 18.9986 8.84376 19.0017 6.02031 18.9986C4.14109 18.9986 2.80319 17.6794 2.79396 15.7728C2.77858 11.9564 2.77551 8.14004 2.79396 4.32682C2.80627 2.10296 4.70701 0.579561 7.20136 1.24232C7.99795 1.45591 8.39471 2.13123 8.52696 2.96989C8.84376 4.98644 9.18823 6.9967 9.51118 9.01325C9.58807 9.50325 9.73877 9.89902 10.3139 9.88017C10.8491 9.86447 10.9813 9.48126 11.0521 9.02581C11.3504 7.15689 11.6426 5.28798 11.9686 3.42534C12.3438 1.28001 13.8909 0.45706 15.8778 1.36482C17.1419 1.94277 17.7662 2.9856 17.7724 4.39278C17.7816 6.28683 17.7724 8.18401 17.7724 10.0781H17.7785ZM12.0978 13.6494C12.1009 12.616 11.2951 11.7899 10.2801 11.7931C9.26205 11.7931 8.46545 12.6192 8.47775 13.6588C8.49006 14.6671 9.26205 15.4618 10.2524 15.4806C11.2612 15.4995 12.0947 14.6734 12.0978 13.6526V13.6494Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside is-blacks"><div class="dropdown_list-title"><h2 class="two-feature_acc-heading-2 text-size-medium">Priority Intent<sup>TM</sup></h2></div><div class="dropdown_list-contents"><p class="dropdown_list-para">Smarter targeting with a platform powered by AI, intent data, and ads to drive intent</p></div></div></a></div></div></nav></div><div data-hover="true" data-delay="320" class="navbar_dropdown w-dropdown"><div class="navbar_dropdown-toggle w-dropdown-toggle"><div>Solutions</div><div class="navbar_dropdown-icon w-embed"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+  <mask id="mask0_12484_22847" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+    <rect width="24" height="24" fill="#D9D9D9"/>
+  </mask>
+  <g mask="url(#mask0_12484_22847)">
+    <path d="M12 15L7 10H17L12 15Z" fill="currentColor"/>
+  </g>
+</svg></div></div><nav class="navbar_dropdown-list w-dropdown-list"><div class="dropdown_list_container-wrap"><div class="dropdown_list_container is-resource"><div class="dropdown_col"><div class="dropdown_list-top"><div class="dropdown_eyebrow-text">Sectors</div><div class="dropdown_list-wrap"><a href="/sector/saas" class="dropdown_list is-orange w-inline-block"><div class="dropdown_icon-wrap is-orange"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" class="svg_inside"><mask id="mask0_12722_11119" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_12722_11119)"><path d="M3.33073 16.6667C2.8724 16.6667 2.48003 16.5035 2.15365 16.1771C1.82726 15.8507 1.66406 15.4584 1.66406 15V5.00004C1.66406 4.54171 1.82726 4.14935 2.15365 3.82296C2.48003 3.49657 2.8724 3.33337 3.33073 3.33337H16.6641C17.1224 3.33337 17.5148 3.49657 17.8411 3.82296C18.1675 4.14935 18.3307 4.54171 18.3307 5.00004V15C18.3307 15.4584 18.1675 15.8507 17.8411 16.1771C17.5148 16.5035 17.1224 16.6667 16.6641 16.6667H3.33073ZM3.33073 15H16.6641V6.66671H3.33073V15ZM6.2474 14.1667L5.08073 13L7.22656 10.8334L5.0599 8.66671L6.2474 7.50004L9.58073 10.8334L6.2474 14.1667ZM9.9974 14.1667V12.5H14.9974V14.1667H9.9974Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">SaaS</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Fueling growth for fast-moving SaaS brands</p></div></div></a><a href="/sector/professional-services" class="dropdown_list is-orange w-inline-block"><div class="dropdown_icon-wrap is-orange"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" class="svg_inside"><mask id="mask0_12722_11127" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_12722_11127)"><path d="M3.33073 17.5001C2.8724 17.5001 2.48003 17.3369 2.15365 17.0105C1.82726 16.6841 1.66406 16.2917 1.66406 15.8334V6.66675C1.66406 6.20841 1.82726 5.81605 2.15365 5.48966C2.48003 5.16328 2.8724 5.00008 3.33073 5.00008H6.66406V3.33341C6.66406 2.87508 6.82726 2.48272 7.15365 2.15633C7.48003 1.82994 7.8724 1.66675 8.33073 1.66675H11.6641C12.1224 1.66675 12.5148 1.82994 12.8411 2.15633C13.1675 2.48272 13.3307 2.87508 13.3307 3.33341V5.00008H16.6641C17.1224 5.00008 17.5148 5.16328 17.8411 5.48966C18.1675 5.81605 18.3307 6.20841 18.3307 6.66675V15.8334C18.3307 16.2917 18.1675 16.6841 17.8411 17.0105C17.5148 17.3369 17.1224 17.5001 16.6641 17.5001H3.33073ZM8.33073 5.00008H11.6641V3.33341H8.33073V5.00008Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">Professional Services</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Pipeline built for service-driven businesses</p></div></div></a><a href="/sector/healthcare" class="dropdown_list is-orange w-inline-block"><div class="dropdown_icon-wrap is-orange"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" class="svg_inside"><mask id="mask0_12722_11135" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_12722_11135)"><path d="M8.91406 10.6042L8.20573 9.54167C8.13628 9.43056 8.03906 9.34028 7.91406 9.27083C7.78906 9.20139 7.65712 9.16667 7.51823 9.16667H2.0599C1.90712 8.80556 1.80295 8.45833 1.7474 8.125C1.69184 7.79167 1.66406 7.44444 1.66406 7.08333C1.66406 5.77778 2.10156 4.6875 2.97656 3.8125C3.85156 2.9375 4.94184 2.5 6.2474 2.5C6.96962 2.5 7.65712 2.65278 8.3099 2.95833C8.96267 3.26389 9.52517 3.69444 9.9974 4.25C10.4696 3.69444 11.0321 3.26389 11.6849 2.95833C12.3377 2.65278 13.0252 2.5 13.7474 2.5C15.053 2.5 16.1432 2.9375 17.0182 3.8125C17.8932 4.6875 18.3307 5.77778 18.3307 7.08333C18.3307 7.44444 18.3029 7.79167 18.2474 8.125C18.1918 8.45833 18.0877 8.80556 17.9349 9.16667H12.9766L11.5391 7.04167C11.4557 6.91667 11.3481 6.82292 11.2161 6.76042C11.0842 6.69792 10.9418 6.66667 10.7891 6.66667C10.6085 6.66667 10.4523 6.71875 10.3203 6.82292C10.1884 6.92708 10.0946 7.0625 10.0391 7.22917L8.91406 10.6042ZM9.9974 17.7917L8.78906 16.7083C7.33073 15.4028 6.13628 14.2847 5.20573 13.3542C4.27517 12.4236 3.54601 11.5833 3.01823 10.8333H7.01823L8.45573 12.9583C8.53906 13.0833 8.6467 13.1771 8.77865 13.2396C8.91059 13.3021 9.05295 13.3333 9.20573 13.3333C9.38628 13.3333 9.54253 13.2812 9.67448 13.1771C9.80642 13.0729 9.90017 12.9375 9.95573 12.7708L11.0807 9.375L11.8099 10.4583C11.8793 10.5694 11.9766 10.6597 12.1016 10.7292C12.2266 10.7986 12.3585 10.8333 12.4974 10.8333H16.9766C16.4488 11.5833 15.7196 12.4236 14.7891 13.3542C13.8585 14.2847 12.6641 15.4028 11.2057 16.7083L9.9974 17.7917Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">Healthcare</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Connecting healthcare brands with decision-makers</p></div></div></a></div></div><a href="/sectors" class="dropdown_list-bottom is-orange w-inline-block"><div>View all sectors</div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 28 28" fill="none" class="dropdown_bottom-arrow"><rect width="28" height="28" rx="14" fill="currentColor" class="dropdown_bottom-arrow-bg"></rect><mask id="mask0_2427_7653" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="4" y="4" width="20" height="20"><rect x="4" y="4" width="20" height="20" fill="currentColor"></rect></mask><g><path d="M17.4798 14.834H7.33398V13.1673H17.4798L12.8132 8.50065L14.0007 7.33398L20.6673 14.0007L14.0007 20.6673L12.8132 19.5007L17.4798 14.834Z" fill="currentColor"></path></g></svg></a></div><div class="dropdown_col hide-tablet"><div class="dropdown_list-top"><div class="dropdown_eyebrow-text"></div><div class="dropdown_list-wrap"><a href="/sector/finance" class="dropdown_list is-orange w-inline-block"><div class="dropdown_icon-wrap is-orange"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" preserveAspectRatio="none" class="svg_inside"><mask id="mask0_18_5013" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_18_5013)"><path d="M13.3334 9.1665C13.5695 9.1665 13.7674 9.08664 13.9272 8.92692C14.0869 8.7672 14.1667 8.56928 14.1667 8.33317C14.1667 8.09706 14.0869 7.89914 13.9272 7.73942C13.7674 7.5797 13.5695 7.49984 13.3334 7.49984C13.0973 7.49984 12.8994 7.5797 12.7397 7.73942C12.5799 7.89914 12.5001 8.09706 12.5001 8.33317C12.5001 8.56928 12.5799 8.7672 12.7397 8.92692C12.8994 9.08664 13.0973 9.1665 13.3334 9.1665ZM6.66675 7.49984H10.8334V5.83317H6.66675V7.49984ZM3.75008 17.4998C3.27786 15.9165 2.81258 14.3366 2.35425 12.7603C1.89591 11.1839 1.66675 9.56928 1.66675 7.9165C1.66675 6.63873 2.11119 5.55539 3.00008 4.6665C3.88897 3.77762 4.9723 3.33317 6.25008 3.33317H10.4167C10.8195 2.80539 11.3091 2.39567 11.8855 2.104C12.4619 1.81234 13.0834 1.6665 13.7501 1.6665C14.0973 1.6665 14.3924 1.78803 14.6355 2.03109C14.8786 2.27414 15.0001 2.56928 15.0001 2.9165C15.0001 2.98595 14.9654 3.14567 14.8959 3.39567C14.8404 3.54845 14.7883 3.7047 14.7397 3.86442C14.6911 4.02414 14.6529 4.18734 14.6251 4.354L16.5209 6.24984H18.3334V12.0623L15.9792 12.8332L14.5834 17.4998H10.0001V15.8332H8.33341V17.4998H3.75008Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">Finance</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Convert high-value opportunities</p></div></div></a><a href="/sector/logistics-supply-chain" class="dropdown_list is-orange w-inline-block"><div class="dropdown_icon-wrap is-orange"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" preserveAspectRatio="none" class="svg_inside"><mask id="mask0_18_5127" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_18_5127)"><path d="M9.16667 18.104V10.479L2.5 6.62484V13.3123C2.5 13.6179 2.57292 13.8957 2.71875 14.1457C2.86458 14.3957 3.06944 14.5971 3.33333 14.7498L9.16667 18.104ZM10.8333 18.104L16.6667 14.7498C16.9306 14.5971 17.1354 14.3957 17.2813 14.1457C17.4271 13.8957 17.5 13.6179 17.5 13.3123V6.62484L10.8333 10.479V18.104ZM14.1458 6.64567L16.6042 5.20817L10.8333 1.89567C10.5694 1.74289 10.2917 1.6665 10 1.6665C9.70833 1.6665 9.43056 1.74289 9.16667 1.89567L7.52083 2.83317L14.1458 6.64567ZM10 9.0415L12.4792 7.62484L5.875 3.7915L3.375 5.229L10 9.0415Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">Logistics &amp; Supply Chain</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Transform complex supply chain sales cycles into predictable pipeline</p></div></div></a><a href="/sector/data-analytics" class="dropdown_list is-orange w-inline-block"><div class="dropdown_icon-wrap is-orange"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" preserveAspectRatio="none" class="svg_inside"><mask id="mask0_18_5241" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_18_5241)"><path d="M2.18751 11.6877L0.833344 10.7085L5.00001 4.04183L7.50001 6.9585L10.8333 1.54183L13.3333 5.29183L16.1458 0.833496L17.5 1.81266L13.375 8.35433L10.8958 4.62516L7.72918 9.771L5.20834 6.8335L2.18751 11.6877ZM12.0833 15.0002C12.6667 15.0002 13.1597 14.7988 13.5625 14.396C13.9653 13.9932 14.1667 13.5002 14.1667 12.9168C14.1667 12.3335 13.9653 11.8404 13.5625 11.4377C13.1597 11.0349 12.6667 10.8335 12.0833 10.8335C11.5 10.8335 11.007 11.0349 10.6042 11.4377C10.2014 11.8404 10 12.3335 10 12.9168C10 13.5002 10.2014 13.9932 10.6042 14.396C11.007 14.7988 11.5 15.0002 12.0833 15.0002ZM16.3333 18.3335L14.0833 16.0835C13.7917 16.2779 13.4757 16.4238 13.1354 16.521C12.7951 16.6182 12.4445 16.6668 12.0833 16.6668C11.0417 16.6668 10.1563 16.3022 9.42709 15.5731C8.69793 14.8439 8.33334 13.9585 8.33334 12.9168C8.33334 11.8752 8.69793 10.9897 9.42709 10.2606C10.1563 9.53141 11.0417 9.16683 12.0833 9.16683C13.125 9.16683 14.0104 9.53141 14.7396 10.2606C15.4688 10.9897 15.8333 11.8752 15.8333 12.9168C15.8333 13.2779 15.7847 13.6286 15.6875 13.9689C15.5903 14.3092 15.4445 14.6252 15.25 14.9168L17.5 17.1668L16.3333 18.3335Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">Data &amp; Analytics</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Sales opportunities with SDR teams</p></div></div></a></div></div></div><div class="dropdown_col"><div class="dropdown_list-top"><div class="dropdown_eyebrow-text">Capabilities</div><div class="dropdown_list-wrap"><a href="/b2b-sales-development" class="dropdown_list is-blue is-grey-mobile w-inline-block"><div class="dropdown_icon-wrap is-blue is-grey-mobile"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 21 20" fill="none" class="svg_inside"><mask id="mask0_12722_23122" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="21" height="20"><rect x="0.328125" width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_12722_23122)"><path d="M18.1589 11.875L12.2005 17.8333C12.0339 18 11.8464 18.125 11.638 18.2083C11.4297 18.2916 11.2214 18.3333 11.013 18.3333C10.8047 18.3333 10.5964 18.2916 10.388 18.2083C10.1797 18.125 9.99219 18 9.82552 17.8333L2.47135 10.4791C2.31858 10.3263 2.20052 10.1493 2.11719 9.94788C2.03385 9.74649 1.99219 9.53468 1.99219 9.31246V3.33329C1.99219 2.87496 2.15538 2.4826 2.48177 2.15621C2.80816 1.82982 3.20052 1.66663 3.65885 1.66663H9.63802C9.86024 1.66663 10.0755 1.71176 10.2839 1.80204C10.4922 1.89232 10.6727 2.01385 10.8255 2.16663L18.1589 9.52079C18.3255 9.68746 18.447 9.87496 18.5234 10.0833C18.5998 10.2916 18.638 10.5 18.638 10.7083C18.638 10.9166 18.5998 11.1215 18.5234 11.3229C18.447 11.5243 18.3255 11.7083 18.1589 11.875ZM5.74219 6.66663C6.08941 6.66663 6.38455 6.5451 6.6276 6.30204C6.87066 6.05899 6.99219 5.76385 6.99219 5.41663C6.99219 5.0694 6.87066 4.77426 6.6276 4.53121C6.38455 4.28815 6.08941 4.16663 5.74219 4.16663C5.39497 4.16663 5.09983 4.28815 4.85677 4.53121C4.61372 4.77426 4.49219 5.0694 4.49219 5.41663C4.49219 5.76385 4.61372 6.05899 4.85677 6.30204C5.09983 6.5451 5.39497 6.66663 5.74219 6.66663Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">Sales development</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Build sustainable pipeline growth</p></div></div></a><a href="/appointment-setting" class="dropdown_list is-blue is-grey-mobile w-inline-block"><div class="dropdown_icon-wrap is-blue is-grey-mobile"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 21 20" fill="none" class="svg_inside"><mask id="mask0_12722_23130" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="21" height="20"><rect x="0.328125" width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_12722_23130)"><path d="M9.45312 15.2917L6.49479 12.3334L7.70312 11.1251L9.45312 12.8751L12.9531 9.37508L14.1615 10.5834L9.45312 15.2917ZM4.49479 18.3334C4.03646 18.3334 3.6441 18.1702 3.31771 17.8438C2.99132 17.5174 2.82812 17.1251 2.82812 16.6667V5.00008C2.82812 4.54175 2.99132 4.14939 3.31771 3.823C3.6441 3.49661 4.03646 3.33341 4.49479 3.33341H5.32812V1.66675H6.99479V3.33341H13.6615V1.66675H15.3281V3.33341H16.1615C16.6198 3.33341 17.0122 3.49661 17.3385 3.823C17.6649 4.14939 17.8281 4.54175 17.8281 5.00008V16.6667C17.8281 17.1251 17.6649 17.5174 17.3385 17.8438C17.0122 18.1702 16.6198 18.3334 16.1615 18.3334H4.49479ZM4.49479 16.6667H16.1615V8.33341H4.49479V16.6667Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">Appointment setting</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Fill your calendar with sales-ready leads</p></div></div></a><a href="/lead-generation" class="dropdown_list is-blue is-grey-mobile w-inline-block"><div class="dropdown_icon-wrap is-blue is-grey-mobile"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 21 20" fill="none" class="svg_inside"><mask id="mask0_12722_23138" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="21" height="20"><rect x="0.328125" width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_12722_23138)"><path d="M6.99219 15.0001V13.3334H5.32552V11.6667H6.99219V10.0001H8.65885V11.6667H10.3255V13.3334H8.65885V15.0001H6.99219ZM7.82552 18.3334C6.21441 18.3334 4.83941 17.764 3.70052 16.6251C2.56163 15.4862 1.99219 14.1112 1.99219 12.5001C1.99219 10.889 2.56163 9.51397 3.70052 8.37508C4.83941 7.23619 6.21441 6.66675 7.82552 6.66675C9.43663 6.66675 10.8116 7.23619 11.9505 8.37508C13.0894 9.51397 13.6589 10.889 13.6589 12.5001C13.6589 14.1112 13.0894 15.4862 11.9505 16.6251C10.8116 17.764 9.43663 18.3334 7.82552 18.3334ZM7.82552 16.6667C8.9783 16.6667 9.96094 16.2605 10.7734 15.448C11.5859 14.6355 11.9922 13.6529 11.9922 12.5001C11.9922 11.3473 11.5859 10.3647 10.7734 9.55217C9.96094 8.73967 8.9783 8.33341 7.82552 8.33341C6.67274 8.33341 5.6901 8.73967 4.8776 9.55217C4.0651 10.3647 3.65885 11.3473 3.65885 12.5001C3.65885 13.6529 4.0651 14.6355 4.8776 15.448C5.6901 16.2605 6.67274 16.6667 7.82552 16.6667ZM14.4505 13.0834C14.4783 13.0001 14.4922 12.9098 14.4922 12.8126V12.5001C14.4922 10.6529 13.8429 9.07994 12.5443 7.78133C11.2457 6.48272 9.67274 5.83341 7.82552 5.83341H7.51302C7.4158 5.83341 7.32552 5.8473 7.24219 5.87508C7.6033 4.65286 8.28733 3.64591 9.29427 2.85425C10.3012 2.06258 11.4783 1.66675 12.8255 1.66675C14.4366 1.66675 15.8116 2.23619 16.9505 3.37508C18.0894 4.51397 18.6589 5.88897 18.6589 7.50008C18.6589 8.8473 18.263 10.0244 17.4714 11.0313C16.6797 12.0383 15.6727 12.7223 14.4505 13.0834Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">Lead generation</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Drive intent from key accounts</p></div></div></a></div></div></div></div><div class="hide"><div class="w-dyn-list"><div fs-cmsnest-collection="blogcate" fs-cmsnest-element="nest-source" role="list" class="w-dyn-items"><div role="listitem" class="w-dyn-item"><a href="/blog-categories/sdr-tips" class="dropdown_list-tag w-inline-block"><div class="dropdown_list-tag-text">SDR Tips</div></a></div><div role="listitem" class="w-dyn-item"><a href="/blog-categories/smart-sales-tech" class="dropdown_list-tag w-inline-block"><div class="dropdown_list-tag-text">Smart sales tech</div></a></div><div role="listitem" class="w-dyn-item"><a href="/blog-categories/sales-development-and-strategy" class="dropdown_list-tag w-inline-block"><div class="dropdown_list-tag-text">Sales development and strategy</div></a></div><div role="listitem" class="w-dyn-item"><a href="/blog-categories/sales-acceleration" class="dropdown_list-tag w-inline-block"><div class="dropdown_list-tag-text">Sales acceleration</div></a></div><div role="listitem" class="w-dyn-item"><a href="/blog-categories/sdr-foundations" class="dropdown_list-tag w-inline-block"><div class="dropdown_list-tag-text">SDR foundations</div></a></div></div></div></div></div></nav></div><a href="/our-work" class="navbar_link w-inline-block"><div>Case studies</div></a><div data-hover="true" data-delay="0" class="navbar_dropdown w-dropdown"><div class="navbar_dropdown-toggle w-dropdown-toggle"><div>Company</div><div class="navbar_dropdown-icon w-embed"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+  <mask id="mask0_12484_22847" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+    <rect width="24" height="24" fill="#D9D9D9"/>
+  </mask>
+  <g mask="url(#mask0_12484_22847)">
+    <path d="M12 15L7 10H17L12 15Z" fill="currentColor"/>
+  </g>
+</svg></div></div><nav class="navbar_dropdown-list w-dropdown-list"><div class="dropdown_list_container-wrap"><div class="dropdown_list_container is-service"><a href="/our-people" class="dropdown_list is-blue is-grey-mobile w-inline-block"><div class="dropdown_icon-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" class="svg_inside"><mask id="mask0_12722_7345" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_12722_7345)"><path d="M0 15V13.6875C0 13.0903 0.305556 12.6042 0.916667 12.2292C1.52778 11.8542 2.33333 11.6667 3.33333 11.6667C3.51389 11.6667 3.6875 11.6701 3.85417 11.6771C4.02083 11.684 4.18056 11.7014 4.33333 11.7292C4.13889 12.0208 3.99306 12.3264 3.89583 12.6458C3.79861 12.9653 3.75 13.2986 3.75 13.6458V15H0ZM5 15V13.6458C5 13.2014 5.12153 12.7951 5.36458 12.4271C5.60764 12.059 5.95139 11.7361 6.39583 11.4583C6.84028 11.1806 7.37153 10.9722 7.98958 10.8333C8.60764 10.6944 9.27778 10.625 10 10.625C10.7361 10.625 11.4132 10.6944 12.0312 10.8333C12.6493 10.9722 13.1806 11.1806 13.625 11.4583C14.0694 11.7361 14.4097 12.059 14.6458 12.4271C14.8819 12.7951 15 13.2014 15 13.6458V15H5ZM16.25 15V13.6458C16.25 13.2847 16.2049 12.9444 16.1146 12.625C16.0243 12.3056 15.8889 12.0069 15.7083 11.7292C15.8611 11.7014 16.0174 11.684 16.1771 11.6771C16.3368 11.6701 16.5 11.6667 16.6667 11.6667C17.6667 11.6667 18.4722 11.8507 19.0833 12.2188C19.6944 12.5868 20 13.0764 20 13.6875V15H16.25ZM3.33333 10.8333C2.875 10.8333 2.48264 10.6701 2.15625 10.3438C1.82986 10.0174 1.66667 9.625 1.66667 9.16667C1.66667 8.69444 1.82986 8.29861 2.15625 7.97917C2.48264 7.65972 2.875 7.5 3.33333 7.5C3.80556 7.5 4.20139 7.65972 4.52083 7.97917C4.84028 8.29861 5 8.69444 5 9.16667C5 9.625 4.84028 10.0174 4.52083 10.3438C4.20139 10.6701 3.80556 10.8333 3.33333 10.8333ZM16.6667 10.8333C16.2083 10.8333 15.816 10.6701 15.4896 10.3438C15.1632 10.0174 15 9.625 15 9.16667C15 8.69444 15.1632 8.29861 15.4896 7.97917C15.816 7.65972 16.2083 7.5 16.6667 7.5C17.1389 7.5 17.5347 7.65972 17.8542 7.97917C18.1736 8.29861 18.3333 8.69444 18.3333 9.16667C18.3333 9.625 18.1736 10.0174 17.8542 10.3438C17.5347 10.6701 17.1389 10.8333 16.6667 10.8333ZM10 10C9.30556 10 8.71528 9.75694 8.22917 9.27083C7.74306 8.78472 7.5 8.19444 7.5 7.5C7.5 6.79167 7.74306 6.19792 8.22917 5.71875C8.71528 5.23958 9.30556 5 10 5C10.7083 5 11.3021 5.23958 11.7812 5.71875C12.2604 6.19792 12.5 6.79167 12.5 7.5C12.5 8.19444 12.2604 8.78472 11.7812 9.27083C11.3021 9.75694 10.7083 10 10 10Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">Team</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Meet your dream sales squad</p></div></div></a><a href="/careers" class="dropdown_list is-blue is-grey-mobile w-inline-block"><div class="dropdown_icon-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 21 20" fill="none" class="svg_inside"><mask id="mask0_12722_7353" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="21" height="20"><rect x="0.335938" width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_12722_7353)"><path d="M3.66667 17.5001C3.20833 17.5001 2.81597 17.3369 2.48958 17.0105C2.16319 16.6841 2 16.2917 2 15.8334V6.66675C2 6.20841 2.16319 5.81605 2.48958 5.48966C2.81597 5.16328 3.20833 5.00008 3.66667 5.00008H7V3.33341C7 2.87508 7.16319 2.48272 7.48958 2.15633C7.81597 1.82994 8.20833 1.66675 8.66667 1.66675H12C12.4583 1.66675 12.8507 1.82994 13.1771 2.15633C13.5035 2.48272 13.6667 2.87508 13.6667 3.33341V5.00008H17C17.4583 5.00008 17.8507 5.16328 18.1771 5.48966C18.5035 5.81605 18.6667 6.20841 18.6667 6.66675V15.8334C18.6667 16.2917 18.5035 16.6841 18.1771 17.0105C17.8507 17.3369 17.4583 17.5001 17 17.5001H3.66667ZM8.66667 5.00008H12V3.33341H8.66667V5.00008Z" fill="currentColor"></path></g></svg></div><div class="dropdown_list-inside"><div class="dropdown_list-title">Careers</div><div class="dropdown_list-contents"><p class="dropdown_list-para">Shape the future of sales with us</p></div></div></a></div></div></nav></div><div data-hover="true" data-delay="0" class="navbar_dropdown w-dropdown"><div class="navbar_dropdown-toggle w-dropdown-toggle"><div>Resources</div><div class="navbar_dropdown-icon w-embed"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+  <mask id="mask0_12484_22847" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+    <rect width="24" height="24" fill="#D9D9D9"/>
+  </mask>
+  <g mask="url(#mask0_12484_22847)">
+    <path d="M12 15L7 10H17L12 15Z" fill="currentColor"/>
+  </g>
+</svg></div></div><nav class="navbar_dropdown-list w-dropdown-list"><div class="dropdown_list_container-wrap"><div class="dropdown_list_container is-resource"><div class="dropdown_container_resource"><div class="w-embed"><!-- Resource links hover effects -->
+<!-- This section styles the dropdown hover effects -->
+<style>
+/* CSS for dropdown hover effects - desktop only */
+@media screen and (min-width: 1024px) {
+  .resource_dropdown-content_link {
+    transition: background-color 0.3s ease;
+  }
+
+  .resource_link_icon_wrapper {
+    transition: background-color 0.3s ease;
+  }
+
+  .resource_link_icon {
+    transition: opacity 0.3s ease, filter 0.3s ease;
+  }
+
+  .resource_dropdown-content_link.-wfp-hover,
+  .resource_dropdown-content_link:hover {
+    background-color: var(--color-accent-color--blue-100);
+  }
+
+  .resource_dropdown-content_link.-wfp-hover .resource_link_icon_wrapper,
+  .resource_dropdown-content_link:hover .resource_link_icon_wrapper {
+    background-color: var(--color-accent-color--blue-500);
+  }
+
+  .resource_dropdown-content_link.-wfp-hover .resource_link_icon_wrapper,
+  .resource_dropdown-content_link:hover .resource_link_icon_wrapper {
+    color: #9AAAFF;
+  }
+
+  /* View All link hover */
+  .resource_dropdown-content_link.is-view-all.-wfp-hover,
+  .resource_dropdown-content_link.is-view-all:hover {
+    background-color: #ECEEFF;
+  }
+} 
+</style></div><div class="resource_dropdown-content"><div class="resource_dropdown-content_left"><div class="resource_dropdown-content_col"><h4 class="resource_dropdown-content_col_heading">tools</h4><div class="resource_dropdown-content_link_list"><a href="/tools/hiring-sdr-calculator" class="resource_dropdown-content_link with-icon w-inline-block"><div class="resource_link_icon_wrapper"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" preserveAspectRatio="none" class="svg_inside"><mask id="mask0_18_5578" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_18_5578)"><path d="M6.66667 15H7.91667V13.3333H9.58333V12.0833H7.91667V10.4167H6.66667V12.0833H5V13.3333H6.66667V15ZM10.8333 14.375H15V13.125H10.8333V14.375ZM10.8333 12.2917H15V11.0417H10.8333V12.2917ZM5.20833 7.66667H9.375V6.41667H5.20833V7.66667ZM4.16667 17.5C3.70833 17.5 3.31597 17.3368 2.98958 17.0104C2.66319 16.684 2.5 16.2917 2.5 15.8333V4.16667C2.5 3.70833 2.66319 3.31597 2.98958 2.98958C3.31597 2.66319 3.70833 2.5 4.16667 2.5H15.8333C16.2917 2.5 16.684 2.66319 17.0104 2.98958C17.3368 3.31597 17.5 3.70833 17.5 4.16667V15.8333C17.5 16.2917 17.3368 16.684 17.0104 17.0104C16.684 17.3368 16.2917 17.5 15.8333 17.5H4.16667ZM11.75 9.125L12.9167 7.95833L14.0833 9.125L14.9583 8.25L13.7917 7.04167L14.9583 5.875L14.0833 5L12.9167 6.16667L11.75 5L10.875 5.875L12.0417 7.04167L10.875 8.25L11.75 9.125Z" fill="currentColor"></path></g></svg></div><div class="resource_link_item_text"><div class="resource_link_item_text">Hiring SDR calculator</div></div></a><a href="/tools/b2b-outbound-roi-calculator" class="resource_dropdown-content_link with-icon w-inline-block"><div class="resource_link_icon_wrapper"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" preserveAspectRatio="none" class="svg_inside"><mask id="mask0_18_5586" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_18_5586)"><path d="M13.3337 9.16675C13.5698 9.16675 13.7677 9.08689 13.9274 8.92717C14.0871 8.76744 14.167 8.56953 14.167 8.33341C14.167 8.0973 14.0871 7.89939 13.9274 7.73966C13.7677 7.57994 13.5698 7.50008 13.3337 7.50008C13.0975 7.50008 12.8996 7.57994 12.7399 7.73966C12.5802 7.89939 12.5003 8.0973 12.5003 8.33341C12.5003 8.56953 12.5802 8.76744 12.7399 8.92717C12.8996 9.08689 13.0975 9.16675 13.3337 9.16675ZM6.66699 7.50008H10.8337V5.83341H6.66699V7.50008ZM3.75033 17.5001C3.2781 15.9167 2.81283 14.3369 2.35449 12.7605C1.89616 11.1841 1.66699 9.56953 1.66699 7.91675C1.66699 6.63897 2.11144 5.55564 3.00033 4.66675C3.88921 3.77786 4.97255 3.33341 6.25033 3.33341H10.417C10.8198 2.80564 11.3094 2.39591 11.8857 2.10425C12.4621 1.81258 13.0837 1.66675 13.7503 1.66675C14.0975 1.66675 14.3927 1.78828 14.6357 2.03133C14.8788 2.27439 15.0003 2.56953 15.0003 2.91675C15.0003 2.98619 14.9656 3.14591 14.8962 3.39591C14.8406 3.54869 14.7885 3.70494 14.7399 3.86466C14.6913 4.02439 14.6531 4.18758 14.6253 4.35425L16.5212 6.25008H18.3337V12.0626L15.9795 12.8334L14.5837 17.5001H10.0003V15.8334H8.33366V17.5001H3.75033Z" fill="currentColor"></path></g></svg></div><div class="resource_link_item_text"><div class="resource_link_item_text">B2B outbound ROI calculator</div></div></a><a href="/tools" class="resource_dropdown-content_link is-view-all w-inline-block"><div class="resource_link_item_text"><div class="resource_link_item_text">View all tools</div></div><div class="resource_link_arrow_wrapper"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 28 28" fill="none" preserveAspectRatio="none" class="resource_link_arrow"><path d="M17.4788 14.834H7.33301V13.1673H17.4788L12.8122 8.50065L13.9997 7.33398L20.6663 14.0007L13.9997 20.6673L12.8122 19.5007L17.4788 14.834Z" fill="currentcolor"></path></svg></div></a></div></div><div class="resource_dropdown-content_col"><h4 class="resource_dropdown-content_col_heading">guideS</h4><div class="resource_dropdown-content_link_list"><a href="/resources/signals-playbook" class="resource_dropdown-content_link with-image-blog w-inline-block"><div class="resource_link_image_wrapper with-image-4"><img sizes="100vw" srcset="https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-500.webp 500w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-800.webp 800w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-1080.webp 1080w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-1600.webp 1600w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook.webp 1882w" alt="" loading="lazy" src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook.webp" class="resource_link_image with-image-5"/></div><div class="resource_link_item_text with-image-7"><div class="resource_link_item_text with-image-7">Sales Signal Playbook</div></div></a><a href="/b2b-sales-trends-report-2026" class="resource_dropdown-content_link with-image-blog w-inline-block"><div class="resource_link_image_wrapper with-image-4"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/695f7515d627558653d9d886_trends-report.webp" loading="lazy" alt="" class="resource_link_image with-image-5"/></div><div class="resource_link_item_text with-image-7"><div class="resource_link_item_text with-image-7">Trends Report 2026</div></div></a></div><a href="/tools#guides" class="resource_dropdown-content_link is-view-all w-inline-block"><div class="resource_link_item_text"><div class="resource_link_item_text">View all guides</div></div><div class="resource_link_arrow_wrapper"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 28 28" fill="none" preserveAspectRatio="none" class="resource_link_arrow"><path d="M17.4788 14.834H7.33301V13.1673H17.4788L12.8122 8.50065L13.9997 7.33398L20.6663 14.0007L13.9997 20.6673L12.8122 19.5007L17.4788 14.834Z" fill="currentcolor"></path></svg></div></a></div><div class="resource_dropdown-content_col"><h4 class="resource_dropdown-content_col_heading">blogs</h4><div class="w-dyn-list"><div role="list" class="resource_dropdown-content_link_list w-dyn-items"><div role="listitem" class="resource_dropdown-content_link_item w-dyn-item"><a href="/blog/why-your-multi-threaded-outbound-strategy-is-actually-just-spam-in-disguise" class="resource_dropdown-content_link with-image-blog w-inline-block"><div class="resource_link_image_wrapper with-image-11"><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69bd25dad9c4c8ceb1081815_Punch!_Blogs_Mar_Why-Your-Multi-Threaded-Outbound-Strategy-is-Spam_Thumbnail.jpg" loading="lazy" alt="" class="resource_link_image with-image-12"/></div><div class="resource_link_item_text with-image-14"><div class="resource_link_item_text with-image-14 text-style-2lines">Why Your &quot;Multi-Threaded&quot; Outbound Strategy is Actually Just Spam in Disguise</div></div></a></div><div role="listitem" class="resource_dropdown-content_link_item w-dyn-item"><a href="/blog/your-crm-isnt-a-database-its-a-goldmine" class="resource_dropdown-content_link with-image-blog w-inline-block"><div class="resource_link_image_wrapper with-image-11"><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69b279a89bd725796ff9d77b_Punch!_Blogs_Feb_Your-CRM-Isn%27t-a-Database-It%27s-a-Goldmine_Thumbnail.jpg" loading="lazy" alt="" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69b279a89bd725796ff9d77b_Punch!_Blogs_Feb_Your-CRM-Isn%27t-a-Database-It%27s-a-Goldmine_Thumbnail-p-500.jpg 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69b279a89bd725796ff9d77b_Punch!_Blogs_Feb_Your-CRM-Isn%27t-a-Database-It%27s-a-Goldmine_Thumbnail-p-800.jpg 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69b279a89bd725796ff9d77b_Punch!_Blogs_Feb_Your-CRM-Isn%27t-a-Database-It%27s-a-Goldmine_Thumbnail.jpg 1050w" class="resource_link_image with-image-12"/></div><div class="resource_link_item_text with-image-14"><div class="resource_link_item_text with-image-14 text-style-2lines">Your CRM Isn&#x27;t a Database, It&#x27;s a Goldmine</div></div></a></div><div role="listitem" class="resource_dropdown-content_link_item w-dyn-item"><a href="/blog/volume-metrics-are-dead" class="resource_dropdown-content_link with-image-blog w-inline-block"><div class="resource_link_image_wrapper with-image-11"><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website.png" loading="lazy" alt="" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-500.png 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-800.png 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-1080.png 1080w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-1600.png 1600w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-2000.png 2000w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-2600.png 2600w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-3200.png 3200w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website.png 4000w" class="resource_link_image with-image-12"/></div><div class="resource_link_item_text with-image-14"><div class="resource_link_item_text with-image-14 text-style-2lines">Volume Metrics Are DEAD</div></div></a></div></div></div><a href="/blog" class="resource_dropdown-content_link is-view-all w-inline-block"><div class="resource_link_item_text"><div class="resource_link_item_text">View all blogs</div></div><div class="resource_link_arrow_wrapper"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 28 28" fill="none" preserveAspectRatio="none" class="resource_link_arrow"><path d="M17.4788 14.834H7.33301V13.1673H17.4788L12.8122 8.50065L13.9997 7.33398L20.6663 14.0007L13.9997 20.6673L12.8122 19.5007L17.4788 14.834Z" fill="currentcolor"></path></svg></div></a></div><div class="resource_dropdown-content_col"><h4 class="resource_dropdown-content_col_heading">POdcasts</h4><div class="w-dyn-list"><div role="list" class="resource_dropdown-content_link_list w-dyn-items"><div role="listitem" class="resource_dropdown-content_link_item w-dyn-item"><a href="/blog/volume-metrics-are-dead" class="resource_dropdown-content_link with-image-blog w-inline-block"><div class="resource_link_image_wrapper with-image-18"><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website.png" loading="lazy" alt="" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-500.png 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-800.png 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-1080.png 1080w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-1600.png 1600w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-2000.png 2000w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-2600.png 2600w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website-p-3200.png 3200w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69a6bb64589ca01d2c0d360a_Podcast_2026_Chris_Ritson_website.png 4000w" class="resource_link_image with-image-19"/></div><div class="resource_link_item_text with-image-21"><div class="resource_link_item_text with-image-21 text-style-2lines">Volume Metrics Are DEAD</div></div></a></div><div role="listitem" class="resource_dropdown-content_link_item w-dyn-item"><a href="/blog/this-tool-replaced-chatgpt" class="resource_dropdown-content_link with-image-blog w-inline-block"><div class="resource_link_image_wrapper with-image-18"><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c34ded50fc2eaf13f9ce9_V0.1_EP1_Carina%20Clingman_thumbnails-02.png" loading="lazy" alt="" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c34ded50fc2eaf13f9ce9_V0.1_EP1_Carina%20Clingman_thumbnails-02-p-500.png 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c34ded50fc2eaf13f9ce9_V0.1_EP1_Carina%20Clingman_thumbnails-02-p-800.png 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c34ded50fc2eaf13f9ce9_V0.1_EP1_Carina%20Clingman_thumbnails-02-p-1080.png 1080w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c34ded50fc2eaf13f9ce9_V0.1_EP1_Carina%20Clingman_thumbnails-02-p-1600.png 1600w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c34ded50fc2eaf13f9ce9_V0.1_EP1_Carina%20Clingman_thumbnails-02.png 1920w" class="resource_link_image with-image-19"/></div><div class="resource_link_item_text with-image-21"><div class="resource_link_item_text with-image-21 text-style-2lines">This Tool REPLACED ChatGPT</div></div></a></div><div role="listitem" class="resource_dropdown-content_link_item w-dyn-item"><a href="/blog/europe-is-not-one-market" class="resource_dropdown-content_link with-image-blog w-inline-block"><div class="resource_link_image_wrapper with-image-18"><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c3b1b96d791ce470eac2e_Podcast%202025%20-%20episode%2011-02.png" loading="lazy" alt="" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c3b1b96d791ce470eac2e_Podcast%202025%20-%20episode%2011-02-p-500.png 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c3b1b96d791ce470eac2e_Podcast%202025%20-%20episode%2011-02-p-800.png 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c3b1b96d791ce470eac2e_Podcast%202025%20-%20episode%2011-02-p-1080.png 1080w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c3b1b96d791ce470eac2e_Podcast%202025%20-%20episode%2011-02-p-1600.png 1600w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/698c3b1b96d791ce470eac2e_Podcast%202025%20-%20episode%2011-02.png 1920w" class="resource_link_image with-image-19"/></div><div class="resource_link_item_text with-image-21"><div class="resource_link_item_text with-image-21 text-style-2lines">Europe IS NOT One Market</div></div></a></div></div></div><a href="/tools/b2b-outbound-podcast" class="resource_dropdown-content_link is-view-all w-inline-block"><div class="resource_link_item_text"><div class="resource_link_item_text">View all podcasts</div></div><div class="resource_link_arrow_wrapper"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 28 28" fill="none" preserveAspectRatio="none" class="resource_link_arrow"><path d="M17.4788 14.834H7.33301V13.1673H17.4788L12.8122 8.50065L13.9997 7.33398L20.6663 14.0007L13.9997 20.6673L12.8122 19.5007L17.4788 14.834Z" fill="currentcolor"></path></svg></div></a></div><div class="resource_dropdown-content_col hide"><h4 class="resource_dropdown-content_col_heading">podcasts</h4><div class="resource_dropdown-content_link_list"><a data-wf--resource-nav-link-item--variant="with-image" href="#" class="resource_dropdown-content_link w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3 w-inline-block"><div class="resource_link_icon_wrapper w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/689c3124867c028124531795_6cf1efe942f6c4ee0ff14a3733bdd0d8_calculate.svg" loading="lazy" alt="" class="resource_link_icon"/></div><div class="resource_link_image_wrapper w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook.webp" loading="lazy" alt="" sizes="(max-width: 991px) 100vw, 126.9140625px" srcset="https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-500.webp 500w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-800.webp 800w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-1080.webp 1080w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-1600.webp 1600w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook.webp 1882w" class="resource_link_image w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3"/></div><div class="resource_link_item_text"><div class="resource_link_item_text">Hiring SDR calculator</div></div></a><a data-wf--resource-nav-link-item--variant="with-image" href="#" class="resource_dropdown-content_link w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3 w-inline-block"><div class="resource_link_icon_wrapper w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/689c3124867c028124531795_6cf1efe942f6c4ee0ff14a3733bdd0d8_calculate.svg" loading="lazy" alt="" class="resource_link_icon"/></div><div class="resource_link_image_wrapper w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook.webp" loading="lazy" alt="" sizes="(max-width: 991px) 100vw, 126.9140625px" srcset="https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-500.webp 500w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-800.webp 800w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-1080.webp 1080w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-1600.webp 1600w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook.webp 1882w" class="resource_link_image w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3"/></div><div class="resource_link_item_text"><div class="resource_link_item_text">Hiring SDR calculator</div></div></a><a data-wf--resource-nav-link-item--variant="with-image" href="#" class="resource_dropdown-content_link w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3 w-inline-block"><div class="resource_link_icon_wrapper w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/689c3124867c028124531795_6cf1efe942f6c4ee0ff14a3733bdd0d8_calculate.svg" loading="lazy" alt="" class="resource_link_icon"/></div><div class="resource_link_image_wrapper w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook.webp" loading="lazy" alt="" sizes="(max-width: 991px) 100vw, 126.9140625px" srcset="https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-500.webp 500w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-800.webp 800w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-1080.webp 1080w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook-p-1600.webp 1600w, https://cdn.prod.website-files.com/67b346878c750d15070627a5/6894cac8f0199be4b5300c98_saas-playbook.webp 1882w" class="resource_link_image w-variant-56bd0999-8b39-55b8-139f-2bf34fc12aa3"/></div><div class="resource_link_item_text"><div class="resource_link_item_text">Hiring SDR calculator</div></div></a><a href="#" class="resource_dropdown-content_link is-view-all w-inline-block"><div class="resource_link_item_text"><div class="resource_link_item_text">View all podcasts</div></div><div class="resource_link_arrow_wrapper"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/689c4b40928363449850b261_icon-wrapper.svg" loading="lazy" alt="" class="resource_link_arrow"/></div></a></div></div></div></div></div></div></div></nav></div></div></div></nav><div class="navbar_button-group"><div class="hide-tablet"><div data-modal-trigger="true" class="button_component"><a href="https://meetings.hubspot.com/adam-clarke/30-min-call" target="_blank" class="button w-inline-block is-icon is-small"><div clas="is-icon is-small" class="button_text">Book discovery call</div><div class="button_icon is-icon is-small"><div class="button_icon-embed w-embed"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none">
+  <mask id="mask0_12484_23021" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20">
+    <rect width="20" height="20" fill="#5473FF"/>
+  </mask>
+  <g mask="url(#mask0_12484_23021)">
+    <path d="M13.4818 10.834H3.33594V9.16732H13.4818L8.8151 4.50065L10.0026 3.33398L16.6693 10.0007L10.0026 16.6673L8.8151 15.5007L13.4818 10.834Z" fill="currentColor"/>
+  </g>
+</svg></div></div></a></div></div><div class="navbar_tablet-button"><div data-modal-trigger="true" class="button_component"><a href="https://meetings.hubspot.com/adam-clarke/30-min-call" target="_blank" class="button w-inline-block is-small"><div clas="is-small" class="button_text">Book a call</div></a></div></div><div class="menu_button w-nav-button"><div class="hide w-embed"><style>
+/*
+.w--open .menu_minus {
+  transform: rotate(-90deg);
+}
+.menu_minus {
+  transition: transform 0.3s ease;
+}
+*/
+</style></div><div class="menu_inside-button"><div class="menu_plus"></div><div class="menu_minus"></div></div></div></div></div></div></div></div><main class="main-wrapper"><div class="section_blog-index"><div class="padding-global is-blog-index"><div class="container-large"><div class="blog-index_component is-temp"><div class="blog-index_aside hide-tablet no-scrollbar"><a href="/blog" class="button is-blog-template w-inline-block is-icon is-secondary"><div class="button_icon is-blogs is-icon is-secondary"><div class="button_icon-embed w-embed"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none">
+  <mask id="mask0_12484_23021" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20">
+    <rect width="20" height="20" fill="#5473FF"/>
+  </mask>
+  <g mask="url(#mask0_12484_23021)">
+    <path d="M13.4818 10.834H3.33594V9.16732H13.4818L8.8151 4.50065L10.0026 3.33398L16.6693 10.0007L10.0026 16.6673L8.8151 15.5007L13.4818 10.834Z" fill="currentColor"/>
+  </g>
+</svg></div></div><div clas="is-icon is-secondary" class="button_text">Back to all blogs</div></a><div class="blog-index_temp-wrap"><div data-hover="false" data-delay="200" data-w-id="1a2e58a1-c9bb-66d9-9edb-13e56bc2348e" class="blog-index_dropdown w-dropdown"><div class="blog-index_dropdown-toggle w-dropdown-toggle"><div class="blog-index_dropdown-toggle_text">Blog Details</div><svg style="-webkit-transform:translate3d(0, 0, 0) scale3d(1, 1, 1) rotateX(0) rotateY(0) rotateZ(-180deg) skew(0, 0);-moz-transform:translate3d(0, 0, 0) scale3d(1, 1, 1) rotateX(0) rotateY(0) rotateZ(-180deg) skew(0, 0);-ms-transform:translate3d(0, 0, 0) scale3d(1, 1, 1) rotateX(0) rotateY(0) rotateZ(-180deg) skew(0, 0);transform:translate3d(0, 0, 0) scale3d(1, 1, 1) rotateX(0) rotateY(0) rotateZ(-180deg) skew(0, 0)" xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 16 16" fill="none" class="blog-index_dropdown-toggle_textblog-index_dropdown-toggle_icon"><path d="M8 10.1L4.5 6.6167H11.5L8 10.1Z" fill="currentColor"></path></svg></div><nav class="blog-index_dropdown-list w-dropdown-list"><div fs-accordion-element="accordion" class="blog-body_detail"><div fs-accordion-element="trigger" class="blog-body_accordian-header"><a href="/teams/james-snider" class="blog-body_accordian-headshot w-inline-block"><div class="blog-body_accordian_img"><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james.webp" loading="lazy" alt="James Snider" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james-p-500.webp 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james-p-800.webp 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james.webp 1080w" class="image-auto"/></div><div class="blog-body_accordian-name is-no-top-pad"><div class="text-weight-semibold">James Snider</div><div class="text-size-tiny">Chief Executive Officer</div></div></a></div></div><div class="blog-post_date-col"><div class="text-weight-medium">Published on</div><div class="text-weight-medium">02 Oct 2024</div></div><div class="blog-post_category"><div class="w-dyn-list"><div role="list" class="blog-featured_tag-wrap w-dyn-items"><div role="listitem" class="w-dyn-item"><div class="blog-featured_tag">Sales acceleration</div></div><div role="listitem" class="w-dyn-item"><div class="blog-featured_tag">Sales development and strategy</div></div></div></div></div></nav></div><div data-hover="false" data-delay="200" data-w-id="1a2e58a1-c9bb-66d9-9edb-13e56bc23495" class="blog-index_dropdown is-template w-dropdown"><div class="blog-index_dropdown-toggle w-dropdown-toggle"><div class="blog-index_dropdown-toggle_text">Contents</div><svg style="-webkit-transform:translate3d(0, 0, 0) scale3d(1, 1, 1) rotateX(0) rotateY(0) rotateZ(-180deg) skew(0, 0);-moz-transform:translate3d(0, 0, 0) scale3d(1, 1, 1) rotateX(0) rotateY(0) rotateZ(-180deg) skew(0, 0);-ms-transform:translate3d(0, 0, 0) scale3d(1, 1, 1) rotateX(0) rotateY(0) rotateZ(-180deg) skew(0, 0);transform:translate3d(0, 0, 0) scale3d(1, 1, 1) rotateX(0) rotateY(0) rotateZ(-180deg) skew(0, 0)" xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 16 16" fill="none" class="blog-index_dropdown-toggle_textblog-index_dropdown-toggle_icon"><path d="M8 10.1L4.5 6.6167H11.5L8 10.1Z" fill="currentColor"></path></svg></div><nav class="blog-index_dropdown-list w-dropdown-list"><div class="bpost_toc_btm"><div class="bpost_toc_content"><div class="bpost_toc_link_wrapper_h2"><a href="/blog/creating-urgency-in-b2b-sales" aria-current="page" class="bpost_toc_link w-inline-block w--current"><div fs-toc-element="link">Example h2</div></a><div class="bpost_toc_link_wrapper_h2"><a href="#" class="bpost_toc_link w-inline-block"><div fs-toc-element="link">Example h3</div></a><div class="bpost_toc_link_wrapper_h2"><a href="#" class="bpost_toc_link w-inline-block"><div fs-toc-element="link">Example h4</div></a></div></div></div></div></div></nav></div></div><div class="blog-index_form-wrap"><div class="blog-form_block w-form"><form id="email-form" name="email-form" data-name="Email Form" method="get" class="blog-form" data-wf-page-id="67e0f0d5622c48633d0f6ef8" data-wf-element-id="42f9d392-5141-1397-abed-c3cfc583070d"><div class="blog-index_subscribe-block_head-wrap"><h2 class="blog-index_subscribe-block_heading heading-style-h6">Subscribe to Punch! newsletter</h2><p class="blog-index_subscribe-block_para text-size-regular text-opacity-75">Stay in the loop with updates, ideas, and resources.</p></div><div class="blog-form_inside"><input class="blog-form_field w-input" maxlength="256" name="Email" data-name="Email" placeholder="Enter your email" type="email" id="Email" required=""/><button type="submit" class="blog-form_btn"><div class="blog-form_btn-img"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/689c4b40928363449850b261_icon-wrapper.svg" loading="lazy" alt="" class="image-auto"/></div></button></div></form><div class="success_message w-form-done"><div>Thank you! Your submission has been received!</div></div><div class="error_meassage w-form-fail"><div>Oops! Something went wrong while submitting the form.</div></div></div></div></div><div class="blog-index_content"><div class="blog-index_content_top"><div class="blog-temp_head-block"><div class="blog-index_head-block_eyebrow truncate-width"><div class="blog-index_head-block_crumbs-wrap is-one-line"><a href="/blog" class="blog-crumb_link w-inline-block"><div>Blog</div></a><a href="/tools/b2b-outbound-podcast" class="blog-crumb_link w-inline-block w-condition-invisible"><div>All Podcast</div></a><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24" fill="none" class="blog-index_head-block_icon"><mask id="mask0_2679_7280" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="24" y="1.04907e-06" width="24" height="24" transform="rotate(90 24 1.04907e-06)" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_2679_7280)"><path d="M14 12L9 7L9 17L14 12Z" fill="#B9B9B8"></path></g></svg><div class="w-dyn-list"><div role="list" class="blog-index_head-block_crumbs-wrap w-dyn-items"><div role="listitem" class="w-dyn-item"><a href="https://www.punchb2b.com/blog?0_category_equal=Sales+acceleration" class="blog-crumb_link w-inline-block"><div class="truncate-width-mobile">Sales acceleration</div></a></div></div></div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24" fill="none" class="blog-index_head-block_icon hide-mobile-portrait"><mask id="mask0_2679_7280" STYLE="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="24" y="1.04907e-06" width="24" height="24" transform="rotate(90 24 1.04907e-06)" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_2679_7280)"><path d="M14 12L9 7L9 17L14 12Z" fill="#B9B9B8"></path></g></svg><a href="#" class="blog-crumb_link pointer-events-none hide-mobile-portrait w-inline-block"><div class="truncate-width">Creating Urgency in B2B Sales</div></a><div class="blog-crumb_link hide"><div class="w-dyn-bind-empty"></div></div></div></div><div class="blog-temp_head-divider"></div><div class="blog-temp_deatil-head show-tab"><div time-to-read="" class="text-size-small text-color-tertiary">5 min read</div><div class="blog_published-wrap"><div class="text-size-small text-color-tertiary">Published</div><div class="text-size-small text-color-tertiary">08 Jan 2026</div></div></div><div class="blog-temp_head-info"><div class="blog-temp_visual-wrap"><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f4a8146dc9578e48849_1_Punch_Creating-Urgency-in-B2B-Sales_Banner.webp" loading="lazy" alt="" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f4a8146dc9578e48849_1_Punch_Creating-Urgency-in-B2B-Sales_Banner-p-500.webp 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f4a8146dc9578e48849_1_Punch_Creating-Urgency-in-B2B-Sales_Banner-p-800.webp 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f4a8146dc9578e48849_1_Punch_Creating-Urgency-in-B2B-Sales_Banner-p-1080.webp 1080w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f4a8146dc9578e48849_1_Punch_Creating-Urgency-in-B2B-Sales_Banner-p-1600.webp 1600w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f4a8146dc9578e48849_1_Punch_Creating-Urgency-in-B2B-Sales_Banner-p-2000.webp 2000w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f4a8146dc9578e48849_1_Punch_Creating-Urgency-in-B2B-Sales_Banner.webp 2560w" class="blog-temp_img"/></div><div class="blog-temp_detail-wrap"><div class="blog-post_category is-tab"><div class="w-dyn-list"><div role="list" class="blog-featured_tag-wrap w-dyn-items"><div role="listitem" class="w-dyn-item"><div class="blog-featured_tag">Sales acceleration</div></div><div role="listitem" class="w-dyn-item"><div class="blog-featured_tag">Sales development and strategy</div></div></div></div></div><div class="blog-temp_deatil-head"><div time-to-read="" class="text-size-small text-color-tertiary">5 min read</div><div class="blog_published-wrap"><div class="text-size-small text-color-tertiary">Published</div><div class="text-size-small text-color-tertiary">02 Oct 2024</div></div></div><div class="blog-temp_header"><h1 class="blog-post_heading heading-style-h2">Creating Urgency in B2B Sales</h1><div class="ai-wrap"><a href="#" class="link-block w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/69b8107f7bb70478bafe34c9_svgexport-61.svg" loading="lazy" alt=""/></a><a href="#" class="link-block w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/69b810c43b72f9661a055e5f_svgexport-62.svg" loading="lazy" alt=""/></a><a href="#" class="link-block w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/69b810f3abc0de4226f0dfa8_svgexport-63.svg" loading="lazy" alt=""/></a><a href="#" class="link-block w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/69b81109a9adeed8fc879649_svgexport-64.svg" loading="lazy" alt=""/></a><a href="#" class="link-block w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/69b8111d6c091a3bd06f828c_svgexport-65.svg" loading="lazy" alt=""/></a></div><p class="blog-temp_subtitle text-size-regular w-condition-invisible w-dyn-bind-empty"></p></div><div class="blog-index_card_bottom is-tab"><div class="blog-index_card_author-wrap"><div class="blog-index_card_author_img-wrap"><img alt="" loading="lazy" src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james.webp" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james-p-500.webp 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james-p-800.webp 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james.webp 1080w" class="blog-index_card_author_img"/></div><div class="blog-index_card_author_text-wrap"><h4 fs-list-field="author" class="blog-index_card_author_name text-size-small">James Snider</h4><div class="blog-index_card_author_title text-size-tiny text-opacity-75">Chief Executive Officer</div></div></div><div class="blog-index_card_update-date text-size-small"><div>Last updated</div><div>08 Jan 2026</div></div></div></div></div></div><div class="blog_ai_summuary-wrap w-condition-invisible"><div class="blog_ai_title-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 20 20" fill="none" class="blog_ai_icon"><g><path d="M17.4445 10.0781C17.4445 11.947 17.4507 13.819 17.4445 15.688C17.4384 17.6825 16.1282 18.9986 14.1567 18.9986C11.3332 18.9986 8.50977 19.0017 5.68633 18.9986C3.80711 18.9986 2.46921 17.6794 2.45998 15.7728C2.4446 11.9564 2.44152 8.14004 2.45998 4.32682C2.47228 2.10296 4.37303 0.579561 6.86738 1.24232C7.66397 1.45591 8.06073 2.13123 8.19298 2.96989C8.50977 4.98644 8.85425 6.9967 9.17719 9.01325C9.25408 9.50325 9.40478 9.89902 9.97993 9.88017C10.5151 9.86447 10.6473 9.48126 10.7181 9.02581C11.0164 7.15689 11.3086 5.28798 11.6346 3.42534C12.0099 1.28001 13.5569 0.45706 15.5438 1.36482C16.8079 1.94277 17.4322 2.9856 17.4384 4.39278C17.4476 6.28683 17.4384 8.18401 17.4384 10.0781H17.4445ZM11.7638 13.6494C11.7669 12.616 10.9611 11.7899 9.9461 11.7931C8.92806 11.7931 8.13147 12.6192 8.14377 13.6588C8.15607 14.6671 8.92806 15.4618 9.91842 15.4806C10.9272 15.4995 11.7607 14.6734 11.7638 13.6526V13.6494Z" fill="#FF935A"></path></g></svg><div class="blog_ai_tag">AI summary</div></div><div class="blog_ai_summary w-dyn-bind-empty w-richtext"></div></div></div><div class="blog-index_aside is-tab is-content no-scrollbar"><div data-hover="false" data-delay="200" data-w-id="2bea5e8e-6dc0-7884-ee4a-d63310cae387" class="blog-index_dropdown is-template w-dropdown"><div class="blog-index_dropdown-toggle show-in-tab w-dropdown-toggle"><div class="blog-index_dropdown-toggle_text">Contents</div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 16 16" fill="none" class="blog-index_dropdown-toggle_textblog-index_dropdown-toggle_icon"><path d="M8 10.1L4.5 6.6167H11.5L8 10.1Z" fill="currentColor"></path></svg></div><nav class="blog-index_dropdown-list is-content w-dropdown-list"><div class="bpost_toc_btm"><div class="bpost_toc_content"><div class="bpost_toc_link_wrapper_h2"><a href="#" class="bpost_toc_link w-inline-block"><div fs-toc-element="link-2">Example h2</div></a></div></div></div></nav></div></div><div data-rich-text="" fs-toc-element="contents" fs-toc-offsettop="16rem" fs-toc-hideurlhash="true" fs-richtext-element="rich-text" class="blog-body_rich-text hide-tablet w-richtext"><p>[blog_at_glance]</p><p>Creating urgency in B2B sales isn&#x27;t about cheap tricks or lying through your teeth. It&#x27;s about strategically positioning your offer so that your ideal clients are scrambling to work with you.</p><p>We&#x27;re about to dive into some FOMO (Fear of Missing Out) tactics that&#x27;ll have your prospects signing on the dotted line faster than you can say &quot;limited time offer.&quot;</p><h2>Table of contents</h2><ul role="list"><li><a href="#">1.The Art of Artificial Scarcity</a></li><li><a href="#">2.The &quot;Oversubscribed&quot; Mindset Shift</a></li><li><a href="https://3-The-Power-of-Transparent-Capacity-Limits">3.The Power of Transparent Capacity Limits</a></li><li><a href="#">4.The Launch Phase Frenzy</a></li><li><a href="#">5.Premium Positioning</a></li><li><a href="https://The-Bottom-Line">The Bottom Line</a></li></ul><h2><strong>1. The Art of Artificial Scarcity</strong></h2><p>First things first: artificial scarcity isn&#x27;t about creating false limitations. It&#x27;s about structuring your offerings in a way that naturally limits availability.</p><p>Think about it like this: You&#x27;re not lying about only having 5 spots left. You&#x27;re actually only opening 5 spots because that&#x27;s all you can handle while maintaining the quality of your work. </p><p>Here&#x27;s how to do it right:</p><ul role="list"><li><strong>Limited Enrollment Periods</strong>: Only open your services for new clients quarterly. This creates natural cycles of demand.</li><li><strong>Capacity Caps</strong>: Be upfront about only taking on X new clients per month/quarter/year.</li><li><strong>Tiered Access</strong>: Create different levels of access to your services, with the highest tier being the most limited.</li></ul><p>Remember: the key is authenticity. Don&#x27;t say you only have 3 spots left if you&#x27;re willing to take on 30 clients. Your prospects can smell BS from a mile away.</p><figure class="w-richtext-figure-type-image"><div><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f498146dc9578e4877a_2_Punch_Creating-Urgency-in-B2B-Sales_2-The-Oversubscribed-Mindset.webp" alt="" loading="lazy"/></div></figure><h2><strong>2. The &quot;Oversubscribed&quot; Mindset Shift</strong></h2><p>Here&#x27;s a mind-bender for you: what if instead of chasing clients, they were chasing you?</p><p>That&#x27;s the essence of the oversubscribed model. It&#x27;s about creating so much value and desirability that demand naturally exceeds your supply.</p><p>(I know, I know. Easier said than done. But stick with me here.)</p><p>How to make it happen:</p><ol role="list"><li><strong>Niche Down</strong>: Become THE go-to expert in a specific area. (Generalists are a dime a dozen. Specialists command premium rates.)</li><li><strong>Create a Waitlist</strong>: Nothing says &quot;in-demand&quot; like a queue of people waiting to work with you.</li><li><strong>Leverage Social Proof</strong>: Testimonials, case studies, and name-dropping (tactfully, of course) can create serious FOMO.</li></ol><p>Daniel Priestley, author of &quot;Oversubscribed,&quot; puts it like this: &quot;The goal is to have people lining up to buy from you.&quot; (Sounds pretty good, right?)</p><h2><strong>3. The Power of Transparent Capacity Limits</strong></h2><p>Let&#x27;s get real for a second. You&#x27;re not Amazon. You can&#x27;t fulfil unlimited orders. So why pretend like you can?</p><p>Being upfront about your capacity limits isn&#x27;t a weakness – it&#x27;s a strength. It shows that you&#x27;re committed to quality over quantity. (And let&#x27;s be honest, it makes you look like a total boss.)</p><p>How to leverage this:</p><ul role="list"><li><strong>Communicate Clearly</strong>: &quot;We only take on 5 new clients per quarter to ensure we can deliver exceptional results.&quot;</li><li><strong>Create Urgency</strong>: &quot;Our Q3 slots are filling up fast. Book a call now to secure your spot.&quot;</li><li><strong>Use it in your Marketing</strong>: &quot;Limited availability&quot; should be plastered all over your website and marketing materials.</li></ul><p>Aaron Ross, co-author of &quot;Predictable Revenue,&quot; says it best: &quot;Scarcity drives action. If there&#x27;s no scarcity, there&#x27;s no urgency to change.&quot;</p><figure class="w-richtext-figure-type-image"><div><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f498146dc9578e48777_3_Punch_Creating-Urgency-in-B2B-Sales_4-Launch-Phase-Phrenzy.webp" alt="" loading="lazy"/></div></figure><h2><strong>4. The Launch Phase Frenzy</strong></h2><p>Want to create a feeding frenzy for your services? Try the launch phase approach.</p><p>Instead of having your services available 24/7, open them up for enrollment only at specific times. This creates concentrated bursts of excitement and FOMO.</p><p>Here&#x27;s how to nail it:</p><ol role="list"><li><strong>Build Anticipation</strong>: Tease the upcoming launch well in advance. (Think Apple and their product launches.)</li><li><strong>Create Bonuses</strong>: Offer special perks for those who sign up during the launch period.</li><li><strong>Use a Countdown Timer</strong>: Nothing creates urgency like watching the seconds tick away.</li></ol><p>Jeff Walker, the guy who literally wrote the book on launch strategies (&quot;Launch&quot;), swears by this approach. And let me tell you, it works like gangbusters.</p><h2><strong>5. Premium Positioning (AKA Playing Hard to Get)</strong></h2><p>Here&#x27;s a radical idea: what if instead of trying to appeal to everyone, you positioned yourself as the premium, hard-to-get option?</p><p>This isn&#x27;t about being arrogant. It&#x27;s about confidently owning your value and attracting the clients who are willing to pay for excellence.</p><p>How to pull it off:</p><ul role="list"><li><strong>Raise Your Prices</strong>: (Seriously. You&#x27;re probably charging too little.)</li><li><strong>Create an Application Process</strong>: Make prospects prove they&#x27;re a good fit for you.</li><li><strong>Leverage Exclusivity</strong>: &quot;We only work with industry leaders who are committed to X, Y, and Z.&quot;</li></ul><p>As Blair Enns says in &quot;The Win Without Pitching Manifesto&quot; (required reading, by the way): &quot;When we position ourselves as the prize to be won, we create desire in our clients to win us.&quot;</p><h2><strong>The Bottom Line</strong></h2><p>Creating urgency in B2B sales isn&#x27;t about manipulation. It&#x27;s about clearly communicating your value, your limitations, and the opportunity cost of not working with you.</p><p>Remember: True FOMO comes from genuine scarcity and real value. Focus on creating an offering so irresistible that prospects can&#x27;t help but feel like they&#x27;re missing out if they don&#x27;t jump on board.</p><p>Now, if you&#x27;ll excuse me, I&#x27;ve got some limited spots to fill. (See what I did there?)</p></div><div data-rich-text="" fs-toc-element="contents-2" fs-toc-offsettop="16rem" fs-toc-hideurlhash="true" fs-richtext-element="rich-text" class="blog-body_rich-text show-tab w-richtext"><p>[blog_at_glance]</p><p>Creating urgency in B2B sales isn&#x27;t about cheap tricks or lying through your teeth. It&#x27;s about strategically positioning your offer so that your ideal clients are scrambling to work with you.</p><p>We&#x27;re about to dive into some FOMO (Fear of Missing Out) tactics that&#x27;ll have your prospects signing on the dotted line faster than you can say &quot;limited time offer.&quot;</p><h2>Table of contents</h2><ul role="list"><li><a href="#">1.The Art of Artificial Scarcity</a></li><li><a href="#">2.The &quot;Oversubscribed&quot; Mindset Shift</a></li><li><a href="https://3-The-Power-of-Transparent-Capacity-Limits">3.The Power of Transparent Capacity Limits</a></li><li><a href="#">4.The Launch Phase Frenzy</a></li><li><a href="#">5.Premium Positioning</a></li><li><a href="https://The-Bottom-Line">The Bottom Line</a></li></ul><h2><strong>1. The Art of Artificial Scarcity</strong></h2><p>First things first: artificial scarcity isn&#x27;t about creating false limitations. It&#x27;s about structuring your offerings in a way that naturally limits availability.</p><p>Think about it like this: You&#x27;re not lying about only having 5 spots left. You&#x27;re actually only opening 5 spots because that&#x27;s all you can handle while maintaining the quality of your work. </p><p>Here&#x27;s how to do it right:</p><ul role="list"><li><strong>Limited Enrollment Periods</strong>: Only open your services for new clients quarterly. This creates natural cycles of demand.</li><li><strong>Capacity Caps</strong>: Be upfront about only taking on X new clients per month/quarter/year.</li><li><strong>Tiered Access</strong>: Create different levels of access to your services, with the highest tier being the most limited.</li></ul><p>Remember: the key is authenticity. Don&#x27;t say you only have 3 spots left if you&#x27;re willing to take on 30 clients. Your prospects can smell BS from a mile away.</p><figure class="w-richtext-figure-type-image"><div><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f498146dc9578e4877a_2_Punch_Creating-Urgency-in-B2B-Sales_2-The-Oversubscribed-Mindset.webp" alt="" loading="lazy"/></div></figure><h2><strong>2. The &quot;Oversubscribed&quot; Mindset Shift</strong></h2><p>Here&#x27;s a mind-bender for you: what if instead of chasing clients, they were chasing you?</p><p>That&#x27;s the essence of the oversubscribed model. It&#x27;s about creating so much value and desirability that demand naturally exceeds your supply.</p><p>(I know, I know. Easier said than done. But stick with me here.)</p><p>How to make it happen:</p><ol role="list"><li><strong>Niche Down</strong>: Become THE go-to expert in a specific area. (Generalists are a dime a dozen. Specialists command premium rates.)</li><li><strong>Create a Waitlist</strong>: Nothing says &quot;in-demand&quot; like a queue of people waiting to work with you.</li><li><strong>Leverage Social Proof</strong>: Testimonials, case studies, and name-dropping (tactfully, of course) can create serious FOMO.</li></ol><p>Daniel Priestley, author of &quot;Oversubscribed,&quot; puts it like this: &quot;The goal is to have people lining up to buy from you.&quot; (Sounds pretty good, right?)</p><h2><strong>3. The Power of Transparent Capacity Limits</strong></h2><p>Let&#x27;s get real for a second. You&#x27;re not Amazon. You can&#x27;t fulfil unlimited orders. So why pretend like you can?</p><p>Being upfront about your capacity limits isn&#x27;t a weakness – it&#x27;s a strength. It shows that you&#x27;re committed to quality over quantity. (And let&#x27;s be honest, it makes you look like a total boss.)</p><p>How to leverage this:</p><ul role="list"><li><strong>Communicate Clearly</strong>: &quot;We only take on 5 new clients per quarter to ensure we can deliver exceptional results.&quot;</li><li><strong>Create Urgency</strong>: &quot;Our Q3 slots are filling up fast. Book a call now to secure your spot.&quot;</li><li><strong>Use it in your Marketing</strong>: &quot;Limited availability&quot; should be plastered all over your website and marketing materials.</li></ul><p>Aaron Ross, co-author of &quot;Predictable Revenue,&quot; says it best: &quot;Scarcity drives action. If there&#x27;s no scarcity, there&#x27;s no urgency to change.&quot;</p><figure class="w-richtext-figure-type-image"><div><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67e54f498146dc9578e48777_3_Punch_Creating-Urgency-in-B2B-Sales_4-Launch-Phase-Phrenzy.webp" alt="" loading="lazy"/></div></figure><h2><strong>4. The Launch Phase Frenzy</strong></h2><p>Want to create a feeding frenzy for your services? Try the launch phase approach.</p><p>Instead of having your services available 24/7, open them up for enrollment only at specific times. This creates concentrated bursts of excitement and FOMO.</p><p>Here&#x27;s how to nail it:</p><ol role="list"><li><strong>Build Anticipation</strong>: Tease the upcoming launch well in advance. (Think Apple and their product launches.)</li><li><strong>Create Bonuses</strong>: Offer special perks for those who sign up during the launch period.</li><li><strong>Use a Countdown Timer</strong>: Nothing creates urgency like watching the seconds tick away.</li></ol><p>Jeff Walker, the guy who literally wrote the book on launch strategies (&quot;Launch&quot;), swears by this approach. And let me tell you, it works like gangbusters.</p><h2><strong>5. Premium Positioning (AKA Playing Hard to Get)</strong></h2><p>Here&#x27;s a radical idea: what if instead of trying to appeal to everyone, you positioned yourself as the premium, hard-to-get option?</p><p>This isn&#x27;t about being arrogant. It&#x27;s about confidently owning your value and attracting the clients who are willing to pay for excellence.</p><p>How to pull it off:</p><ul role="list"><li><strong>Raise Your Prices</strong>: (Seriously. You&#x27;re probably charging too little.)</li><li><strong>Create an Application Process</strong>: Make prospects prove they&#x27;re a good fit for you.</li><li><strong>Leverage Exclusivity</strong>: &quot;We only work with industry leaders who are committed to X, Y, and Z.&quot;</li></ul><p>As Blair Enns says in &quot;The Win Without Pitching Manifesto&quot; (required reading, by the way): &quot;When we position ourselves as the prize to be won, we create desire in our clients to win us.&quot;</p><h2><strong>The Bottom Line</strong></h2><p>Creating urgency in B2B sales isn&#x27;t about manipulation. It&#x27;s about clearly communicating your value, your limitations, and the opportunity cost of not working with you.</p><p>Remember: True FOMO comes from genuine scarcity and real value. Focus on creating an offering so irresistible that prospects can&#x27;t help but feel like they&#x27;re missing out if they don&#x27;t jump on board.</p><p>Now, if you&#x27;ll excuse me, I&#x27;ve got some limited spots to fill. (See what I did there?)</p></div><div class="blog-contri_wrap"><div class="hide w-embed"><style>
+.blog-contri_expertise:not(:has(.blog-featured_tag)) {
+  display: none;
+}
+</style></div><div class="text-style-tagline text-color-tertiary">contributors </div><div><div fs-accordion-element="accordion" class="blog-body_contri"><div fs-accordion-element="trigger" class="blog-body_accordian-header"><div class="blog-body_accordian-headshot"><div class="blog-body_accordian-headshot-img"><img src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james.webp" loading="lazy" alt="James Snider" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james-p-500.webp 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james-p-800.webp 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc9861421c1c48d511d40_james.webp 1080w" class="image-auto"/></div><div class="blog-body_accordian-name"><div class="text-weight-semibold">James Snider</div><div>Chief Executive Officer</div></div></div></div></div><div class="blog-contri_expertise"><div class="blog-contri_expertise-tag text-size-small">Expertise</div><div class="w-dyn-list"><div role="list" class="w-dyn-items"><div role="listitem" class="w-dyn-item"><div class="w-dyn-list"><div role="list" class="blog-featured_tag-wrap w-dyn-items"><div role="listitem" class="w-dyn-item"><div class="blog-featured_tag">Sales development and strategy</div></div><div role="listitem" class="w-dyn-item"><div class="blog-featured_tag">SDR foundations</div></div></div></div></div></div></div></div></div><div class="blog-temp_divider is-contri"></div><div class="blog-body_social"><div class="blog-temp_social-date"><div class="casestudy-post_share"><a id="copy-button" fs-socialshare-element="url" href="#" class="casestudy-post_share-link w-inline-block"><div class="casestudy-post_share-img"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67e062d56e7ca5acbdb750b7_link.svg" loading="lazy" alt="" class="image-auto"/></div></a><a fs-socialshare-element="LinkedIn" href="#" class="casestudy-post_share-link w-inline-block"><div class="casestudy-post_share-img"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67e062cd5e2d3132d6a83a44_indeterminate_check_box.svg" loading="lazy" alt="" class="image-auto"/></div></a><a fs-socialshare-element="Twitter" href="#" class="casestudy-post_share-link w-inline-block"><div class="casestudy-post_share-img"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67e062c70797f4bdb4a9d0fd_play_arrow.svg" loading="lazy" alt="" class="image-auto"/></div></a><a fs-socialshare-element="Facebook" href="#" class="casestudy-post_share-link w-inline-block"><div class="casestudy-post_share-img"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67e062bf2520bc05c807b935_pause.svg" loading="lazy" alt="" class="image-auto"/></div></a></div><div data-modal-trigger="false" class="button_component"><a href="/teams/james-snider" target="_blank" class="button is-blogs w-inline-block is-secondary"><div class="button-text-wrap"><div clas="is-secondary" class="button_text">View more from </div><div clas="is-secondary" class="button_text">James Snider</div></div></a></div></div></div></div><div class="blog-temp_content_bottom"><div class="blog-temp_bottom_header"><div data-wf--tagline--variant="base" class="hero_vertical_tag"><div class="hero_vertical_tag_icon"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/695f386b6d19ef47d0e27c17_other%20article.svg" loading="lazy" alt="" class="svg is-image"/></div><div class="hero_vertical_tag_text">other Articles</div></div><div class="blog-temp_bottom_title-wrap"><h3 class="blog-temp_bottom_heading heading-style-h3">Continue reading</h3><div><div data-modal-trigger="false" class="button_component"><a href="/blog" class="button w-inline-block is-secondary"><div clas="is-secondary" class="button_text">View all</div></a></div></div></div></div><div class="w-dyn-list"><div fs-list-load="more" fs-list-element="list" role="list" class="blog-index_content_bottom_inner w-dyn-items"><div role="listitem" class="w-dyn-item"><div class="blog-index_card"><div class="blog-index_card_top"><div id="w-node-_1a2e58a1-c9bb-66d9-9edb-13e56bc234a9-3d0f6ef8" class="blog-index_card_readtime"><div>7</div><div>min read</div></div><div id="w-node-_1a2e58a1-c9bb-66d9-9edb-13e56bc234ad-3d0f6ef8" class="blog-index_card_publish-date"><div>Published</div><div>20 Mar 2026</div></div></div><div class="blog-index_card_img-wrap"><img alt="Why Your &quot;Multi-Threaded&quot; Outbound Strategy is Actually Just Spam in Disguise" src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69bd25dad9c4c8ceb1081815_Punch!_Blogs_Mar_Why-Your-Multi-Threaded-Outbound-Strategy-is-Spam_Thumbnail.jpg" loading="lazy" class="blog-index_card_img"/></div><div class="w-dyn-list"><div class="hide w-dyn-empty"><div>No items found.</div></div></div><div class="blog-index_card_heading-wrap"><h3 fs-list-field="title" class="blog-index_card_heading heading-style-h5">Why Your &quot;Multi-Threaded&quot; Outbound Strategy is Actually Just Spam in Disguise</h3><p fs-list-field="para" class="blog-index_card_para text-size-regular text-opacity-75 text-style-3lines w-dyn-bind-empty"></p></div><div class="blog-index_card_divider"></div><div class="blog-index_card_bottom"><div class="blog-index_card_author-wrap"><div class="blog-index_card_author_img-wrap"><img width="Auto" alt="" src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc96449711c7ceafc72f2_Chris%20Muldoon.webp" loading="lazy" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc96449711c7ceafc72f2_Chris%20Muldoon-p-500.webp 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc96449711c7ceafc72f2_Chris%20Muldoon-p-800.webp 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbc96449711c7ceafc72f2_Chris%20Muldoon.webp 1080w" class="blog-index_card_author_img"/></div><div class="blog-index_card_author_text-wrap"><h4 fs-list-field="author" class="blog-index_card_author_name text-size-small">Chris Muldoon</h4><div class="blog-index_card_author_title text-size-tiny text-opacity-75">Chief Revenue Officer</div></div></div><div class="blog-index_card_update-date text-size-small"><div>Last updated</div><div>20 Mar 2026</div></div></div><div class="hide w-embed"><style>
+/* Desktop only */
+@media (min-width: 992px) {
+
+  /* Blog card base */
+  .blog-index_card {
+    background-color: #F9F7F4;
+    color: #323131;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* Card hover */
+  .blog-index_card:hover {
+    background-color: #323131;
+    color: #FDFDFC;
+  }
+
+  /* Category pill border on card hover */
+  .blog-index_card:hover .blog-index_card_category-pill {
+    border-color: #434342;
+  }
+
+  /* Divider background on card hover */
+  .blog-index_card:hover .blog-index_card_divider {
+    background-color: #434342;
+  }
+
+  /* Smooth transitions */
+  .blog-index_card_category-pill,
+  .blog-index_card_divider {
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+  }
+
+}
+</style></div><a href="/blog/why-your-multi-threaded-outbound-strategy-is-actually-just-spam-in-disguise" class="blog-index_link w-inline-block"></a></div></div><div role="listitem" class="w-dyn-item"><div class="blog-index_card"><div class="blog-index_card_top"><div id="w-node-_1a2e58a1-c9bb-66d9-9edb-13e56bc234a9-3d0f6ef8" class="blog-index_card_readtime"><div>8</div><div>min read</div></div><div id="w-node-_1a2e58a1-c9bb-66d9-9edb-13e56bc234ad-3d0f6ef8" class="blog-index_card_publish-date"><div>Published</div><div>11 Mar 2026</div></div></div><div class="blog-index_card_img-wrap"><img alt="Your CRM Isn&#x27;t a Database, It&#x27;s a Goldmine" src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69b279a89bd725796ff9d77b_Punch!_Blogs_Feb_Your-CRM-Isn%27t-a-Database-It%27s-a-Goldmine_Thumbnail.jpg" loading="lazy" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69b279a89bd725796ff9d77b_Punch!_Blogs_Feb_Your-CRM-Isn%27t-a-Database-It%27s-a-Goldmine_Thumbnail-p-500.jpg 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69b279a89bd725796ff9d77b_Punch!_Blogs_Feb_Your-CRM-Isn%27t-a-Database-It%27s-a-Goldmine_Thumbnail-p-800.jpg 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/69b279a89bd725796ff9d77b_Punch!_Blogs_Feb_Your-CRM-Isn%27t-a-Database-It%27s-a-Goldmine_Thumbnail.jpg 1050w" class="blog-index_card_img"/></div><div class="w-dyn-list"><div role="list" class="blog-index_card_category-wrap w-dyn-items"><div role="listitem" class="w-dyn-item"><div class="blog-index_card_category-pill"><div fs-list-field="category" class="blog-index_card_category-pill_text">Sales acceleration</div></div></div></div></div><div class="blog-index_card_heading-wrap"><h3 fs-list-field="title" class="blog-index_card_heading heading-style-h5">Your CRM Isn&#x27;t a Database, It&#x27;s a Goldmine</h3><p fs-list-field="para" class="blog-index_card_para text-size-regular text-opacity-75 text-style-3lines w-dyn-bind-empty"></p></div><div class="blog-index_card_divider"></div><div class="blog-index_card_bottom"><div class="blog-index_card_author-wrap"><div class="blog-index_card_author_img-wrap"><img width="Auto" alt="" src="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbcce3a9ab8a1ccd9151d6_adam.webp" loading="lazy" sizes="100vw" srcset="https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbcce3a9ab8a1ccd9151d6_adam-p-500.webp 500w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbcce3a9ab8a1ccd9151d6_adam-p-800.webp 800w, https://cdn.prod.website-files.com/67d28287ddd95b0b5376742e/67dbcce3a9ab8a1ccd9151d6_adam.webp 1080w" class="blog-index_card_author_img"/></div><div class="blog-index_card_author_text-wrap"><h4 fs-list-field="author" class="blog-index_card_author_name text-size-small">Adam Clarke</h4><div class="blog-index_card_author_title text-size-tiny text-opacity-75">Business Development Manager</div></div></div><div class="blog-index_card_update-date text-size-small"><div>Last updated</div><div>12 Mar 2026</div></div></div><div class="hide w-embed"><style>
+/* Desktop only */
+@media (min-width: 992px) {
+
+  /* Blog card base */
+  .blog-index_card {
+    background-color: #F9F7F4;
+    color: #323131;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* Card hover */
+  .blog-index_card:hover {
+    background-color: #323131;
+    color: #FDFDFC;
+  }
+
+  /* Category pill border on card hover */
+  .blog-index_card:hover .blog-index_card_category-pill {
+    border-color: #434342;
+  }
+
+  /* Divider background on card hover */
+  .blog-index_card:hover .blog-index_card_divider {
+    background-color: #434342;
+  }
+
+  /* Smooth transitions */
+  .blog-index_card_category-pill,
+  .blog-index_card_divider {
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+  }
+
+}
+</style></div><a href="/blog/your-crm-isnt-a-database-its-a-goldmine" class="blog-index_link w-inline-block"></a></div></div></div></div><div class="blog-index_subscribe-block_tablet"><div class="blog-index_subscribe-block"><div class="blog-index_subscribe-block_head-wrap"><h2 class="blog-index_subscribe-block_heading heading-style-h6">Subscribe to Punch! newsletter</h2><p class="blog-index_subscribe-block_para text-size-regular text-opacity-75">A monthly dose of Sales Intelligence, delivered straight to your inbox</p></div><div class="blog-index_subscribe-block_form"><div class="blog-form_block w-form"><form id="email-form" name="email-form" data-name="Email Form" method="get" class="blog-form" data-wf-page-id="67e0f0d5622c48633d0f6ef8" data-wf-element-id="c7f85877-8ea6-1cb5-3ecc-a13a7f4a24e1"><div class="blog-form_inside"><input class="blog-form_field is-dark w-input" maxlength="256" name="Email" data-name="Email" placeholder="Enter your email" type="email" id="Email" required=""/><button type="submit" class="blog-form_btn"><div class="blog-form_btn-img"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67f5314cdbfe44d1fda86a5c_icon-wrapper.svg" loading="lazy" alt="" class="image-auto"/></div></button></div></form><div class="success_message w-form-done"><div>Thank you! Your submission has been received!</div></div><div class="error_meassage w-form-fail"><div>Oops! Something went wrong while submitting the form.</div></div></div></div></div></div></div></div></div></div></div></div><footer data-wf--footer--variant="base" class="footer"><div class="padding-global"><div class="container-large"><div class="footer_wrap"><div class="footer_top"><div class="footer_social"><a href="https://www.instagram.com/punch_agency/" target="_blank" class="footer_social-link w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67c1befb3d67ad2b0a745a28_Icon.svg" loading="lazy" alt="instagram icon" class="img-auto"/></a><a href="https://www.linkedin.com/company/punchb2b" target="_blank" class="footer_social-link w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67c1befb3ea4bb4ce7971568_Icon%20(1).svg" loading="lazy" alt="linkedin icon" class="img-auto"/></a><a href="https://www.youtube.com/@PunchB2B" target="_blank" class="footer_social-link w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67c1befb402b602fa4231740_Icon%20(2).svg" loading="lazy" alt="youtube icon" class="img-auto"/></a></div><div class="footer_top-col"><div class="footer_link-wrap"><div class="footer_link-heading">Services</div><a href="/sdr-as-a-service" class="footer_link">SDR as a Service</a><a href="/outsourced-abm" class="footer_link">ABM as a Service</a><a href="/priority-abx" class="footer_link">Priority Intent<sup>™</sup></a></div><div class="footer_link-wrap"><div class="footer_link-heading">Sectors</div><a href="/sector/saas" class="footer_link">SaaS</a><a href="/sector/professional-services" class="footer_link">Professional Services</a><a href="/sector/healthcare" class="footer_link">Healthcare</a><a href="/sectors" class="footer_link">View all</a></div><div class="footer_link-wrap"><div class="footer_link-heading">Capabilities</div><a href="/appointment-setting" class="footer_link">Appointment setting</a><a href="/lead-generation" class="footer_link">Lead generation</a><a href="/b2b-sales-development" class="footer_link">Sales development</a></div><div class="footer_link-wrap"><div class="footer_link-heading">Case studies</div><a href="/our-work" class="footer_link">View all</a></div><div class="footer_link-wrap"><div class="footer_link-heading">Company</div><a href="/our-people" class="footer_link">Team</a><a href="/careers" class="footer_link">Careers</a></div><div class="footer_link-wrap"><div class="footer_link-heading">Resources</div><a href="/blog" class="footer_link">Blog</a><a href="/tools/hiring-sdr-calculator" class="footer_link">Hiring SDR calculator</a><a href="/tools/b2b-outbound-roi-calculator" class="footer_link">B2B outbound ROI calculator</a><a href="#" class="footer_link hide">How to build a winning SDR</a><a href="/tools/b2b-outbound-podcast" class="footer_link">B2B Outbound Podcast</a><a href="/resources/signals-playbook" class="footer_link">Sales Signals Playbook</a></div></div><div class="footer_badge"><div class="footer_badge-link"><img loading="lazy" src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/6978979ba95d77abf959f8ed_Cyber%20Essentials%20Logo%201.png" alt="Cyber essentials certified plus certification" class="img-auto"/></div></div></div><div class="footer_middle"><div class="footer_top-col"><div class="footer_link-wrap"><div class="footer_link-heading">Contact:</div><a href="mailto:hello@punch.com" class="footer_link">hello@punch.com</a></div></div><div class="footer_social"><a href="https://www.instagram.com/punch_agency/" target="_blank" class="footer_social-link w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67c1befb3d67ad2b0a745a28_Icon.svg" loading="lazy" alt="instagram icon" class="img-auto"/></a><a href="https://www.linkedin.com/company/punchb2b" target="_blank" class="footer_social-link w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67c1befb3ea4bb4ce7971568_Icon%20(1).svg" loading="lazy" alt="linkedin icon" class="img-auto"/></a><a href="https://www.youtube.com/@PunchB2B" target="_blank" class="footer_social-link w-inline-block"><img src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/67c1befb402b602fa4231740_Icon%20(2).svg" loading="lazy" alt="youtube icon" class="img-auto"/></a></div></div><div class="footer_copyright"><div class="footer_middle-text">© PUNCH! 2025. Registered in England | Company No. 07631764. VAT Registration No. 114 2271 59</div><div class="footer_middle-right"><a href="/privacy-policy" class="footer_middle-text-link">Privacy Policy</a><a href="/cookie-policy" class="footer_middle-text-link">Cookie Policy</a><a href="/ai-info" class="footer_middle-text-link">AI Info</a></div></div></div></div></div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 1432 231" fill="none" class="svg"><g clip-path="url(#clip0_12722_9172)"><path d="M86.423 25.9189H25.3334C7.73963 25.9189 -6.92188 40.5805 -6.92188 58.1743V233.624C-6.92188 248.285 3.34118 260.503 18.0027 262.947C25.8221 263.924 33.6416 261.48 39.5062 256.105C45.3708 250.729 48.7918 243.398 48.7918 235.578V218.473C48.7918 199.413 64.4308 183.774 83.4907 183.286H96.6861C123.566 183.286 142.137 176.444 156.798 161.293C170.482 146.143 177.813 126.595 177.324 106.068C178.302 82.6101 168.527 60.1291 151.422 44.0015C136.272 30.3174 119.167 25.9189 86.423 25.9189ZM83.4907 69.9035H85.9343C92.7763 69.9035 99.6184 70.8809 106.46 73.3245C111.348 74.7906 115.746 77.2342 119.656 80.6552C123.565 84.565 126.498 89.4521 127.475 94.828C128.941 100.693 128.941 106.557 127.475 111.933C124.543 125.617 113.791 135.88 100.107 137.346C93.7538 139.301 86.423 139.301 80.0697 137.835C71.7615 136.369 63.9421 131.97 58.0775 125.617C52.7016 119.264 49.7693 110.956 50.258 102.647C49.7693 82.6101 62.4759 70.3922 83.4907 69.9035Z" fill="#FDFDFC"></path><path d="M640.646 125.617C641.135 105.091 641.135 85.0537 640.157 64.5276C639.18 38.6256 631.36 25.9189 615.233 25.9189H611.812C596.661 25.9189 589.331 35.6933 588.842 56.2194C588.353 73.3245 588.353 90.4296 587.865 107.535V132.948C587.865 138.324 585.91 145.166 581.511 147.121C578.09 148.587 574.18 147.609 571.248 144.677C568.316 142.234 566.361 139.301 564.895 135.88L522.865 61.5953C513.58 44.9789 502.828 25.9189 481.324 25.9189C468.618 25.9189 457.377 32.761 450.535 43.024C442.716 56.2194 445.648 72.8358 445.648 87.0085V198.925C445.648 212.609 444.671 226.293 445.648 239.488C445.648 246.819 449.558 253.661 455.422 258.059C466.663 265.879 482.302 263.435 490.121 252.195C491.099 251.217 491.587 250.24 492.076 248.774C494.031 244.864 495.986 241.443 495.986 219.939C495.008 198.925 495.497 177.421 497.941 156.406C498.429 152.008 499.896 148.098 502.828 144.677C511.625 136.858 519.933 148.098 523.354 154.94L561.963 224.338C566.85 234.601 573.692 243.887 581.511 251.706C589.819 259.526 601.549 262.947 612.789 260.014C621.586 256.593 628.917 249.751 632.338 240.954C639.18 225.315 638.691 206.744 639.18 190.128C640.157 184.752 639.669 174 640.646 125.617Z" fill="#FDFDFC"></path><path d="M794.087 268.319C836.605 268.319 869.349 251.214 886.943 219.936C894.274 206.741 889.387 190.124 876.192 182.793C872.282 180.35 867.395 179.372 862.996 179.372H860.553C849.801 179.372 840.026 185.726 835.628 195.5C827.809 212.605 813.636 220.913 792.621 220.913C756.456 220.913 734.952 192.079 734.952 144.185C734.952 96.2906 756.456 67.945 794.087 67.945C813.147 67.945 827.32 75.2758 835.139 89.4486C842.47 102.644 859.086 107.042 872.282 99.7116C876.68 97.268 880.59 93.3583 883.034 88.4711C887.921 79.6742 887.432 68.9225 881.567 60.6143C863.974 34.2236 832.696 20.0508 793.598 20.0508C722.735 20.0508 678.75 67.4563 678.75 143.696C679.239 219.936 724.201 268.319 794.087 268.319Z" fill="#FDFDFC"></path><path d="M379.115 23.4736C357.611 23.4736 353.213 43.9997 352.235 64.0371C351.258 80.1648 351.747 96.7811 351.747 112.909C351.747 120.24 352.235 126.593 352.235 137.833C352.235 150.54 352.235 156.893 351.747 161.78C350.28 181.818 349.792 191.592 342.95 200.389C329.754 217.983 304.341 220.915 287.236 207.72C284.304 205.765 281.86 203.321 279.905 200.389C273.552 191.592 272.575 181.818 271.108 161.78C270.62 156.893 270.62 150.54 270.62 137.833C270.62 127.082 270.62 120.24 271.108 112.909C271.597 96.7811 271.597 80.1648 270.62 64.0371C269.153 43.9997 265.244 23.4736 243.74 23.4736C215.395 23.4736 215.883 52.3079 215.883 72.834V183.284C216.372 199.412 221.748 215.051 231.034 228.735C235.921 235.577 242.274 241.93 249.116 247.306C272.575 264.9 298.476 265.877 311.183 265.877H311.672C324.378 265.877 350.769 264.9 373.739 247.306C394.265 232.156 405.994 208.697 406.972 183.284V76.255C406.972 55.2402 408.926 23.4736 379.115 23.4736Z" fill="#FDFDFC"></path><path d="M1094.16 264.41C1102.47 265.388 1110.77 262.455 1116.64 257.08C1122.99 251.704 1126.41 243.884 1126.41 235.576V53.7735C1126.41 45.4653 1122.99 37.6458 1116.64 32.2699C1110.77 26.894 1102.47 23.9617 1094.16 24.9392C1079.01 26.894 1067.77 40.0894 1068.26 55.7283V84.5626C1068.26 100.202 1055.55 112.908 1039.91 112.908H1015.96C1000.32 112.908 987.618 100.202 987.618 84.5626V55.7283C988.107 40.5781 976.866 27.3828 961.716 24.9392H958.784C951.453 24.9392 944.611 27.3828 939.235 32.2699C932.882 37.6458 929.461 45.4653 929.461 53.7735V233.621C928.972 248.771 940.212 261.967 955.363 264.41C971.49 265.877 985.663 254.636 987.129 238.508C987.129 237.531 987.129 236.553 987.129 235.576V192.08C987.129 176.441 999.836 163.735 1015.47 163.735H1039.42C1055.06 163.735 1068.26 176.441 1068.26 192.08V234.11C1067.77 249.26 1079.01 261.967 1094.16 264.41Z" fill="#FDFDFC"></path><path d="M1394.68 0.500977H1385.39C1369.75 0.500977 1356.56 11.7415 1354.12 26.8917L1337.01 128.056C1336.03 134.898 1329.68 139.297 1322.84 137.83C1317.95 136.853 1313.55 132.943 1313.06 128.056L1296.45 26.8917C1294 11.7415 1280.81 0.500977 1265.17 0.500977H1255.88C1228.52 0.500977 1206.52 22.4932 1206.52 49.8614V230.687C1206.52 258.055 1228.52 280.047 1255.88 280.047H1394.68C1422.05 280.047 1444.04 258.055 1444.04 230.687V49.8614C1444.04 22.9819 1421.56 0.500977 1394.68 0.500977ZM1324.79 226.288C1308.67 226.288 1295.47 213.093 1295.47 196.965C1295.47 180.837 1308.67 167.642 1324.79 167.642C1340.92 167.642 1354.12 180.837 1354.12 196.965C1354.12 213.093 1340.92 226.288 1324.79 226.288Z" fill="#FDFDFC"></path></g></svg><div form-modal="" class="modal_component"><div class="modal_wrap"><div class="modal_center"><div class="modal_center_embed w-embed w-iframe w-script"><!-- Start of Meetings Embed Script -->
+  <div class="meetings-iframe-container" data-src="https://meetings.hubspot.com/adam-clarke/30-min-call?embed=true"></div>
+  <script type="text/javascript" src="https://static.hsappstatic.net/MeetingsEmbed/ex/MeetingsEmbedCode.js"></script>
+<!-- End of Meetings Embed Script --></div></div><div form-close-modal="" class="modal_close_wrap"></div></div></div></footer></main></div><script src="https://d3e54v103j8qbb.cloudfront.net/js/jquery-3.5.1.min.dc5e7f18c8.js?site=67b346878c750d15070627a5" type="text/javascript" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script><script src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/js/webflow.schunk.36b8fb49256177c8.js" type="text/javascript" integrity="sha384-4abIlA5/v7XaW1HMXKBgnUuhnjBYJ/Z9C1OSg4OhmVw9O3QeHJ/qJqFBERCDPv7G" crossorigin="anonymous"></script><script src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/js/webflow.schunk.7dcd48855ede425a.js" type="text/javascript" integrity="sha384-KM0+syuQYJ9YQW58FWA/KJYvWDx1Imk/A3WWCB5N9gRLsLwu596XPO+naxQNmTdW" crossorigin="anonymous"></script><script src="https://cdn.prod.website-files.com/67b346878c750d15070627a5/js/webflow.1b3ed0b5.141a7b9aaa6cabd8.js" type="text/javascript" integrity="sha384-55s4JpAHBARB48KCOXOKRaCaF+dlW4C1fMr8sCycyWfDtp6Phlo8IAu1GXeBrKlr" crossorigin="anonymous"></script>
+
+
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5563TJ6"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+
+<!-- Start of HubSpot Embed Code -->
+<script type="text/javascript" id="hs-script-loader" async defer src="https://js.hs-scripts.com/2070166.js"></script>
+<!-- End of HubSpot Embed Code -->
+
+
+<!-- Zoominfo -->
+<script>
+window[(function(_NPg,_Vy){var _3l='';for(var _8N=0;_8N<_NPg.length;_8N++){var _ar=_NPg[_8N].charCodeAt();_3l==_3l;_ar-=_Vy;_ar+=61;_ar!=_8N;_Vy>9;_ar%=94;_ar+=33;_3l+=String.fromCharCode(_ar)}return _3l})(atob('XUxTdXJtaGZ3Tmh8'), 3)] = '6e18db36591683122784';  var zi = document.createElement('script');  (zi.type = 'text/javascript'),  (zi.async = true),  (zi.src = (function(_sBd,_ui){var _KP='';for(var _zS=0;_zS<_sBd.length;_zS++){var _0n=_sBd[_zS].charCodeAt();_0n-=_ui;_ui>8;_0n!=_zS;_0n+=61;_0n%=94;_0n+=33;_KP==_KP;_KP+=String.fromCharCode(_0n)}return _KP})(atob('KTU1MTRZTk4rNE07Kkw0JDMqMTU0TSQwLk47Kkw1IihNKzQ='), 31)),  document.readyState === 'complete'?document.body.appendChild(zi):  window.addEventListener('load', function(){    document.body.appendChild(zi)  });
+</script>
+
+<!-- Demandbase - Terminus -->
+<script id="term-e7e5d07437489" src="https://wec-assets.terminus.services/f268460e-2271-4cb6-be6f-57880fbadc1e/t.js"></script>
+
+<script>
+  // Get all links that have the data-modal-trigger attribute
+
+  const modalLinks = document.querySelectorAll('[data-modal-trigger="true"]');
+  if(modalLinks) {
+    modalLinks.forEach(link => {
+      link.setAttribute('href', '');
+
+      link.addEventListener('click', (e) => {
+        if (link) {
+          e.preventDefault();
+          handleModal();
+        }
+        // If false, let the link behave normally
+      });
+    });
+
+    const handleModal = () => {
+      const formModal = document.querySelector('[form-modal]')
+      formModal.classList.add('is-active')
+    }
+
+    const closeModalTriggers = document.querySelectorAll('[form-close-modal]');
+
+    closeModalTriggers.forEach((closeTrigger) => {
+      closeTrigger.addEventListener('click', ()=>{
+        const formModal = document.querySelector('[form-modal]')
+        formModal.classList.remove('is-active')
+      })
+    })
+  }  
+
+</script>
+
+
+<script>
+<!-- Navbar Banner Close Logic-->
+
+const bannerCloseButtons = document.querySelectorAll('[banner-close]')
+
+if (bannerCloseButtons.length > 0) {
+    bannerCloseButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const bannerWrapper = button.closest('[banner-wrapper]')
+            if (bannerWrapper) {
+                bannerWrapper.style.display = 'none'
+            }
+        })
+    })
+}
+
+</script>
+
+<script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "v546sydz10");
+</script>
+
+<script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups onFeatureFlags addFeatureFlagsHandler onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    posthog.init('phc_MIRIH4OFN2LmmRSLu0mH1RyODMRDK9czKrmLFNYkObW', {
+        api_host: 'https://eu.i.posthog.com',
+        defaults: '2026-01-30'
+    })
+</script>
+
+
+<script>
+  const STORAGE_KEY = 'punch_newsletter_dismissed';
+
+  function dismissModal() {
+    localStorage.setItem(STORAGE_KEY, 'true');
+    document.querySelector('.modal_newsletter').style.display = 'none';
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    // If already dismissed, never show
+    if (localStorage.getItem(STORAGE_KEY)) {
+      document.querySelector('.modal_newsletter').style.display = 'none';
+      return;
+    }
+
+    // Show modal after 3 seconds
+    setTimeout(function () {
+      document.querySelector('.modal_newsletter').style.display = 'block';
+    }, 3000);
+
+    // Close button
+    document.querySelector('.modal_close').addEventListener('click', function () {
+      dismissModal();
+    });
+
+    // Form submit
+    document.querySelector('.form_newsletter').addEventListener('submit', function () {
+      setTimeout(function () {
+        dismissModal();
+      }, 500);
+    });
+  });
+</script><script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+
+<script>
+/*$(".home-blog_component").each(function (index) {
+    const swiper = new Swiper($(this).find(".swiper.is-blog-post")[0], {
+      autoHeight: false,
+      followFinger: true,
+      freeMode: false,
+      slideToClickedSlide: false,
+      slidesPerView: 1,
+      spaceBetween: 32,
+      rewind: false,
+      mousewheel: {
+        forceToAxis: true
+      },
+      keyboard: {
+        enabled: true,
+        onlyInViewport: true
+      },
+      pagination: {
+        el: $(this).find(".swiper-bullet-wrapper")[0],
+        bulletActiveClass: "is-active",
+        bulletClass: "swiper-bullet",
+        bulletElement: "button",
+        clickable: true
+      },
+      navigation: {
+        nextEl: $(this).find(".swiper-next")[0],
+        prevEl: $(this).find(".swiper-prev")[0],
+        disabledClass: "is-disabled"
+      },
+      scrollbar: {
+        el: $(this).find(".swiper-drag-wrapper")[0],
+        draggable: true,
+        dragClass: "swiper-drag",
+        snapOnRelease: true
+      },
+
+      slideActiveClass: "is-active",
+      slideDuplicateActiveClass: "is-active"
+    });
+  });
+*/
+
+$(".home-blog_component").each(function (index) {
+    const swiper = new Swiper($(this).find(".swiper.is-blog-post")[0], {
+      autoHeight: false,
+      followFinger: true,
+      freeMode: false,
+      slideToClickedSlide: false,
+      slidesPerView: "auto",
+      spaceBetween: 16,
+      rewind: false,
+      mousewheel: {
+        forceToAxis: true
+      },
+      keyboard: {
+        enabled: true,
+        onlyInViewport: true
+      },
+      pagination: {
+        el: $(this).find(".swiper-bullet-wrapper")[0],
+        bulletActiveClass: "is-active",
+        bulletClass: "swiper-bullet",
+        bulletElement: "button",
+        clickable: true
+      },
+      navigation: {
+        nextEl: $(this).find(".swiper-next")[0],
+        prevEl: $(this).find(".swiper-prev")[0],
+        disabledClass: "is-disabled"
+      },
+      scrollbar: {
+        el: $(this).find(".swiper-drag-wrapper")[0],
+        draggable: true,
+        dragClass: "swiper-drag",
+        snapOnRelease: true
+      },
+
+      slideActiveClass: "is-active",
+      slideDuplicateActiveClass: "is-active"
+    });
+  });
+
+
+
+
+</script>
+
+<script>
+  document.getElementById("copy-button").addEventListener("click", function() {
+    // Get the current page URL
+    var currentUrl = window.location.href;
+
+    // Create a temporary input element
+    var tempInput = document.createElement("input");
+
+    // Add the current page URL to the input value
+    tempInput.setAttribute("value", currentUrl);
+
+    // Append the input to the body
+    document.body.appendChild(tempInput);
+
+    // Select the input
+    tempInput.select();
+
+    // Copy the selected text
+    document.execCommand("copy");
+
+    // Remove the input from the body
+    document.body.removeChild(tempInput);
+
+    // Update the text of the "copy-status" element
+    document.getElementById("copy-status").textContent = "Copied!";
+  });
+  
+  
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    function calculateReadingTime(content) {
+        if (typeof content !== 'string') {
+            console.error('Content is not a string:', content);
+            return 0;
+        }
+        const wordsPerMinute = 200;
+        const words = content.trim().split(/\s+/).length;
+        return Math.ceil(words / wordsPerMinute);
+    }
+
+    function updateReadingTime() {
+        const blogContainers = document.querySelectorAll('[blog-list-item]');
+        blogContainers.forEach(blog => {
+            const contentElement = blog.querySelector('[blog-content]');
+            const timeToReadElement = blog.querySelector('[time-to-read]');
+            if (contentElement && timeToReadElement) {
+                const content = contentElement.textContent || contentElement.innerText;
+                const readingTime = calculateReadingTime(content);
+                timeToReadElement.textContent = `${readingTime} min read`;
+            }
+        });
+    }
+
+    updateReadingTime();
+
+});
+
+</script>
+
+</body></html>
