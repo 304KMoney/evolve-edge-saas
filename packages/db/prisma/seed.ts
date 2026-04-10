@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { PrismaClient, UserRole, SubscriptionStatus, AssessmentStatus, JobStatus, FindingSeverity, RecommendationPriority, ReportStatus } from "@prisma/client";
 
 const prisma = new PrismaClient();

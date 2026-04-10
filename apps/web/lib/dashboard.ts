@@ -16,64 +16,75 @@ function titleCaseSeverity(value: string) {
   return value.toUpperCase();
 }
 
+function buildFallbackDashboardData(organizationName: string): DashboardData {
+  return {
+    organizationName,
+    planName: "No Plan",
+    planSummary: "Connect billing and seed demo data to populate this workspace.",
+    workspaceLabel: "AI Governance Workspace",
+    metrics: [],
+    activeAssessment: {
+      name: "No active assessment",
+      status: "Not started",
+      progress: 0,
+      nextStep: "Create your first assessment.",
+      eta: "Waiting for setup"
+    },
+    domainScores: [],
+    findings: [],
+    roadmap: [],
+    reports: []
+  };
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   const session = await getCurrentSession();
 
-  const organization = await prisma.organization.findFirst({
-    where: { slug: session.organization.slug },
-    include: {
-      subscriptions: {
-        include: { plan: true },
-        orderBy: { createdAt: "desc" },
-        take: 1
-      },
-      frameworkSelections: {
-        include: { framework: true }
-      },
-      assessments: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        include: {
-          findings: {
-            orderBy: { sortOrder: "asc" },
-            take: 3
-          },
-          recommendations: {
-            orderBy: { sortOrder: "asc" },
-            take: 3
-          },
-          analysisJobs: {
-            orderBy: { createdAt: "desc" },
-            take: 1
+  let organization = null;
+
+  try {
+    organization = await prisma.organization.findFirst({
+      where: { slug: session.organization.slug },
+      include: {
+        subscriptions: {
+          include: { plan: true },
+          orderBy: { createdAt: "desc" },
+          take: 1
+        },
+        frameworkSelections: {
+          include: { framework: true }
+        },
+        assessments: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          include: {
+            findings: {
+              orderBy: { sortOrder: "asc" },
+              take: 3
+            },
+            recommendations: {
+              orderBy: { sortOrder: "asc" },
+              take: 3
+            },
+            analysisJobs: {
+              orderBy: { createdAt: "desc" },
+              take: 1
+            }
           }
+        },
+        reports: {
+          orderBy: { publishedAt: "desc" },
+          take: 2
         }
-      },
-      reports: {
-        orderBy: { publishedAt: "desc" },
-        take: 2
       }
-    }
-  });
+    });
+  } catch (error) {
+    console.error("Dashboard data fallback triggered", error);
+    return buildFallbackDashboardData(session.organization.name);
+  }
 
   if (!organization) {
-    return {
-      organizationName: session.organization.name,
-      planName: "No Plan",
-      planSummary: "Connect billing and seed demo data to populate this workspace.",
-      workspaceLabel: "AI Governance Workspace",
-      metrics: [],
-      activeAssessment: {
-        name: "No active assessment",
-        status: "Not started",
-        progress: 0,
-        nextStep: "Create your first assessment.",
-        eta: "Waiting for setup"
-      },
-      domainScores: [],
-      findings: [],
-      roadmap: [],
-      reports: []
-    };
+    return buildFallbackDashboardData(session.organization.name);
   }
 
   const subscription = organization.subscriptions[0];
