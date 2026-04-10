@@ -1,8 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  typedRoutes: true,
+  serverExternalPackages: ["@prisma/client", "prisma"],
   experimental: {
-    typedRoutes: true
+    outputFileTracingIncludes: {
+      "/**": [
+        "../../node_modules/.prisma/client/**/*",
+        "../../node_modules/@prisma/client/**/*"
+      ]
+    }
   },
   transpilePackages: ["@evolve-edge/db", "@evolve-edge/ui"]
 };
