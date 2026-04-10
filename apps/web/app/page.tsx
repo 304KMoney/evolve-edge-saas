@@ -1,6 +1,10 @@
+import { isPasswordAuthEnabled } from "../lib/auth";
 import Link from "next/link";
 
 export default function HomePage() {
+  const primaryHref = isPasswordAuthEnabled() ? "/sign-in" : "/dashboard";
+  const primaryLabel = isPasswordAuthEnabled() ? "Sign In" : "Open Dashboard";
+
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-3xl rounded-[28px] border border-white/70 bg-white/80 p-10 shadow-panel backdrop-blur">
@@ -16,16 +20,16 @@ export default function HomePage() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
-            href="/dashboard"
+            href={primaryHref}
             className="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
           >
-            Open Dashboard
+            {primaryLabel}
           </Link>
           <Link
-            href="/dashboard/reports"
+            href={primaryHref}
             className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
           >
-            View Reports
+            View Workspace
           </Link>
         </div>
       </div>

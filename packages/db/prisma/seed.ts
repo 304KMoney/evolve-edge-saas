@@ -2,13 +2,31 @@ import { PrismaClient, UserRole, SubscriptionStatus, AssessmentStatus, JobStatus
 
 const prisma = new PrismaClient();
 
+const seedConfig = {
+  planCode: process.env.SEED_PLAN_CODE ?? "growth-annual",
+  planName: process.env.SEED_PLAN_NAME ?? "Growth Annual",
+  ownerEmail:
+    process.env.SEED_OWNER_EMAIL ??
+    process.env.AUTH_ACCESS_EMAIL ??
+    "owner@example.com",
+  ownerFirstName: process.env.SEED_OWNER_FIRST_NAME ?? "Primary",
+  ownerLastName: process.env.SEED_OWNER_LAST_NAME ?? "Owner",
+  organizationName: process.env.SEED_ACCOUNT_NAME ?? "Primary Workspace",
+  organizationSlug: process.env.SEED_ACCOUNT_SLUG ?? "primary-workspace",
+  organizationIndustry:
+    process.env.SEED_ACCOUNT_INDUSTRY ?? "AI Services",
+  organizationSizeBand:
+    process.env.SEED_ACCOUNT_SIZE_BAND ?? "11-50",
+  organizationCountry: process.env.SEED_ACCOUNT_COUNTRY ?? "US"
+};
+
 async function main() {
   const plan = await prisma.plan.upsert({
-    where: { code: "growth-annual" },
+    where: { code: seedConfig.planCode },
     update: {},
     create: {
-      code: "growth-annual",
-      name: "Growth Annual",
+      code: seedConfig.planCode,
+      name: seedConfig.planName,
       billingInterval: "annual",
       priceCents: 120000,
       activeAssessmentsLimit: 5,
@@ -23,27 +41,27 @@ async function main() {
   });
 
   const user = await prisma.user.upsert({
-    where: { email: "founder@lawsonhealth.example" },
+    where: { email: seedConfig.ownerEmail },
     update: {},
     create: {
-      email: "founder@lawsonhealth.example",
-      firstName: "Jordan",
-      lastName: "Lawson",
-      authProviderId: "demo_founder_user"
+      email: seedConfig.ownerEmail,
+      firstName: seedConfig.ownerFirstName,
+      lastName: seedConfig.ownerLastName,
+      authProviderId: `seed_${seedConfig.organizationSlug}_owner`
     }
   });
 
   const organization = await prisma.organization.upsert({
-    where: { slug: "lawson-health-group" },
+    where: { slug: seedConfig.organizationSlug },
     update: {
       currentPostureScore: 72
     },
     create: {
-      name: "Lawson Health Group",
-      slug: "lawson-health-group",
-      industry: "Digital Health",
-      sizeBand: "51-200",
-      country: "US",
+      name: seedConfig.organizationName,
+      slug: seedConfig.organizationSlug,
+      industry: seedConfig.organizationIndustry,
+      sizeBand: seedConfig.organizationSizeBand,
+      country: seedConfig.organizationCountry,
       aiUsageSummary: "Uses AI copilots for operations, drafting, research, and internal support workflows.",
       currentPostureScore: 72,
       regulatoryProfile: {
@@ -75,8 +93,8 @@ async function main() {
     create: {
       organizationId: organization.id,
       planId: plan.id,
-      stripeCustomerId: "cus_demo_lawson_health",
-      stripeSubscriptionId: "sub_demo_growth_annual",
+      stripeCustomerId: `cus_seed_${seedConfig.organizationSlug}`,
+      stripeSubscriptionId: `sub_seed_${seedConfig.planCode}`,
       status: SubscriptionStatus.ACTIVE,
       currentPeriodStart: new Date("2026-04-01T00:00:00.000Z"),
       currentPeriodEnd: new Date("2027-03-31T23:59:59.000Z")
