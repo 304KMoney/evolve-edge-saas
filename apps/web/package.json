@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "tsx test/customer-runs.test.ts && tsx test/customer-accounts.test.ts && tsx test/operator-safeguards.test.ts && tsx test/authority-content.test.ts && tsx test/executive-delivery.test.ts && tsx test/continuous-monitoring.test.ts && tsx test/conversion-funnel.test.ts && tsx test/reliability.test.ts && tsx test/engagement-programs.test.ts && tsx test/evidence.test.ts && tsx test/framework-intelligence.test.ts && tsx test/roles.test.ts && tsx test/authorization.test.ts && tsx test/billing-admin.test.ts && tsx test/runtime-config.test.ts && tsx test/demo-mode.test.ts && tsx test/kpi-dashboard.test.ts && tsx test/account-timeline.test.ts && tsx test/event-replay.test.ts && tsx test/operations-queues.test.ts && tsx test/subscription-domain.test.ts && tsx test/entitlements.test.ts && tsx test/usage-quotas.test.ts && tsx test/stripe-lifecycle.test.ts && tsx test/product-surface.test.ts && tsx test/integration-contracts.test.ts && tsx test/workflow-routing.test.ts && tsx test/commercial-catalog.test.ts && tsx test/commercial-routing.test.ts && tsx test/workflow-dispatch.test.ts && tsx test/site-sync-reference.test.ts"
   },
   "dependencies": {
     "@evolve-edge/db": "workspace:*",

@@ -1,6 +1,17 @@
 import { prisma } from "@evolve-edge/db";
 import type { DashboardData } from "../components/dashboard-shell";
-import { getCurrentSession } from "./auth";
+import { getOrganizationActivationSnapshot } from "./activation";
+import { requireCurrentSession } from "./auth";
+import { getOrganizationEntitlements } from "./entitlements";
+import { getCurrentSubscription } from "./billing";
+import { getMonitoringDashboardSnapshot } from "./continuous-monitoring";
+import { isDemoModeEnabled } from "./demo-mode";
+import { getExpansionOffers } from "./expansion-engine";
+import { logServerEvent } from "./monitoring";
+import { buildProductSurfaceModel } from "./product-surface";
+import { getOrganizationRetentionSnapshot } from "./retention";
+import { getOrganizationUsageMeteringSnapshot } from "./usage-metering";
+import { getUsageRemaining } from "./usage-quotas";
 
 function formatDate(date: Date | null | undefined) {
   if (!date) return "Draft";
@@ -16,11 +27,73 @@ function titleCaseSeverity(value: string) {
   return value.toUpperCase();
 }
 
+function getSeverityWeight(severity: string) {
+  switch (severity) {
+    case "CRITICAL":
+      return 22;
+    case "HIGH":
+      return 14;
+    case "MEDIUM":
+      return 8;
+    case "LOW":
+      return 4;
+    default:
+      return 0;
+  }
+}
+
+function buildDomainScores(
+  findings: Array<{ riskDomain: string; severity: string }>
+) {
+  const domains = [
+    "governance",
+    "security",
+    "privacy",
+    "compliance",
+    "third-party risk"
+  ];
+
+  return domains.map((domain) => {
+    const penalties = findings
+      .filter((finding) => finding.riskDomain === domain)
+      .reduce((sum, finding) => sum + getSeverityWeight(finding.severity), 0);
+
+    return {
+      label:
+        domain === "third-party risk"
+          ? "Third-Party Risk"
+          : domain.charAt(0).toUpperCase() + domain.slice(1),
+      score: Math.max(35, 90 - penalties)
+    };
+  });
+}
+
+function calculateAssessmentProgress(sections: Array<{ status: string }>) {
+  if (!sections.length) {
+    return 0;
+  }
+
+  const completedWeight = sections.reduce((total, section) => {
+    if (section.status === "completed") {
+      return total + 1;
+    }
+
+    if (section.status === "in_review" || section.status === "in_progress") {
+      return total + 0.7;
+    }
+
+    return total + 0.2;
+  }, 0);
+
+  return Math.round((completedWeight / sections.length) * 100);
+}
+
 function buildFallbackDashboardData(organizationName: string): DashboardData {
   return {
     organizationName,
+    organizationId: "unknown",
     planName: "No Plan",
-    planSummary: "Connect billing and seed demo data to populate this workspace.",
+    planSummary: "Connect billing and complete onboarding to populate this workspace.",
     workspaceLabel: "AI Governance Workspace",
     metrics: [],
     activeAssessment: {
@@ -33,18 +106,131 @@ function buildFallbackDashboardData(organizationName: string): DashboardData {
     domainScores: [],
     findings: [],
     roadmap: [],
-    reports: []
+    reports: [],
+    notifications: [],
+    inventories: {
+      vendorCount: 0,
+      modelCount: 0,
+      memberCount: 0,
+      latestVendors: [],
+      latestModels: []
+    },
+    usageMetrics: [],
+    productSurface: buildProductSurfaceModel({
+      area: "dashboard",
+      entitlements: {
+        planName: "No Plan",
+        workspaceMode: "INACTIVE",
+        trialEndsAt: null,
+        currentPeriodEnd: null,
+        canAccessReports: false,
+        canGenerateReports: false,
+        featureAccess: {
+          "workspace.access": false,
+          "assessments.create": false,
+          "reports.view": false,
+          "reports.generate": false,
+          "roadmap.view": false,
+          "members.manage": false,
+          "billing.portal": false,
+          "evidence.view": false,
+          "evidence.manage": false,
+          "uploads.manage": false,
+          "monitoring.view": false,
+          "monitoring.manage": false,
+          "executive.reviews": false,
+          "executive.delivery": false,
+          "frameworks.view": false,
+          "frameworks.manage": false,
+          "custom.frameworks": false,
+          "api.access": false,
+          "priority.support": false
+        }
+      }
+    }),
+    upsellOffers: [],
+    activation: {
+      activationMilestone: {
+        key: "first_report_generated",
+        label: "First executive report generated",
+        rationale:
+          "This is the earliest point where Evolve Edge turns setup and assessment work into stakeholder-visible compliance value.",
+        isReached: false
+      },
+      completionPercent: 0,
+      steps: [],
+      supportingSignals: [],
+      nextAction: {
+        title: "Create your first live records",
+        body: "Create an assessment and move it toward the first executive report.",
+        href: "/dashboard/assessments",
+        label: "Open assessments"
+      },
+      isActivated: false
+    },
+    retention: {
+      healthScore: 0,
+      healthTone: "watch",
+      headline: "Retention data pending",
+      summary:
+        "Renewal and retention signals will appear once the workspace has a subscription and live product activity.",
+      renewal: {
+        label: "Billing status",
+        dateLabel: null,
+        daysRemaining: null,
+        helperText: "No billing milestone is recorded yet."
+      },
+      usageDeclineWarning: null,
+      reactivationPrompt: null,
+      saveOffer: null,
+      valueReminders: [],
+      signals: []
+    },
+    isDemoMode: isDemoModeEnabled(),
+    monitoring: {
+      status: "Pending",
+      postureScore: null,
+      riskLevel: "Unscored",
+      openFindingsCount: 0,
+      inRemediationCount: 0,
+      reportArchiveCount: 0,
+      nextReviewLabel: "Monitoring will activate after the first live report sync.",
+      trendDelta: 0
+    },
+    recommendedFocus: {
+      label: "Getting started",
+      title: "Create your first live records",
+      body: "Set up an assessment, register vendors and AI systems, and then generate your first executive deliverable.",
+      primaryHref: "/dashboard/assessments",
+      primaryLabel: "Create Assessment",
+      secondaryHref: "/dashboard/settings",
+      secondaryLabel: "Open Settings"
+    }
   };
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const session = await getCurrentSession();
+  const session = await requireCurrentSession({ requireOrganization: true });
+  const [entitlements, currentSubscription] = await Promise.all([
+    getOrganizationEntitlements(session.organization!.id),
+    getCurrentSubscription(session.organization!.id)
+  ]);
+  const monitoring = await getMonitoringDashboardSnapshot(session.organization!.id);
+  const [usageMetering, auditsQuota, evidenceUploadsQuota] = await Promise.all([
+    getOrganizationUsageMeteringSnapshot(session.organization!.id, entitlements.planCode),
+    getUsageRemaining(session.organization!.id, "audits"),
+    getUsageRemaining(session.organization!.id, "evidence_uploads")
+  ]);
+  const activation = await getOrganizationActivationSnapshot(
+    session.organization!.id,
+    entitlements
+  );
 
   let organization = null;
 
   try {
     organization = await prisma.organization.findFirst({
-      where: { slug: session.organization.slug },
+      where: { id: session.organization!.id },
       include: {
         subscriptions: {
           include: { plan: true },
@@ -54,10 +240,32 @@ export async function getDashboardData(): Promise<DashboardData> {
         frameworkSelections: {
           include: { framework: true }
         },
+        vendors: {
+          orderBy: { createdAt: "desc" },
+          take: 3
+        },
+        models: {
+          orderBy: { createdAt: "desc" },
+          take: 3
+        },
+        notifications: {
+          orderBy: { createdAt: "desc" },
+          take: 4
+        },
+        _count: {
+          select: {
+            members: true,
+            vendors: true,
+            models: true
+          }
+        },
         assessments: {
           orderBy: { createdAt: "desc" },
           take: 1,
           include: {
+            sections: {
+              orderBy: { orderIndex: "asc" }
+            },
             findings: {
               orderBy: { sortOrder: "asc" },
               take: 3
@@ -79,33 +287,118 @@ export async function getDashboardData(): Promise<DashboardData> {
       }
     });
   } catch (error) {
-    console.error("Dashboard data fallback triggered", error);
-    return buildFallbackDashboardData(session.organization.name);
+    logServerEvent("error", "dashboard.data.fallback", {
+      organizationId: session.organization!.id,
+      message: error instanceof Error ? error.message : "Unknown error"
+    });
+    return buildFallbackDashboardData(session.organization!.name);
   }
 
   if (!organization) {
-    return buildFallbackDashboardData(session.organization.name);
+    return buildFallbackDashboardData(session.organization!.name);
   }
 
   const subscription = organization.subscriptions[0];
   const assessment = organization.assessments[0];
   const reports = organization.reports;
   const frameworks = organization.frameworkSelections.map((item) => item.framework.name);
+  const vendorNames = organization.vendors.map((vendor) => vendor.name);
+  const modelNames = organization.models.map((model) => model.name);
+  const monitoredAssetsCount = organization._count.vendors + organization._count.models;
+  const findingsCount = assessment?.findings.length ?? 0;
   const criticalFindings =
     assessment?.findings.filter((finding) => finding.severity === "CRITICAL").length ?? 0;
   const currentPeriodEnd = subscription?.currentPeriodEnd;
+  const primaryRecommendation = assessment?.recommendations[0];
+  const latestNotification = organization.notifications[0];
+  const recommendedFocus =
+    entitlements.workspaceMode === "INACTIVE"
+      ? {
+          label: "Billing required",
+          title: "Reactivate the workspace before the next operating cycle.",
+          body: "This customer is now in inactive mode. Restore billing to resume assessment creation, reports, and roadmap access.",
+          primaryHref: "/dashboard/settings",
+          primaryLabel: "Open Billing",
+          secondaryHref: "/dashboard/reports",
+          secondaryLabel: "View Reports"
+        }
+      : usageMetering.topWarning
+        ? {
+            label: "Capacity pressure",
+            title: usageMetering.topWarning.upgradeTitle,
+            body: `${usageMetering.topWarning.upgradeBody} ${usageMetering.topWarning.helperText}`,
+            primaryHref: "/pricing",
+            primaryLabel: "Review upgrade options",
+            secondaryHref: "/dashboard/settings",
+            secondaryLabel: "Open usage details"
+          }
+      : primaryRecommendation
+        ? {
+            label: "Top remediation",
+            title: primaryRecommendation.title,
+            body:
+              primaryRecommendation.description ||
+              "Open the roadmap to assign ownership and due dates for this action.",
+            primaryHref: "/dashboard/roadmap",
+            primaryLabel: "Open Roadmap",
+            secondaryHref: "/dashboard/assessments",
+            secondaryLabel: "Review Assessment"
+          }
+        : latestNotification
+          ? {
+              label: "Latest activity",
+              title: latestNotification.title,
+              body: latestNotification.body,
+              primaryHref: latestNotification.actionUrl ?? "/dashboard/settings",
+              primaryLabel: latestNotification.actionUrl ? "Open Activity" : "Open Settings",
+              secondaryHref: "/dashboard/assessments",
+              secondaryLabel: "Create Assessment"
+            }
+          : {
+              label: "Inventory next",
+              title: "Register the tools and vendors used in production.",
+              body: "Track vendors and AI systems in the workspace so assessments, reports, and stakeholder reviews are backed by real operational records.",
+              primaryHref: "/dashboard/settings",
+              primaryLabel: "Manage Inventory",
+              secondaryHref: "/dashboard/assessments",
+              secondaryLabel: "Open Assessments"
+            };
+  const retention = getOrganizationRetentionSnapshot({
+    entitlements,
+    activation,
+    usageMetering,
+    assessmentsCount: assessment ? 1 : 0,
+    reportsCount: reports.length,
+    findingsCount,
+    monitoredAssetsCount,
+    memberCount: organization._count.members,
+    currentPlanCode: currentSubscription?.plan.code ?? entitlements.planCode,
+    hasStripeCustomer: Boolean(currentSubscription?.stripeCustomerId)
+  });
 
   return {
     organizationName: organization.name,
+    organizationId: organization.id,
     planName: subscription?.plan.name ?? "Unassigned Plan",
     planSummary:
-      "Quarterly reassessments, report archive, remediation roadmap, and collaborative workspace controls.",
+      entitlements.workspaceMode === "DEMO"
+        ? "Demo workspace using seeded data fallbacks for exploration only. Stripe billing and plan enforcement stay disabled in this mode."
+        : entitlements.workspaceMode === "TRIAL"
+          ? "Trial workspace with live assessments, reports, roadmap generation, and onboarding enabled while the customer evaluates the product."
+          : entitlements.workspaceMode === "SUBSCRIPTION"
+            ? "Live subscription with assessments, report archive, remediation roadmap, and team workspace controls."
+            : entitlements.workspaceMode === "READ_ONLY"
+              ? "Workspace access is preserved in read-only mode while billing is paused, past due, or recently canceled. Historical records remain available while write actions stay gated."
+            : "Inactive workspace. Reactivate billing to unlock report generation, roadmap access, and new assessment creation.",
     workspaceLabel: "AI Governance Workspace",
     metrics: [
       {
         label: "Posture Score",
         value: `${organization.currentPostureScore ?? assessment?.postureScore ?? 0} / 100`,
-        note: "+8 since prior assessment",
+        note:
+          assessment?.completedAt
+            ? `Last completed ${formatDate(assessment.completedAt)}`
+            : "Calculated from your latest live assessment",
         tone: "positive"
       },
       {
@@ -117,35 +410,37 @@ export async function getDashboardData(): Promise<DashboardData> {
       {
         label: "Framework Coverage",
         value: `${frameworks.length} active`,
-        note: frameworks.join(", "),
+        note: frameworks.length > 0 ? frameworks.join(", ") : "No frameworks selected yet",
         tone: "neutral"
       },
       {
-        label: "Renewal Window",
-        value: currentPeriodEnd ? formatDate(currentPeriodEnd) : "Not scheduled",
-        note: "Quarterly reassessment recommended",
+        label: "Plan Status",
+        value:
+          entitlements.subscriptionStatus === "NONE"
+            ? "No billing"
+            : entitlements.subscriptionStatus.replaceAll("_", " "),
+        note: currentPeriodEnd ? `Current term through ${formatDate(currentPeriodEnd)}` : "Billing period pending",
         tone: "neutral"
       }
     ],
     activeAssessment: {
       name: assessment?.name ?? "No active assessment",
       status: assessment?.status.replaceAll("_", " ") ?? "Not started",
-      progress: assessment?.status === "ANALYSIS_RUNNING" ? 68 : 20,
+      progress: assessment ? calculateAssessmentProgress(assessment.sections) : 0,
       nextStep:
         assessment?.analysisJobs[0]?.status === "RUNNING"
           ? "Generate executive summary and publish findings package"
-          : "Complete intake and queue analysis",
+          : assessment
+            ? "Complete intake sections and queue analysis"
+            : "Create your first live assessment",
       eta:
         assessment?.analysisJobs[0]?.status === "RUNNING"
           ? "Ready in about 18 minutes"
-          : "Waiting for input completion"
+          : assessment
+            ? "Waiting for input completion"
+            : "No assessment in progress"
     },
-    domainScores: [
-      { label: "Governance", score: 68 },
-      { label: "Security", score: 75 },
-      { label: "Privacy", score: 64 },
-      { label: "Compliance", score: 70 }
-    ],
+    domainScores: buildDomainScores(assessment?.findings ?? []),
     findings:
       assessment?.findings.map((finding) => ({
         title: finding.title,
@@ -164,8 +459,76 @@ export async function getDashboardData(): Promise<DashboardData> {
       })) ?? [],
     reports: reports.map((report) => ({
       title: report.title,
-      type: report.pdfUrl ? "Executive PDF" : "Interactive report",
+      type:
+        report.status === "DELIVERED"
+          ? "Delivered report"
+          : report.pdfUrl
+            ? "Executive PDF"
+            : "Ready for delivery",
       date: formatDate(report.publishedAt ?? report.createdAt)
-    }))
+    })),
+    notifications: organization.notifications.map((notification) => ({
+      title: notification.title,
+      body: notification.body,
+      date: formatDate(notification.createdAt),
+      actionUrl: notification.actionUrl
+    })),
+    usageMetrics: usageMetering.metrics.filter((metric) =>
+      ["activeAssessments", "reportsGenerated", "monitoredAssets", "seats"].includes(
+        metric.key
+      )
+    ),
+    productSurface: buildProductSurfaceModel({
+      area: "dashboard",
+      entitlements,
+      usageMetrics: usageMetering.metrics.filter((metric) =>
+        ["activeAssessments", "monitoredAssets"].includes(metric.key)
+      ),
+      quotas: [
+        {
+          key: "audits",
+          label: "Monthly audits",
+          snapshot: auditsQuota
+        },
+        {
+          key: "evidence_uploads",
+          label: "Monthly evidence uploads",
+          snapshot: evidenceUploadsQuota
+        }
+      ]
+    }),
+    activation,
+    retention,
+    monitoring: {
+      status: monitoring.subscription
+        ? monitoring.subscription.status.replaceAll("_", " ")
+        : "Pending",
+      postureScore: monitoring.summary.postureScore,
+      riskLevel: monitoring.summary.riskLevel,
+      openFindingsCount: monitoring.summary.openFindingsCount,
+      inRemediationCount: monitoring.summary.inRemediationCount,
+      reportArchiveCount: monitoring.summary.reportArchiveCount,
+      nextReviewLabel: monitoring.summary.nextReviewAt
+        ? `Next review ${formatDate(monitoring.summary.nextReviewAt)}`
+        : "Monitoring review not scheduled yet",
+      trendDelta: monitoring.summary.postureTrendDelta
+    },
+    isDemoMode: isDemoModeEnabled(),
+    upsellOffers: getExpansionOffers({
+      placement: "dashboard",
+      session,
+      entitlements,
+      usageMetering,
+      currentPlanCode: currentSubscription?.plan.code ?? entitlements.planCode,
+      hasStripeCustomer: Boolean(currentSubscription?.stripeCustomerId)
+    }),
+    inventories: {
+      vendorCount: organization._count.vendors,
+      modelCount: organization._count.models,
+      memberCount: organization._count.members,
+      latestVendors: vendorNames,
+      latestModels: modelNames
+    },
+    recommendedFocus
   };
 }

@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ChevronRight,
   CreditCard,
+  FolderOpen,
   FileText,
   LayoutDashboard,
   ListTodo,
@@ -18,6 +19,15 @@ import {
   ShieldCheck,
   TriangleAlert
 } from "lucide-react";
+import { ActivationGuide } from "./activation-guide";
+import { ProductSurfacePanel } from "./product-surface-panel";
+import type { ActivationSnapshot } from "../lib/activation";
+import { RetentionOverview } from "./retention-overview";
+import { UpsellOfferStack } from "./upsell-offer-stack";
+import type { ResolvedUpsellOffer } from "../lib/expansion-engine";
+import type { ProductSurfaceModel } from "../lib/product-surface";
+import type { RetentionSnapshot } from "../lib/retention";
+import type { UsageMetricSnapshot } from "../lib/usage-metering";
 
 export type DashboardMetric = {
   label: string;
@@ -46,6 +56,13 @@ export type DashboardReport = {
   date: string;
 };
 
+export type DashboardNotification = {
+  title: string;
+  body: string;
+  date: string;
+  actionUrl: string | null;
+};
+
 export type DashboardData = {
   organizationName: string;
   planName: string;
@@ -63,6 +80,40 @@ export type DashboardData = {
   findings: DashboardFinding[];
   roadmap: DashboardRoadmapItem[];
   reports: DashboardReport[];
+  notifications: DashboardNotification[];
+  inventories: {
+    vendorCount: number;
+    modelCount: number;
+    memberCount: number;
+    latestVendors: string[];
+    latestModels: string[];
+  };
+  recommendedFocus: {
+    label: string;
+    title: string;
+    body: string;
+    primaryHref: string;
+    primaryLabel: string;
+    secondaryHref: string;
+    secondaryLabel: string;
+  };
+  usageMetrics: UsageMetricSnapshot[];
+  productSurface: ProductSurfaceModel;
+  upsellOffers: ResolvedUpsellOffer[];
+  activation: ActivationSnapshot;
+  retention: RetentionSnapshot;
+  organizationId: string;
+  isDemoMode: boolean;
+  monitoring: {
+    status: string;
+    postureScore: number | null;
+    riskLevel: string;
+    openFindingsCount: number;
+    inRemediationCount: number;
+    reportArchiveCount: number;
+    nextReviewLabel: string;
+    trendDelta: number;
+  };
 };
 
 const navigation: Array<{
@@ -72,6 +123,10 @@ const navigation: Array<{
 }> = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/assessments", label: "Assessments", icon: ShieldCheck },
+  { href: "/dashboard/frameworks" as Route, label: "Frameworks", icon: CheckCircle2 },
+  { href: "/dashboard/monitoring" as Route, label: "Monitoring", icon: ChartColumn },
+  { href: "/dashboard/evidence" as Route, label: "Evidence", icon: FolderOpen },
+  { href: "/dashboard/programs" as Route, label: "Programs", icon: Building2 },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
   { href: "/dashboard/roadmap", label: "Roadmap", icon: ListTodo },
   { href: "/dashboard/settings", label: "Billing & Settings", icon: CreditCard }
@@ -83,6 +138,16 @@ function cn(...values: Array<string | false | null | undefined>) {
 
 export function DashboardShell({ data }: { data: DashboardData }) {
   const pathname = usePathname();
+  const resolvedNavigation = data.isDemoMode
+    ? [
+        ...navigation,
+        {
+          href: "/dashboard/demo" as Route,
+          label: "Demo Tour",
+          icon: CheckCircle2
+        }
+      ]
+    : navigation;
 
   return (
     <div className="min-h-screen bg-transparent px-4 py-4 md:px-6">
@@ -109,7 +174,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
           </div>
 
           <nav className="mt-8 space-y-2">
-            {navigation.map((item) => {
+            {resolvedNavigation.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href;
 
@@ -140,10 +205,13 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               Review data handling, audit logs, access controls, and methodology
               notes for your current assessments.
             </p>
-            <button className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-teal-200">
+            <Link
+              href="/dashboard/settings"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-teal-200"
+            >
               Open trust center
               <ArrowRight className="h-4 w-4" />
-            </button>
+            </Link>
           </div>
         </aside>
 
@@ -168,13 +236,19 @@ export function DashboardShell({ data }: { data: DashboardData }) {
                 <LogOut className="h-4 w-4" />
                 Sign out
               </Link>
-              <button className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink">
+              <Link
+                href="#activity"
+                className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink"
+              >
                 <Bell className="h-4 w-4" />
                 Notifications
-              </button>
-              <button className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white">
+              </Link>
+              <Link
+                href="/dashboard/assessments"
+                className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white"
+              >
                 Start Reassessment
-              </button>
+              </Link>
             </div>
           </header>
 
@@ -201,6 +275,124 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               </article>
             ))}
           </section>
+
+          <div className="mt-6">
+            <ActivationGuide
+              activation={data.activation}
+              organizationId={data.organizationId}
+            />
+          </div>
+
+          <div className="mt-6">
+            <RetentionOverview
+              retention={data.retention}
+              title="Renewal and account health"
+            />
+          </div>
+
+          <div className="mt-6">
+            <ProductSurfacePanel model={data.productSurface} />
+          </div>
+
+          <section className="mt-6 rounded-[24px] border border-line p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-steel">Continuous Monitoring</p>
+                <h2 className="mt-2 text-2xl font-semibold text-ink">
+                  Recurring risk visibility
+                </h2>
+              </div>
+              <Link
+                href={"/dashboard/monitoring" as Route}
+                className="text-sm font-semibold text-accent"
+              >
+                Open monitoring
+              </Link>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <article className="rounded-2xl border border-line bg-mist p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-steel">Status</p>
+                <p className="mt-3 text-2xl font-semibold text-ink">{data.monitoring.status}</p>
+                <p className="mt-2 text-sm text-steel">{data.monitoring.nextReviewLabel}</p>
+              </article>
+              <article className="rounded-2xl border border-line bg-mist p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-steel">Posture</p>
+                <p className="mt-3 text-2xl font-semibold text-ink">
+                  {data.monitoring.postureScore ?? "--"}
+                  {data.monitoring.postureScore !== null ? "/100" : ""}
+                </p>
+                <p className="mt-2 text-sm text-steel">
+                  {data.monitoring.riskLevel} risk · Trend {data.monitoring.trendDelta >= 0 ? "+" : ""}
+                  {data.monitoring.trendDelta}
+                </p>
+              </article>
+              <article className="rounded-2xl border border-line bg-mist p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-steel">Open Findings</p>
+                <p className="mt-3 text-2xl font-semibold text-ink">
+                  {data.monitoring.openFindingsCount}
+                </p>
+                <p className="mt-2 text-sm text-steel">
+                  {data.monitoring.inRemediationCount} in remediation
+                </p>
+              </article>
+              <article className="rounded-2xl border border-line bg-mist p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-steel">Archive</p>
+                <p className="mt-3 text-2xl font-semibold text-ink">
+                  {data.monitoring.reportArchiveCount}
+                </p>
+                <p className="mt-2 text-sm text-steel">
+                  Historic reports available to leadership and operators
+                </p>
+              </article>
+            </div>
+          </section>
+
+          {data.usageMetrics.length > 0 ? (
+            <section className="mt-6 rounded-[24px] border border-line p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-steel">Usage and Capacity</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-ink">
+                    Plan utilization
+                  </h2>
+                </div>
+                <Link
+                  href="/dashboard/settings"
+                  className="text-sm font-semibold text-accent"
+                >
+                  Open billing
+                </Link>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {data.usageMetrics.map((metric) => (
+                  <article
+                    key={metric.key}
+                    className="rounded-2xl border border-line bg-mist p-4"
+                  >
+                    <p className="text-xs uppercase tracking-[0.18em] text-steel">
+                      {metric.shortLabel}
+                    </p>
+                    <p className="mt-3 text-2xl font-semibold text-ink">
+                      {metric.usageLabel}
+                    </p>
+                    <p className="mt-2 text-sm text-steel">{metric.helperText}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {data.upsellOffers.length > 0 ? (
+            <div className="mt-6">
+              <UpsellOfferStack
+                offers={data.upsellOffers}
+                title="Expansion opportunities"
+                description="Show high-intent upgrade and add-on paths only when the workspace signals real commercial readiness."
+              />
+            </div>
+          ) : null}
 
           <section className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
             <article className="rounded-[24px] border border-line p-5">
@@ -265,20 +457,27 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               </div>
 
               <div className="mt-6 space-y-4">
-                {data.domainScores.map((item) => (
-                  <div key={item.label}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-steel">{item.label}</span>
-                      <span className="font-semibold text-ink">{item.score}%</span>
+                {data.domainScores.length > 0 ? (
+                  data.domainScores.map((item) => (
+                    <div key={item.label}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-steel">{item.label}</span>
+                        <span className="font-semibold text-ink">{item.score}%</span>
+                      </div>
+                      <div className="mt-2 h-2.5 rounded-full bg-slate-200">
+                        <div
+                          className="h-2.5 rounded-full bg-[#0f766e]"
+                          style={{ width: `${item.score}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="mt-2 h-2.5 rounded-full bg-slate-200">
-                      <div
-                        className="h-2.5 rounded-full bg-[#0f766e]"
-                        style={{ width: `${item.score}%` }}
-                      />
-                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
+                    Domain scores appear once live findings are attached to an
+                    assessment.
                   </div>
-                ))}
+                )}
               </div>
             </article>
           </section>
@@ -298,37 +497,43 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               </div>
 
               <div className="mt-6 space-y-3">
-                {data.findings.map((finding) => (
-                  <div
-                    key={finding.title}
-                    className="rounded-2xl border border-line bg-mist p-4"
-                  >
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <p className="text-sm font-semibold text-ink">
-                        {finding.title}
-                      </p>
-                      <span
-                        className={cn(
-                          "w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]",
-                          finding.severity === "CRITICAL" &&
-                            "bg-red-100 text-danger",
-                          finding.severity === "HIGH" &&
-                            "bg-amber-100 text-warning",
-                          finding.severity === "MEDIUM" &&
-                            "bg-slate-200 text-steel",
-                          finding.severity === "LOW" &&
-                            "bg-emerald-100 text-accent"
-                        )}
-                      >
-                        {finding.severity}
-                      </span>
+                {data.findings.length > 0 ? (
+                  data.findings.map((finding) => (
+                    <div
+                      key={finding.title}
+                      className="rounded-2xl border border-line bg-mist p-4"
+                    >
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <p className="text-sm font-semibold text-ink">
+                          {finding.title}
+                        </p>
+                        <span
+                          className={cn(
+                            "w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]",
+                            finding.severity === "CRITICAL" &&
+                              "bg-red-100 text-danger",
+                            finding.severity === "HIGH" &&
+                              "bg-amber-100 text-warning",
+                            finding.severity === "MEDIUM" &&
+                              "bg-slate-200 text-steel",
+                            finding.severity === "LOW" &&
+                              "bg-emerald-100 text-accent"
+                          )}
+                        >
+                          {finding.severity}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-3 text-sm text-steel">
+                        <span>{finding.framework}</span>
+                        <span>Owner: {finding.owner}</span>
+                      </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-3 text-sm text-steel">
-                      <span>{finding.framework}</span>
-                      <span>Owner: {finding.owner}</span>
-                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
+                    No live findings have been generated yet for this workspace.
                   </div>
-                ))}
+                )}
               </div>
             </article>
 
@@ -346,19 +551,26 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               </div>
 
               <div className="mt-6 space-y-3">
-                {data.roadmap.map((item) => (
-                  <div
-                    key={item.title}
-                    className="rounded-2xl border border-line bg-mist p-4"
-                  >
-                    <p className="text-sm font-semibold text-ink">{item.title}</p>
-                    <div className="mt-3 flex flex-wrap gap-3 text-sm text-steel">
-                      <span>Priority: {item.priority}</span>
-                      <span>Effort: {item.effort}</span>
-                      <span>Due: {item.due}</span>
+                {data.roadmap.length > 0 ? (
+                  data.roadmap.map((item) => (
+                    <div
+                      key={item.title}
+                      className="rounded-2xl border border-line bg-mist p-4"
+                    >
+                      <p className="text-sm font-semibold text-ink">{item.title}</p>
+                      <div className="mt-3 flex flex-wrap gap-3 text-sm text-steel">
+                        <span>Priority: {item.priority}</span>
+                        <span>Effort: {item.effort}</span>
+                        <span>Due: {item.due}</span>
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
+                    No live remediation tasks exist yet. Publish a report or add
+                    recommendations to populate the roadmap.
                   </div>
-                ))}
+                )}
               </div>
             </article>
           </section>
@@ -367,23 +579,30 @@ export function DashboardShell({ data }: { data: DashboardData }) {
             <article className="rounded-[24px] border border-line p-5">
               <p className="text-sm font-medium text-steel">Recent Reports</p>
               <div className="mt-5 space-y-3">
-                {data.reports.map((report) => (
-                  <Link
-                    key={report.title}
-                    href="/dashboard/reports"
-                    className="flex items-center justify-between rounded-2xl border border-line bg-mist p-4 transition hover:border-accent"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-ink">
-                        {report.title}
-                      </p>
-                      <p className="mt-2 text-sm text-steel">
-                        {report.type} • {report.date}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-steel" />
-                  </Link>
-                ))}
+                {data.reports.length > 0 ? (
+                  data.reports.map((report) => (
+                    <Link
+                      key={report.title}
+                      href="/dashboard/reports"
+                      className="flex items-center justify-between rounded-2xl border border-line bg-mist p-4 transition hover:border-accent"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-ink">
+                          {report.title}
+                        </p>
+                        <p className="mt-2 text-sm text-steel">
+                          {report.type} · {report.date}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-steel" />
+                    </Link>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
+                    No published reports yet. Generate one from a live assessment
+                    to start the report archive.
+                  </div>
+                )}
               </div>
             </article>
 
@@ -391,30 +610,124 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               <p className="text-sm font-medium text-steel">Recommended Focus</p>
               <div className="mt-5 rounded-[24px] bg-[#0f172a] p-5 text-white">
                 <p className="text-xs uppercase tracking-[0.24em] text-teal-200">
-                  This week
+                  {data.recommendedFocus.label}
                 </p>
                 <h2 className="mt-3 text-2xl font-semibold">
-                  Convert assessment output into an auditable operating plan.
+                  {data.recommendedFocus.title}
                 </h2>
                 <p className="mt-3 text-sm leading-7 text-slate-300">
-                  Prioritize policy approval, vendor intake controls, and PHI
-                  guidance for AI-enabled workflows before the next executive
-                  review.
+                  {data.recommendedFocus.body}
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
                   <Link
-                    href="/dashboard/roadmap"
+                    href={data.recommendedFocus.primaryHref as Route}
                     className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink"
                   >
-                    Open Roadmap
+                    {data.recommendedFocus.primaryLabel}
                   </Link>
                   <Link
-                    href="/dashboard/assessments"
+                    href={data.recommendedFocus.secondaryHref as Route}
                     className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white"
                   >
-                    Review Assessment
+                    {data.recommendedFocus.secondaryLabel}
                   </Link>
                 </div>
+              </div>
+            </article>
+          </section>
+
+          <section
+            id="activity"
+            className="mt-6 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]"
+          >
+            <article className="rounded-[24px] border border-line p-5">
+              <p className="text-sm font-medium text-steel">Operational Inventory</p>
+              <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-2xl bg-mist p-4">
+                  <p className="text-xs uppercase tracking-[0.24em] text-steel">
+                    Vendors
+                  </p>
+                  <p className="mt-3 text-2xl font-semibold text-ink">
+                    {data.inventories.vendorCount}
+                  </p>
+                  <p className="mt-2 text-sm text-steel">
+                    {data.inventories.latestVendors.length > 0
+                      ? data.inventories.latestVendors.join(", ")
+                      : "No vendor records yet"}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-mist p-4">
+                  <p className="text-xs uppercase tracking-[0.24em] text-steel">
+                    AI Models
+                  </p>
+                  <p className="mt-3 text-2xl font-semibold text-ink">
+                    {data.inventories.modelCount}
+                  </p>
+                  <p className="mt-2 text-sm text-steel">
+                    {data.inventories.latestModels.length > 0
+                      ? data.inventories.latestModels.join(", ")
+                      : "No model records yet"}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-mist p-4">
+                  <p className="text-xs uppercase tracking-[0.24em] text-steel">
+                    Team Members
+                  </p>
+                  <p className="mt-3 text-2xl font-semibold text-ink">
+                    {data.inventories.memberCount}
+                  </p>
+                  <p className="mt-2 text-sm text-steel">
+                    Live organization memberships tracked in the database.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5">
+                <Link
+                  href="/dashboard/settings"
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-accent"
+                >
+                  Manage registry records
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </article>
+
+            <article className="rounded-[24px] border border-line p-5">
+              <p className="text-sm font-medium text-steel">Recent Activity</p>
+              <div className="mt-5 space-y-3">
+                {data.notifications.length > 0 ? (
+                  data.notifications.map((notification) => (
+                    <div
+                      key={`${notification.title}-${notification.date}`}
+                      className="rounded-2xl border border-line bg-mist p-4"
+                    >
+                      <p className="text-sm font-semibold text-ink">
+                        {notification.title}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-steel">
+                        {notification.body}
+                      </p>
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-steel">
+                          {notification.date}
+                        </p>
+                        {notification.actionUrl ? (
+                          <Link
+                            href={notification.actionUrl as Route}
+                            className="text-sm font-semibold text-accent"
+                          >
+                            Open
+                          </Link>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
+                    No activity notifications have been recorded yet for this
+                    workspace.
+                  </div>
+                )}
               </div>
             </article>
           </section>

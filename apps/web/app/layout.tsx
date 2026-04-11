@@ -1,5 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { AttributionCapture } from "../components/attribution-capture";
+import { DemoModeBanner } from "../components/demo-mode-banner";
+import { getDemoModeConfig } from "../lib/demo-mode";
 
 export const metadata: Metadata = {
   title: "Evolve Edge",
@@ -9,10 +12,20 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children
 }: Readonly<{ children: React.ReactNode }>) {
+  const demoMode = getDemoModeConfig();
+
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {demoMode.enabled ? (
+          <DemoModeBanner
+            label={demoMode.label}
+            resetCommand={demoMode.resetCommand}
+          />
+        ) : null}
+        <AttributionCapture />
+        {children}
+      </body>
     </html>
   );
 }
-
