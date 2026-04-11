@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { AttributionCapture } from "../components/attribution-capture";
 import { DemoModeBanner } from "../components/demo-mode-banner";
 import { getDemoModeConfig } from "../lib/demo-mode";
@@ -23,7 +24,9 @@ export default function RootLayout({
             resetCommand={demoMode.resetCommand}
           />
         ) : null}
-        <AttributionCapture />
+        <Suspense fallback={null}>
+          <AttributionCapture />
+        </Suspense>
         {children}
       </body>
     </html>

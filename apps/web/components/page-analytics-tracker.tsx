@@ -2,7 +2,10 @@
 
 import { useEffect } from "react";
 import { sendProductAnalyticsEvent } from "../lib/product-analytics-client";
-import type { ProductAnalyticsEventMap, ProductAnalyticsEventName } from "../lib/product-analytics";
+import type {
+  ProductAnalyticsEventMap,
+  ProductAnalyticsEventName
+} from "../lib/product-analytics-shared";
 
 export function PageAnalyticsTracker<TName extends ProductAnalyticsEventName>({
   eventName,

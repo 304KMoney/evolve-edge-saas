@@ -3,10 +3,12 @@ import { NextResponse } from "next/server";
 import { getOptionalCurrentSession } from "../../../../lib/auth";
 import {
   isKnownProductAnalyticsEventName,
-  trackProductAnalyticsEvent,
-  type ProductAnalyticsEventMap,
-  type ProductAnalyticsEventName
+  trackProductAnalyticsEvent
 } from "../../../../lib/product-analytics";
+import type {
+  ProductAnalyticsEventMap,
+  ProductAnalyticsEventName
+} from "../../../../lib/product-analytics-shared";
 
 type AnalyticsTrackRequest = {
   name?: string;

@@ -1,6 +1,10 @@
 "use client";
 
-import { PRODUCT_ANALYTICS_COOKIE, type ProductAnalyticsEventMap, type ProductAnalyticsEventName } from "./product-analytics";
+import {
+  PRODUCT_ANALYTICS_COOKIE,
+  type ProductAnalyticsEventMap,
+  type ProductAnalyticsEventName
+} from "./product-analytics-shared";
 
 function readAnalyticsCookie() {
   const match = document.cookie
