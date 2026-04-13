@@ -16,8 +16,8 @@ import {
 } from "../lib/pricing-content";
 
 export function PricingPageClient({ data }: { data: PricingPageData }) {
-  const foundingOfferHref = "/contact?intent=founding-risk-audit&source=pricing-page-primary";
-  const foundingCallHref = "/contact?intent=founding-risk-audit&source=pricing-page-secondary";
+  const foundingOfferHref = data.marketingLinks.foundingRiskAuditHref;
+  const foundingCallHref = data.marketingLinks.foundingRiskAuditCallHref;
 
   return (
     <main className="grid gap-6">

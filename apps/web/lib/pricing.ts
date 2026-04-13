@@ -4,11 +4,12 @@ import {
   CANONICAL_COMMERCIAL_PLAN_CATALOG,
   type CanonicalPlanCode,
   getCanonicalCommercialPlanDefinition,
+  resolveCanonicalPlanCode,
   resolveCanonicalPlanCodeFromRevenuePlanCode
 } from "./commercial-catalog";
 import { EntitlementSnapshot, getOrganizationEntitlements } from "./entitlements";
 import { canManageBilling } from "./roles";
-import { getSalesContactEmail } from "./runtime-config";
+import { getFoundingRiskAuditUrl, getSalesContactEmail } from "./runtime-config";
 
 export type PricingPlanCard = {
   code: CanonicalPlanCode;
@@ -62,6 +63,10 @@ export type PricingPageData = {
   currentEntitlements: EntitlementSnapshot | null;
   ctasByPlanCode: Record<CanonicalPlanCode, PricingCta>;
   salesEmail: string;
+  marketingLinks: {
+    foundingRiskAuditHref: string;
+    foundingRiskAuditCallHref: string;
+  };
 };
 
 function buildPlanHighlights(planCode: CanonicalPlanCode) {
@@ -202,15 +207,20 @@ function buildPricingCta(input: {
 
 export async function getPricingPageData(): Promise<PricingPageData> {
   const session = await getOptionalCurrentSession();
-  const currentSubscription = session?.organization
-    ? await getCurrentSubscription(session.organization.id)
+  const hasWorkspaceSession =
+    Boolean(session) && session?.authMode === "password";
+  const workspaceOrganization = hasWorkspaceSession ? session?.organization : null;
+  // Keep the public pricing route resilient even if a demo workspace is active.
+  // The marketing page should not depend on seeded/demo Prisma reads to render.
+  const currentSubscription = workspaceOrganization
+    ? await getCurrentSubscription(workspaceOrganization.id)
     : null;
-  const currentEntitlements = session?.organization
-    ? await getOrganizationEntitlements(session.organization.id)
+  const currentEntitlements = workspaceOrganization
+    ? await getOrganizationEntitlements(workspaceOrganization.id)
     : null;
-  const currentPlanCode = resolveCanonicalPlanCodeFromRevenuePlanCode(
-    currentSubscription?.plan.code ?? null
-  );
+  const currentPlanCode =
+    resolveCanonicalPlanCode(currentSubscription?.plan.code ?? null) ??
+    resolveCanonicalPlanCodeFromRevenuePlanCode(currentSubscription?.plan.code ?? null);
 
   const plans = CANONICAL_COMMERCIAL_PLAN_CATALOG.map((plan) => ({
     code: plan.code,
@@ -234,9 +244,10 @@ export async function getPricingPageData(): Promise<PricingPageData> {
       plan.code,
       buildPricingCta({
         planCode: plan.code,
-        isAuthenticated: Boolean(session),
-        onboardingRequired: session?.onboardingRequired ?? false,
-        organizationRole: session?.organization?.role ?? null,
+        isAuthenticated: hasWorkspaceSession,
+        onboardingRequired:
+          hasWorkspaceSession ? (session?.onboardingRequired ?? false) : false,
+        organizationRole: workspaceOrganization?.role ?? null,
         currentPlanCode,
         hasStripeCustomer: Boolean(currentSubscription?.stripeCustomerId)
       })
@@ -246,10 +257,11 @@ export async function getPricingPageData(): Promise<PricingPageData> {
   return {
     plans,
     sessionState: {
-      isAuthenticated: Boolean(session),
-      onboardingRequired: session?.onboardingRequired ?? false,
-      organizationName: session?.organization?.name ?? null,
-      organizationRole: session?.organization?.role ?? null,
+      isAuthenticated: hasWorkspaceSession,
+      onboardingRequired:
+        hasWorkspaceSession ? (session?.onboardingRequired ?? false) : false,
+      organizationName: workspaceOrganization?.name ?? null,
+      organizationRole: workspaceOrganization?.role ?? null,
       currentPlanCode,
       currentPlanName:
         currentPlanCode
@@ -258,6 +270,10 @@ export async function getPricingPageData(): Promise<PricingPageData> {
     },
     currentEntitlements,
     ctasByPlanCode,
-    salesEmail: getSalesContactEmail()
+    salesEmail: getSalesContactEmail(),
+    marketingLinks: {
+      foundingRiskAuditHref: getFoundingRiskAuditUrl(),
+      foundingRiskAuditCallHref: "/contact?intent=founding-risk-audit&source=pricing-page-secondary"
+    }
   };
 }

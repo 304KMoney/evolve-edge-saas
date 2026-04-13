@@ -12,6 +12,7 @@ import {
   FOUNDING_RISK_AUDIT_PROBLEMS,
   PRICING_TRUST_SIGNALS
 } from "../lib/pricing-content";
+import { getFoundingRiskAuditUrl } from "../lib/runtime-config";
 
 export default async function HomePage() {
   const session = await getOptionalCurrentSession();
@@ -27,7 +28,7 @@ export default async function HomePage() {
     : isPasswordAuthEnabled()
       ? "Sign in"
       : "View workspace";
-  const foundingOfferHref = "/contact?intent=founding-risk-audit&source=homepage-primary";
+  const foundingOfferHref = getFoundingRiskAuditUrl();
   const foundingCallHref = "/contact?intent=founding-risk-audit&source=homepage-secondary";
 
   return (
