@@ -48,7 +48,7 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
               href={foundingOfferHref as never}
               className="inline-flex items-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink"
             >
-              {FOUNDING_RISK_AUDIT.ctas.apply}
+              {FOUNDING_RISK_AUDIT.ctas.primary}
             </Link>
             <Link
               href={foundingCallHref as never}
@@ -57,17 +57,18 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
               {FOUNDING_RISK_AUDIT.ctas.secondary}
             </Link>
           </div>
+          <p className="mt-4 text-sm font-medium text-[#8debf4]">{FOUNDING_RISK_AUDIT.availability}</p>
         </div>
 
         <div className="content-surface p-8 md:p-12">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
-            Why this offer converts now
+            Outcomes
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-            A premium first engagement that gives leadership fast clarity
+            From Uncertainty to Clarity
           </h2>
           <p className="mt-4 text-sm leading-7 text-steel">
-            {FOUNDING_RISK_AUDIT.promise}
+            {FOUNDING_RISK_AUDIT.summary}
           </p>
           <div className="mt-8 space-y-4">
             {FOUNDING_RISK_AUDIT_OUTCOMES.map((item) => (
@@ -83,11 +84,13 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
       <section className="content-surface p-8 md:p-14">
         <div className="max-w-3xl">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
-            Who this is for
+            Founding offer
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-            Built for high-trust organizations already using AI in sensitive workflows
+            Evolve Edge Founding Risk Audit
           </h2>
+          <p className="mt-4 text-xl font-semibold text-accent">{FOUNDING_RISK_AUDIT.priceLabel}</p>
+          <p className="mt-4 text-sm leading-7 text-steel">{FOUNDING_RISK_AUDIT.summary}</p>
         </div>
         <div className="mt-8 grid gap-5 lg:grid-cols-3">
           {FOUNDING_RISK_AUDIT_AUDIENCE.map((audience) => (
@@ -103,11 +106,14 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
       <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         <div className="content-surface p-8 md:p-12">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
-            What you get
+            Deliverables
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-            An executive-ready assessment, roadmap, and briefing
+            What You Actually Receive
           </h2>
+          <p className="mt-4 text-sm leading-7 text-steel">
+            This is not just a PDF. It is a fast, executive-ready AI risk assessment designed to give leadership clarity, confidence, and a prioritized action plan.
+          </p>
           <div className="mt-8 grid gap-4">
             {FOUNDING_RISK_AUDIT_DELIVERABLES.map((item) => (
               <article key={item.title} className="content-surface-muted p-6">
@@ -123,7 +129,7 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
             How it works
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Fast-turnaround delivery with a premium outside perspective
+            How Evolve Edge Works
           </h2>
           <div className="mt-8 grid gap-4">
             {FOUNDING_RISK_AUDIT_PROCESS.map((step) => (
@@ -156,8 +162,12 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
               Expansion path
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-              Higher-ticket engagements still exist, but they follow the founding audit
+              What Happens Next
             </h2>
+            <p className="mt-4 text-sm leading-7 text-steel">
+              The Founding Risk Audit is designed to give you immediate clarity. From there, organizations can expand into deeper engagement based on their needs.
+            </p>
+            <p className="mt-4 text-sm font-semibold text-ink">Start with clarity. Expand with confidence.</p>
           </div>
           <Workflow className="h-6 w-6 text-accent" />
         </div>
@@ -195,30 +205,30 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
             Next step
           </p>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight">
-            Book a call and confirm fit for the Founding Risk Audit
+            Get Ahead of AI Risk Before It Becomes a Problem
           </h2>
           <p className="mt-4 text-sm leading-7 text-slate-300">
-            We will review your use case, confirm the right audit scope, and recommend the fastest path forward.
+            Join a limited group of founding clients and get a clear, executive-ready understanding of your AI risk posture.
           </p>
           <div className="mt-8 space-y-3">
             <Link
               href={foundingOfferHref as never}
               className="inline-flex w-full items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink"
             >
-              {FOUNDING_RISK_AUDIT.ctas.apply}
+              Start Your Founding Risk Audit
             </Link>
             <a
-              href={`mailto:${data.salesEmail}`}
+              href={foundingCallHref as never}
               className="inline-flex w-full items-center justify-center rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-white"
             >
-              Email {data.salesEmail}
+              Book a Call
             </a>
           </div>
           <ul className="mt-8 space-y-3 text-sm text-slate-300">
             {[
               FOUNDING_RISK_AUDIT.priceLabel,
               "Executive-ready report plus live briefing",
-              "Expansion path into $10K and larger engagements"
+              "Expansion path into $10,000 and larger engagements"
             ].map((item) => (
               <li key={item} className="flex items-start gap-3">
                 <ArrowRight className="mt-0.5 h-4 w-4 text-[#99f6e4]" />

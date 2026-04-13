@@ -1,110 +1,110 @@
 export const FOUNDING_RISK_AUDIT = {
   eyebrow: "Founding Client Offer",
-  title: "Founding Risk Audit",
-  priceLabel: "$2,500-$5,000",
-  availability: "Limited availability for the next 7 days",
+  title: "Evolve Edge Founding Risk Audit",
+  priceLabel: "$2,500 - $5,000",
+  availability: "Limited founding client availability this week",
   summary:
-    "A fast-turnaround, executive-ready AI risk and compliance assessment for regulated and high-trust teams that need clarity before exposure becomes a client, legal, or operational problem.",
+    "A fast, executive-ready AI risk assessment designed to give you clarity, confidence, and a prioritized action plan.",
   promise:
-    "Identify AI, security, confidentiality, governance, and compliance risks quickly and leave with a prioritized action plan leadership can use immediately.",
+    "Know exactly where your AI usage creates risk and what to do about it in a matter of days.",
   ctas: {
     primary: "Get the Founding Risk Audit",
-    secondary: "Book a Call",
+    secondary: "Book an Executive Call",
     apply: "Apply for Founding Client Access"
   }
 } as const;
 
 export const FOUNDING_RISK_AUDIT_AUDIENCE = [
   {
-    title: "Law firms and legal teams",
+    title: "Law firms handling sensitive client data",
     body: "For firms using AI in research, drafting, client workflows, or sensitive matter handling where confidentiality and trust cannot slip."
   },
   {
-    title: "Early fintech teams",
+    title: "Fintech and early-stage financial platforms",
     body: "For teams moving quickly with AI, automation, and vendors while needing clearer governance and compliance posture."
   },
   {
-    title: "Small healthtech organizations",
+    title: "Healthtech and regulated environments",
     body: "For teams using AI around regulated workflows, sensitive data, and trust-critical operations that leadership needs to understand quickly."
+  },
+  {
+    title: "Organizations using AI in critical workflows",
+    body: "For teams relying on AI tools, automation, or external platforms in revenue, client, or operational processes where blind spots create real exposure."
   }
 ] as const;
 
 export const FOUNDING_RISK_AUDIT_PROBLEMS = [
-  "AI is already in use, but leadership does not have a clear view of where risk is accumulating.",
-  "Confidentiality, vendor, and governance concerns often show up before policy and controls catch up.",
-  "Teams need outside perspective and fast clarity, not a months-long consulting engagement."
+  "AI tools are already embedded in daily workflows, from client communication to internal automation, but most organizations lack visibility into how these tools impact security, confidentiality, and compliance.",
+  "This creates hidden exposure across client and sensitive data handling, third-party AI tools and vendors, internal processes and employee usage, and governance and policy gaps.",
+  "Without a clear risk posture, leadership is making decisions without knowing where the business is vulnerable."
 ] as const;
 
 export const FOUNDING_RISK_AUDIT_OUTCOMES = [
   "Know your top AI risks in days, not months",
-  "See where trust, confidentiality, and compliance can break down",
-  "Get leadership-ready findings you can act on",
+  "Understand where client data and sensitive information may be exposed",
+  "Gain a clear, leadership-ready view of your risk posture",
   "Move from uncertainty to a prioritized action plan"
 ] as const;
 
 export const FOUNDING_RISK_AUDIT_DELIVERABLES = [
   {
-    title: "Structured intake and business context",
-    body: "We capture your current AI usage, workflows, tools, sensitive processes, and leadership concerns before analysis begins."
+    title: "Executive-Ready Audit Report",
+    body: "A structured, professional report designed for leadership, clearly outlining your AI risk posture, key findings, and business impact."
   },
   {
-    title: "Focused risk review",
-    body: "We assess confidentiality exposure, data handling risk, governance gaps, vendor risk, control weaknesses, and trust or compliance concerns."
+    title: "Top Risk Identification",
+    body: "A prioritized breakdown of the most critical risks across security, confidentiality, governance, and compliance."
   },
   {
-    title: "Executive-ready audit report",
-    body: "You receive a professional report built for leadership review, decision support, and immediate internal alignment."
+    title: "Business Impact Analysis",
+    body: "Each finding is translated into real-world impact so you understand what matters and why."
   },
   {
-    title: "Top risks with business context",
-    body: "We prioritize the issues that matter most and explain why they create legal, operational, confidentiality, or reputational exposure."
+    title: "30-60 Day Action Roadmap",
+    body: "Clear, practical steps your organization can take immediately to reduce risk and improve your posture."
   },
   {
-    title: "30-60 day action roadmap",
-    body: "You leave with a practical next-step plan that helps the team move from ambiguity to remediation."
-  },
-  {
-    title: "Live executive briefing",
-    body: "We walk leadership through the findings, answer questions, and clarify the next best move if deeper remediation is needed."
+    title: "Executive Briefing",
+    body: "A live walkthrough of your results with expert guidance on what to prioritize next."
   }
 ] as const;
 
 export const FOUNDING_RISK_AUDIT_PROCESS = [
   {
     step: "1",
-    title: "Intake and business context",
-    body: "We review your current AI usage, vendors, workflows, sensitive processes, and key business concerns."
+    title: "Business & AI Intake",
+    body: "We capture how your organization uses AI, automation, and external tools across workflows."
   },
   {
     step: "2",
     title: "AI risk analysis",
-    body: "We assess where confidentiality, governance, security, and compliance exposure may be building."
+    body: "Our system analyzes your environment for security, confidentiality, governance, and compliance risks."
   },
   {
     step: "3",
-    title: "Executive-ready report",
-    body: "We turn the findings into a professional report with clear priorities and business context."
+    title: "Executive Report Generation",
+    body: "We produce a clear, structured, executive-ready report with findings and priorities."
   },
   {
     step: "4",
-    title: "Briefing and roadmap",
-    body: "We deliver a live walkthrough and a practical action plan for the next 30 to 60 days."
+    title: "Briefing & Roadmap",
+    body: "We walk you through the results and provide a focused action plan for the next 30-60 days."
   }
 ] as const;
 
 export const EXPANSION_PATHS = [
   {
-    title: "Full Audit + Implementation Roadmap",
+    title: "Full Audit & Implementation Roadmap",
     priceLabel: "$10,000",
-    body: "The next step for teams that want deeper validation, broader controls coverage, and a more extensive implementation roadmap."
+    body: "The next step for organizations that need deeper validation, broader controls coverage, and a more extensive implementation roadmap."
   },
   {
-    title: "Ongoing advisory and monitoring",
+    title: "Ongoing Risk Monitoring & Advisory",
     priceLabel: "$50,000+",
     body: "For organizations that need recurring reassessment, operating support, and ongoing executive visibility as AI use expands."
   },
   {
-    title: "Enterprise custom engagements",
+    title: "Enterprise AI Risk Governance Programs",
     priceLabel: "Custom",
     body: "For larger or more complex environments that need tailored rollout, procurement coordination, and broader governance support."
   }
@@ -112,9 +112,9 @@ export const EXPANSION_PATHS = [
 
 export const PRICING_HERO = {
   eyebrow: "Pricing",
-  title: "Start with a premium founding offer built to deliver fast executive clarity.",
+  title: "Identify Your AI Risk Before It Becomes a Business Problem",
   body:
-    "The Founding Risk Audit is the fastest way to understand where AI use may be creating confidentiality, governance, compliance, and operational exposure, without waiting months for a larger consulting engagement.",
+    "Evolve Edge helps high-trust organizations uncover hidden AI security, confidentiality, and compliance risks and delivers a clear, executive-ready action plan in days, not months.",
   trustBadges: [
     "Executive-ready audit report",
     "30-60 day action roadmap",
@@ -125,16 +125,16 @@ export const PRICING_HERO = {
 
 export const PRICING_TRUST_SIGNALS = [
   {
-    title: "Outside perspective, fast",
-    body: "Get an expert-driven readout that helps leadership understand where risk sits now and what needs attention first."
+    title: "High-trust focus",
+    body: "Built for organizations where confidentiality, client trust, data handling, and compliance need to be visible before AI use creates a bigger problem."
   },
   {
-    title: "Built for high-trust organizations",
-    body: "Designed for firms and teams where confidentiality, data handling, governance, and client trust matter immediately."
+    title: "Executive-ready clarity",
+    body: "Turn fragmented AI usage into a clear leadership view of where risk exists, what it means, and what should happen next."
   },
   {
-    title: "A pathway to deeper work",
-    body: "The founding audit creates a clear starting point for broader audit, remediation, and ongoing advisory work if needed."
+    title: "Expansion path built in",
+    body: "Start with the founding audit for immediate clarity, then expand into deeper audit, remediation, and advisory work if needed."
   }
 ] as const;
 
