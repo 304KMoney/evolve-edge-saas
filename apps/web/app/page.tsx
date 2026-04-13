@@ -2,6 +2,7 @@ import Image from "next/image";
 import { ArrowRight, CheckCircle2, ShieldCheck, Workflow } from "lucide-react";
 import { MarketingShell } from "../components/marketing-shell";
 import { TrackedCtaLink } from "../components/tracked-cta-link";
+import { getCanonicalCommercialPlanCatalog } from "../lib/commercial-catalog";
 import { getOptionalCurrentSession, isPasswordAuthEnabled } from "../lib/auth";
 
 const workflowSteps = [
@@ -71,26 +72,24 @@ const reportPreview = [
   }
 ];
 
-const pricingPreview = [
-  {
-    plan: "Starter",
-    description: "A focused assessment for teams that need an executive-grade baseline quickly.",
-    emphasis: "Best for an initial risk readout"
-  },
-  {
-    plan: "Scale",
-    description: "Deeper review and broader stakeholder alignment for growing AI programs.",
-    emphasis: "Built for multi-team decision making"
-  },
-  {
-    plan: "Enterprise",
-    description: "Advisory-led delivery for complex environments, leadership scrutiny, and ongoing support.",
-    emphasis: "Designed for high-stakes programs"
-  }
-];
-
 export default async function HomePage() {
   const session = await getOptionalCurrentSession();
+  const pricingPreview = getCanonicalCommercialPlanCatalog().map((plan) => ({
+    plan: plan.displayName,
+    price:
+      plan.code === "starter"
+        ? "$10,000"
+        : plan.code === "scale"
+          ? "$50,000"
+          : "$85,000+",
+    description: plan.publicDescription,
+    emphasis:
+      plan.code === "starter"
+        ? "Best for a fast baseline assessment"
+        : plan.code === "scale"
+          ? "Built for the primary delivery path"
+          : "Designed for enterprise scope and advisory depth"
+  }));
   const workspaceHref = session
     ? session.onboardingRequired
       ? "/onboarding"
@@ -113,7 +112,7 @@ export default async function HomePage() {
               Premium AI risk assessment
             </p>
             <h1 className="mt-6 max-w-4xl text-4xl font-semibold tracking-[-0.05em] text-white md:text-6xl">
-              Know your AI risk posture in days — not months
+              {"Know your AI risk posture in days \u2014 not months"}
             </h1>
             <p className="mt-6 max-w-3xl text-lg leading-8 text-white/[0.78]">
               Identify AI security and compliance gaps, prioritize remediation, and deliver executive-ready reporting your leadership can act on immediately.
@@ -127,7 +126,7 @@ export default async function HomePage() {
                   href: "/intake"
                 }}
                 source="homepage"
-                className="inline-flex items-center rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-[#05111d] shadow-[0_18px_44px_rgba(255,255,255,0.12)]"
+                className="inline-flex items-center rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-6 py-3.5 text-sm font-semibold text-[#05111d] shadow-[0_18px_44px_rgba(28,199,216,0.24)] transition hover:-translate-y-0.5"
               >
                 Get your risk assessment
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -164,7 +163,7 @@ export default async function HomePage() {
                 width={544}
                 height={544}
                 priority
-                className="h-auto w-full object-cover"
+                className="mx-auto h-auto w-[280px] object-contain py-10 sm:w-[320px]"
               />
             </div>
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -317,7 +316,7 @@ export default async function HomePage() {
                 href: "/pricing"
               }}
               source="homepage"
-              className="inline-flex items-center rounded-full border border-line px-5 py-3 text-sm font-semibold text-ink"
+              className="inline-flex items-center rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-5 py-3 text-sm font-semibold text-[#05111d] shadow-[0_16px_40px_rgba(28,199,216,0.16)] transition hover:-translate-y-0.5"
             >
               Explore pricing
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -332,6 +331,7 @@ export default async function HomePage() {
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
                   {item.plan}
                 </p>
+                <p className="mt-4 text-4xl font-semibold tracking-tight text-ink">{item.price}</p>
                 <p className="mt-4 text-xl font-semibold text-ink">{item.emphasis}</p>
                 <p className="mt-4 text-sm leading-7 text-steel">{item.description}</p>
               </article>

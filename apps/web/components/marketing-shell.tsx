@@ -47,7 +47,7 @@ export function MarketingShell({
               </nav>
               <Link
                 href={ctaHref as never}
-                className="inline-flex items-center justify-center rounded-full bg-[#081120] px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(8,17,32,0.12)] transition hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-5 py-3 text-sm font-semibold text-[#05111d] shadow-[0_16px_40px_rgba(28,199,216,0.18)] transition hover:-translate-y-0.5"
               >
                 {ctaLabel}
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -81,8 +81,8 @@ export function MarketingShell({
                 <Link href={"/intake" as never} className="block transition hover:text-white">
                   Intake workflow
                 </Link>
-                <Link href={"/dashboard/reports" as never} className="block transition hover:text-white">
-                  Reports
+                <Link href={"/resources" as never} className="block transition hover:text-white">
+                  Resources
                 </Link>
               </div>
             </div>
@@ -97,8 +97,8 @@ export function MarketingShell({
                 <Link href={"/trust" as never} className="block transition hover:text-white">
                   Trust Center
                 </Link>
-                <Link href={"/dashboard/billing" as never} className="block transition hover:text-white">
-                  Billing
+                <Link href={"/methodology" as never} className="block transition hover:text-white">
+                  Methodology
                 </Link>
               </div>
             </div>
