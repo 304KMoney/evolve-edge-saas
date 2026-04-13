@@ -1,76 +1,41 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, ShieldCheck, Users, Wallet } from "lucide-react";
+import { ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
+import { MarketingShell } from "../../components/marketing-shell";
 import { getOptionalCurrentSession } from "../../lib/auth";
 import { getSalesContactEmail } from "../../lib/runtime-config";
+import { FOUNDING_RISK_AUDIT } from "../../lib/pricing-content";
 import { submitContactSalesLeadAction } from "./actions";
 
 export const metadata: Metadata = {
-  title: "Contact Sales | Evolve Edge",
+  title: "Contact Evolve Edge | Evolve Edge",
   description:
-    "Contact Evolve Edge for enterprise rollout planning, executive walkthroughs, and pricing alignment."
+    "Book a call about the Founding Risk Audit or broader Evolve Edge AI risk and compliance engagements."
 };
 
-function getIntentContent(intent?: string) {
-  switch (intent) {
-    case "seat-pack":
-      return {
-        eyebrow: "Seat expansion",
-        title: "Plan the next team expansion without interrupting governance work.",
-        body:
-          "Use this path when the workspace needs additional seats beyond the standard plan allowance.",
-        note: "We are interested in expanding seat capacity for our compliance workspace."
-      };
-    case "asset-pack":
-      return {
-        eyebrow: "Monitored asset expansion",
-        title: "Expand monitored asset coverage for a broader production estate.",
-        body:
-          "Use this path when vendor and AI model inventories are growing faster than the current plan envelope.",
-        note: "We need additional monitored asset capacity for vendors and AI systems."
-      };
-    case "premium-reports":
-      return {
-        eyebrow: "Premium reports",
-        title: "Add executive-ready report support for higher-stakes stakeholders.",
-        body:
-          "Use this path when leadership, board, or regulator-facing reporting needs more structure than the core plan provides.",
-        note: "We want to discuss premium report options for leadership and external stakeholders."
-      };
-    case "premium-support":
-      return {
-        eyebrow: "Premium support",
-        title: "Move this workspace onto a faster, higher-touch support motion.",
-        body:
-          "Use this path when the team needs quicker responses, rollout guidance, or a stronger operational support relationship.",
-        note: "We would like to discuss a premium support option for our workspace."
-      };
-    case "white-glove-onboarding":
-      return {
-        eyebrow: "White-glove onboarding",
-        title: "Reduce rollout friction with guided onboarding support.",
-        body:
-          "Use this path when the organization wants help with framework setup, executive alignment, and early governance operating rhythm.",
-        note: "We want help with a guided onboarding and rollout plan."
-      };
-    case "demo-request":
-      return {
-        eyebrow: "Demo request",
-        title: "Book a serious walkthrough for your compliance and governance team.",
-        body:
-          "Use this path when you want a guided product walkthrough tied to your current governance program, reporting needs, and rollout timeline.",
-        note: "We would like a product walkthrough tailored to our governance and compliance use case."
-      };
-    default:
-      return {
-        eyebrow: "Contact Sales",
-        title: "Align pricing, rollout scope, and executive confidence before you commit.",
-        body:
-          "Use this path when you need help matching plan fit to procurement timing, governance maturity, or a broader enterprise rollout.",
-        note: "We are evaluating Evolve Edge for AI governance and compliance operations."
-      };
-  }
-}
+const defaultTrustBullets = [
+  "Executive-ready risk reporting",
+  "Built for regulated and high-trust teams",
+  "Clear remediation roadmap, not just findings"
+] as const;
+
+const foundingTrustBullets = [
+  "Fast-turnaround premium assessment",
+  "Leadership-ready report and live briefing",
+  "Focused on AI, confidentiality, governance, and compliance exposure"
+] as const;
+
+const defaultNextSteps = [
+  "We review your use case and current environment",
+  "We tailor the walkthrough to your risk and compliance priorities",
+  "You leave with a clear next-step recommendation"
+] as const;
+
+const foundingNextSteps = [
+  "We confirm fit and scope for the Founding Risk Audit",
+  "We review your current AI usage, sensitive workflows, and business concerns",
+  "We recommend the fastest path to a high-trust executive-ready assessment"
+] as const;
 
 export default async function ContactSalesPage({
   searchParams
@@ -80,147 +45,186 @@ export default async function ContactSalesPage({
   const session = await getOptionalCurrentSession();
   const params = await searchParams;
   const salesEmail = getSalesContactEmail();
+  const isFoundingAuditIntent = (params.intent ?? "").includes("founding-risk-audit");
   const primaryHref = session
     ? session.onboardingRequired
       ? "/onboarding"
-      : "/dashboard/settings"
+      : "/dashboard/billing"
     : "/pricing";
-  const content = getIntentContent(params.intent);
+  const heroEyebrow = isFoundingAuditIntent ? FOUNDING_RISK_AUDIT.eyebrow : "Private walkthrough";
+  const heroTitle = isFoundingAuditIntent
+    ? `Apply for the ${FOUNDING_RISK_AUDIT.title}`
+    : "Book a private Evolve Edge walkthrough";
+  const heroBody = isFoundingAuditIntent
+    ? `${FOUNDING_RISK_AUDIT.priceLabel} founding-client access for high-trust teams that need fast clarity on AI, confidentiality, governance, and compliance exposure.`
+    : "See how your team can identify AI security, compliance, and governance gaps faster, prioritize remediation, and deliver executive-ready reporting.";
+  const scheduleLabel = isFoundingAuditIntent ? "Founding client access" : "Schedule a call";
+  const formTitle = isFoundingAuditIntent
+    ? "Tell us about your current AI risk concerns"
+    : "Tell us what you need help understanding";
+  const formBody = isFoundingAuditIntent
+    ? "We will use this to confirm fit, understand your environment, and recommend the right audit scope."
+    : "We will shape the conversation around your environment, stakeholders, and highest-priority risk questions.";
+  const submitLabel = isFoundingAuditIntent ? FOUNDING_RISK_AUDIT.ctas.apply : "Book a Call";
+  const messageLabel = isFoundingAuditIntent
+    ? "What is driving urgency right now?"
+    : "What do you want to discuss?";
+  const messagePlaceholder = isFoundingAuditIntent
+    ? "Tell us about your AI usage, sensitive workflows, top concerns, and what leadership needs clarity on."
+    : "Tell us about your current environment, priorities, or the workflows you want to review.";
+  const successMessage = isFoundingAuditIntent
+    ? "Thanks. Your request is in, and we will follow up to confirm fit and next-step timing for the Founding Risk Audit."
+    : "Thanks. Your request is in, and our team will follow up with the right next step.";
+  const trustBullets = isFoundingAuditIntent ? foundingTrustBullets : defaultTrustBullets;
+  const nextSteps = isFoundingAuditIntent ? foundingNextSteps : defaultNextSteps;
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(153,246,228,0.35),transparent_28%),linear-gradient(180deg,#f8fbfc_0%,#edf5f7_100%)] px-6 py-10">
-      <div className="mx-auto max-w-5xl rounded-[32px] border border-white/80 bg-white/92 p-8 shadow-[0_24px_90px_rgba(15,23,42,0.08)] md:p-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#0f766e]">
-          {content.eyebrow}
-        </p>
-        <h1 className="mt-4 text-4xl font-semibold tracking-tight text-[#0f172a]">
-          {content.title}
-        </h1>
-        <p className="mt-5 max-w-3xl text-base leading-8 text-[#475569]">
-          {content.body}
-        </p>
-        {params.source ? (
-          <p className="mt-3 text-sm text-[#64748b]">
-            Source: <span className="font-semibold text-[#0f172a]">{params.source}</span>
+    <MarketingShell
+      ctaHref={session ? primaryHref : "/pricing"}
+      ctaLabel={session ? "Open workspace" : "View pricing"}
+    >
+      <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch">
+        <div className="brand-surface relative overflow-hidden p-8 md:p-10 lg:p-12">
+          <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(123,230,241,0.8),transparent)]" />
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-[#8debf4]">
+            {heroEyebrow}
           </p>
-        ) : null}
-        {params.submitted ? (
-          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-[#0f766e]">
-            Your request was captured successfully. Revenue operations can now route it into CRM and follow-up workflows.
-          </div>
-        ) : null}
-        {params.error === "missing-required" ? (
-          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-[#b42318]">
-            Company name and email are required so the request can be routed safely into CRM.
-          </div>
-        ) : null}
+          <h1 className="mt-5 max-w-2xl text-4xl font-semibold tracking-[-0.04em] text-white md:text-5xl">
+            {heroTitle}
+          </h1>
+          <p className="mt-5 max-w-2xl text-base leading-8 text-white/[0.72] md:text-lg">
+            {heroBody}
+          </p>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          <div className="rounded-[24px] border border-[#d7eaeb] bg-[#fbfdfd] p-5">
-            <ShieldCheck className="h-6 w-6 text-[#0f766e]" />
-            <h2 className="mt-4 text-lg font-semibold text-[#0f172a]">Compliance fit</h2>
-            <p className="mt-2 text-sm leading-7 text-[#64748b]">
-              Match plan capacity to framework coverage, reporting obligations, and governance cadence.
-            </p>
+          <div className="mt-8 grid gap-4">
+            {trustBullets.map((item) => (
+              <div
+                key={item}
+                className="rounded-[24px] border border-white/10 bg-white/[0.06] p-5 backdrop-blur"
+              >
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#8debf4]" />
+                  <p className="text-base font-semibold text-white">{item}</p>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="rounded-[24px] border border-[#d7eaeb] bg-[#fbfdfd] p-5">
-            <Users className="h-6 w-6 text-[#0f766e]" />
-            <h2 className="mt-4 text-lg font-semibold text-[#0f172a]">Executive rollout</h2>
-            <p className="mt-2 text-sm leading-7 text-[#64748b]">
-              Coordinate the plan around stakeholder workflows, approvals, and leadership visibility.
-            </p>
-          </div>
-          <div className="rounded-[24px] border border-[#d7eaeb] bg-[#fbfdfd] p-5">
-            <Wallet className="h-6 w-6 text-[#0f766e]" />
-            <h2 className="mt-4 text-lg font-semibold text-[#0f172a]">Procurement timing</h2>
-            <p className="mt-2 text-sm leading-7 text-[#64748b]">
-              Start monthly when needed, then convert cleanly to annual once budget or procurement is ready.
-            </p>
+
+          <div className="mt-10 rounded-[28px] border border-white/10 bg-black/20 p-6 backdrop-blur">
+            <div className="flex items-center gap-3">
+              <Sparkles className="h-5 w-5 text-[#8debf4]" />
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#8debf4]">
+                What happens next
+              </p>
+            </div>
+            <div className="mt-5 space-y-4">
+              {nextSteps.map((step) => (
+                <div key={step} className="flex items-start gap-3 text-sm leading-7 text-white/[0.76]">
+                  <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-[#8debf4]" />
+                  <span>{step}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <a
-            href={`mailto:${salesEmail}?subject=Evolve%20Edge%20pricing%20and%20rollout`}
-            className="inline-flex items-center justify-center rounded-full bg-[#0f172a] px-5 py-3 text-sm font-semibold text-white"
-          >
-            Email {salesEmail}
-          </a>
-          <Link
-            href={primaryHref as never}
-            className="inline-flex items-center justify-center rounded-full border border-[#d7eaeb] bg-white px-5 py-3 text-sm font-semibold text-[#0f172a]"
-          >
-            {session ? "Open billing and workspace" : "Return to pricing"}
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </div>
+        <div className="content-surface p-8 md:p-10 lg:p-12">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
+                {scheduleLabel}
+              </p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
+                {formTitle}
+              </h2>
+              <p className="mt-4 max-w-xl text-sm leading-7 text-steel">
+                {formBody}
+              </p>
+            </div>
+            <a
+              href={`mailto:${salesEmail}?subject=${encodeURIComponent(
+                isFoundingAuditIntent
+                  ? "Founding Risk Audit"
+                  : "Evolve Edge walkthrough"
+              )}`}
+              className="inline-flex items-center rounded-full border border-line px-5 py-3 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
+            >
+              Email {salesEmail}
+            </a>
+          </div>
 
-        <div className="mt-8 rounded-[28px] border border-[#d7eaeb] bg-white p-6">
-          <h2 className="text-2xl font-semibold text-[#0f172a]">Request a conversation</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-[#64748b]">
-            This form captures a normalized lead record with source attribution so sales, HubSpot, and n8n can process it without relying on inbox-only follow-up.
-          </p>
+          {params.submitted ? (
+            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-[#0f766e]">
+              {successMessage}
+            </div>
+          ) : null}
+          {params.error === "missing-required" ? (
+            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-[#b42318]">
+              Work email and company name are required so we can prepare the right next step for your team.
+            </div>
+          ) : null}
 
-          <form action={submitContactSalesLeadAction} className="mt-6 grid gap-4">
+          <form action={submitContactSalesLeadAction} className="mt-8 grid gap-4">
             <input type="hidden" name="intent" value={params.intent ?? "general-sales"} />
             <input type="hidden" name="source" value={params.source ?? "contact-sales-page"} />
             <input type="hidden" name="sourcePath" value="/contact-sales" />
+            <input
+              type="hidden"
+              name="requestedPlanCode"
+              value={params.intent?.includes("enterprise") ? "enterprise-annual" : ""}
+            />
+
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block">
-                <span className="text-sm font-medium text-[#0f172a]">First name</span>
+                <span className="text-sm font-medium text-ink">First name</span>
                 <input
                   name="firstName"
-                  className="mt-2 w-full rounded-2xl border border-[#d7eaeb] bg-white px-4 py-3 text-sm text-[#0f172a]"
+                  className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink transition focus:border-accent/40 focus:outline-none"
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-medium text-[#0f172a]">Last name</span>
+                <span className="text-sm font-medium text-ink">Last name</span>
                 <input
                   name="lastName"
-                  className="mt-2 w-full rounded-2xl border border-[#d7eaeb] bg-white px-4 py-3 text-sm text-[#0f172a]"
+                  className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink transition focus:border-accent/40 focus:outline-none"
                 />
               </label>
             </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block">
-                <span className="text-sm font-medium text-[#0f172a]">Work email</span>
+                <span className="text-sm font-medium text-ink">Work email</span>
                 <input
                   name="email"
                   type="email"
                   required
-                  className="mt-2 w-full rounded-2xl border border-[#d7eaeb] bg-white px-4 py-3 text-sm text-[#0f172a]"
+                  className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink transition focus:border-accent/40 focus:outline-none"
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-medium text-[#0f172a]">Company name</span>
+                <span className="text-sm font-medium text-ink">Company name</span>
                 <input
                   name="companyName"
                   required
-                  className="mt-2 w-full rounded-2xl border border-[#d7eaeb] bg-white px-4 py-3 text-sm text-[#0f172a]"
+                  className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink transition focus:border-accent/40 focus:outline-none"
                 />
               </label>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
+
+            <div className="grid gap-4 md:grid-cols-2">
               <label className="block">
-                <span className="text-sm font-medium text-[#0f172a]">Job title</span>
+                <span className="text-sm font-medium text-ink">Job title</span>
                 <input
                   name="jobTitle"
-                  className="mt-2 w-full rounded-2xl border border-[#d7eaeb] bg-white px-4 py-3 text-sm text-[#0f172a]"
+                  className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink transition focus:border-accent/40 focus:outline-none"
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-medium text-[#0f172a]">Phone</span>
-                <input
-                  name="phone"
-                  className="mt-2 w-full rounded-2xl border border-[#d7eaeb] bg-white px-4 py-3 text-sm text-[#0f172a]"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-[#0f172a]">Team size</span>
+                <span className="text-sm font-medium text-ink">Team size</span>
                 <select
                   name="teamSize"
-                  className="mt-2 w-full rounded-2xl border border-[#d7eaeb] bg-white px-4 py-3 text-sm text-[#0f172a]"
                   defaultValue="11-50"
+                  className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink transition focus:border-accent/40 focus:outline-none"
                 >
                   <option value="1-10">1-10</option>
                   <option value="11-50">11-50</option>
@@ -230,51 +234,35 @@ export default async function ContactSalesPage({
                 </select>
               </label>
             </div>
+
             <label className="block">
-              <span className="text-sm font-medium text-[#0f172a]">Requested plan code</span>
-              <input
-                name="requestedPlanCode"
-                defaultValue={params.intent?.includes("enterprise") ? "enterprise-annual" : ""}
-                className="mt-2 w-full rounded-2xl border border-[#d7eaeb] bg-white px-4 py-3 text-sm text-[#0f172a]"
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-[#0f172a]">What should we prepare for the call?</span>
+              <span className="text-sm font-medium text-ink">{messageLabel}</span>
               <textarea
                 name="message"
-                rows={4}
-                defaultValue={content.note}
-                className="mt-2 w-full rounded-2xl border border-[#d7eaeb] bg-white px-4 py-3 text-sm text-[#0f172a]"
+                rows={5}
+                className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink transition focus:border-accent/40 focus:outline-none"
+                placeholder={messagePlaceholder}
               />
             </label>
-            <button
-              type="submit"
-              className="inline-flex w-fit items-center justify-center rounded-full bg-[#0f172a] px-5 py-3 text-sm font-semibold text-white"
-            >
-              Submit request
-            </button>
+
+            <div className="flex flex-wrap gap-3 pt-2">
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-5 py-3 text-sm font-semibold text-[#05111d] shadow-[0_16px_40px_rgba(28,199,216,0.24)] transition hover:-translate-y-0.5"
+              >
+                {submitLabel}
+              </button>
+              <Link
+                href={primaryHref as never}
+                className="inline-flex items-center justify-center rounded-full border border-line px-5 py-3 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
+              >
+                {session ? "Open workspace" : "Return to pricing"}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </div>
           </form>
         </div>
-
-        <div className="mt-8 rounded-[28px] border border-[#d7eaeb] bg-[#f8fbfb] p-6">
-          <h2 className="text-xl font-semibold text-[#0f172a]">Suggested outreach note</h2>
-          <pre className="mt-4 overflow-x-auto whitespace-pre-wrap rounded-2xl bg-white p-4 text-sm leading-7 text-[#334155]">
-{`${content.note}
-
-Please help us determine:
-- the best-fit plan for our current team and framework scope
-- whether monthly or annual is the better starting point
-- what an executive rollout would look like for our stakeholders
-
-Our current environment:
-- organization type:
-- estimated seat count:
-- frameworks in scope:
-- target go-live window:
-- current expansion trigger: ${params.intent ?? "general-pricing"}`}
-          </pre>
-        </div>
-      </div>
-    </main>
+      </section>
+    </MarketingShell>
   );
 }

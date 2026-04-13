@@ -1,51 +1,163 @@
+export const FOUNDING_RISK_AUDIT = {
+  eyebrow: "Founding Client Offer",
+  title: "Founding Risk Audit",
+  priceLabel: "$2,500-$5,000",
+  availability: "Limited availability for the next 7 days",
+  summary:
+    "A fast-turnaround, executive-ready AI risk and compliance assessment for regulated and high-trust teams that need clarity before exposure becomes a client, legal, or operational problem.",
+  promise:
+    "Identify AI, security, confidentiality, governance, and compliance risks quickly and leave with a prioritized action plan leadership can use immediately.",
+  ctas: {
+    primary: "Get the Founding Risk Audit",
+    secondary: "Book a Call",
+    apply: "Apply for Founding Client Access"
+  }
+} as const;
+
+export const FOUNDING_RISK_AUDIT_AUDIENCE = [
+  {
+    title: "Law firms and legal teams",
+    body: "For firms using AI in research, drafting, client workflows, or sensitive matter handling where confidentiality and trust cannot slip."
+  },
+  {
+    title: "Early fintech teams",
+    body: "For teams moving quickly with AI, automation, and vendors while needing clearer governance and compliance posture."
+  },
+  {
+    title: "Small healthtech organizations",
+    body: "For teams using AI around regulated workflows, sensitive data, and trust-critical operations that leadership needs to understand quickly."
+  }
+] as const;
+
+export const FOUNDING_RISK_AUDIT_PROBLEMS = [
+  "AI is already in use, but leadership does not have a clear view of where risk is accumulating.",
+  "Confidentiality, vendor, and governance concerns often show up before policy and controls catch up.",
+  "Teams need outside perspective and fast clarity, not a months-long consulting engagement."
+] as const;
+
+export const FOUNDING_RISK_AUDIT_OUTCOMES = [
+  "Know your top AI risks in days, not months",
+  "See where trust, confidentiality, and compliance can break down",
+  "Get leadership-ready findings you can act on",
+  "Move from uncertainty to a prioritized action plan"
+] as const;
+
+export const FOUNDING_RISK_AUDIT_DELIVERABLES = [
+  {
+    title: "Structured intake and business context",
+    body: "We capture your current AI usage, workflows, tools, sensitive processes, and leadership concerns before analysis begins."
+  },
+  {
+    title: "Focused risk review",
+    body: "We assess confidentiality exposure, data handling risk, governance gaps, vendor risk, control weaknesses, and trust or compliance concerns."
+  },
+  {
+    title: "Executive-ready audit report",
+    body: "You receive a professional report built for leadership review, decision support, and immediate internal alignment."
+  },
+  {
+    title: "Top risks with business context",
+    body: "We prioritize the issues that matter most and explain why they create legal, operational, confidentiality, or reputational exposure."
+  },
+  {
+    title: "30-60 day action roadmap",
+    body: "You leave with a practical next-step plan that helps the team move from ambiguity to remediation."
+  },
+  {
+    title: "Live executive briefing",
+    body: "We walk leadership through the findings, answer questions, and clarify the next best move if deeper remediation is needed."
+  }
+] as const;
+
+export const FOUNDING_RISK_AUDIT_PROCESS = [
+  {
+    step: "1",
+    title: "Intake and business context",
+    body: "We review your current AI usage, vendors, workflows, sensitive processes, and key business concerns."
+  },
+  {
+    step: "2",
+    title: "AI risk analysis",
+    body: "We assess where confidentiality, governance, security, and compliance exposure may be building."
+  },
+  {
+    step: "3",
+    title: "Executive-ready report",
+    body: "We turn the findings into a professional report with clear priorities and business context."
+  },
+  {
+    step: "4",
+    title: "Briefing and roadmap",
+    body: "We deliver a live walkthrough and a practical action plan for the next 30 to 60 days."
+  }
+] as const;
+
+export const EXPANSION_PATHS = [
+  {
+    title: "Full Audit + Implementation Roadmap",
+    priceLabel: "$10,000",
+    body: "The next step for teams that want deeper validation, broader controls coverage, and a more extensive implementation roadmap."
+  },
+  {
+    title: "Ongoing advisory and monitoring",
+    priceLabel: "$50,000+",
+    body: "For organizations that need recurring reassessment, operating support, and ongoing executive visibility as AI use expands."
+  },
+  {
+    title: "Enterprise custom engagements",
+    priceLabel: "Custom",
+    body: "For larger or more complex environments that need tailored rollout, procurement coordination, and broader governance support."
+  }
+] as const;
+
 export const PRICING_HERO = {
   eyebrow: "Pricing",
-  title: "Choose the operating model for AI governance that executives will actually trust.",
+  title: "Start with a premium founding offer built to deliver fast executive clarity.",
   body:
-    "Evolve Edge helps regulated teams reduce AI risk, produce decision-ready reporting, and keep compliance programs moving with one canonical commercial model across the app, billing, routing, and delivery stack.",
+    "The Founding Risk Audit is the fastest way to understand where AI use may be creating confidentiality, governance, compliance, and operational exposure, without waiting months for a larger consulting engagement.",
   trustBadges: [
-    "Stripe-backed billing",
-    "Multi-tenant access controls",
-    "Executive-ready reporting",
-    "Audit-friendly workflow history"
+    "Executive-ready audit report",
+    "30-60 day action roadmap",
+    "Live briefing with leadership",
+    "Built for high-trust teams"
   ]
 } as const;
 
 export const PRICING_TRUST_SIGNALS = [
   {
-    title: "Compliance-focused by design",
-    body: "Built around governance posture, risk visibility, framework alignment, and evidence-backed decision support."
+    title: "Outside perspective, fast",
+    body: "Get an expert-driven readout that helps leadership understand where risk sits now and what needs attention first."
   },
   {
-    title: "Executive reporting included",
-    body: "Each workspace is structured to turn live assessments into board-ready summaries and remediation roadmaps."
+    title: "Built for high-trust organizations",
+    body: "Designed for firms and teams where confidentiality, data handling, governance, and client trust matter immediately."
   },
   {
-    title: "Ongoing monitoring posture",
-    body: "Designed for recurring reassessment, plan-aware limits, and durable customer lifecycle visibility instead of one-off consulting workflows."
+    title: "A pathway to deeper work",
+    body: "The founding audit creates a clear starting point for broader audit, remediation, and ongoing advisory work if needed."
   }
 ] as const;
 
 export const PRICING_FAQ = [
   {
-    question: "Does every plan include a trial?",
+    question: "Is the Founding Risk Audit just a report artifact?",
     answer:
-      "No. The public commercial model is now Starter, Scale, and Enterprise. Starter and Scale are direct checkout paths, while Enterprise remains a sales-led motion."
+      "No. It is a fast executive-ready assessment with leadership context, prioritized risk findings, a roadmap, and a live walkthrough so the team knows what to do next."
   },
   {
-    question: "What happens if billing is canceled or goes past due?",
+    question: "Who is this best for right now?",
     answer:
-      "Evolve Edge preserves read-only access for historical visibility where possible, while new write actions stay gated until billing returns to an active state."
+      "It is best for law firms, early fintech teams, small healthtech organizations, and other high-trust operators already using AI, automation, or sensitive workflows without full risk clarity."
   },
   {
-    question: "Why do Starter and Scale use a direct checkout path while Enterprise does not?",
+    question: "What happens after the founding audit?",
     answer:
-      "Starter and Scale follow standardized backend-owned commercial routing. Enterprise stays sales-led so rollout scope, approvals, and support expectations can be aligned explicitly."
+      "Clients can continue into a broader full audit and implementation roadmap, or into larger advisory and enterprise support if the scope calls for it."
   },
   {
-    question: "When should a team talk to sales?",
+    question: "How quickly can this move?",
     answer:
-      "Enterprise buyers, multi-entity programs, or teams that want a guided rollout should use the contact path so plan fit, procurement timing, and rollout scope can be aligned early."
+      "The offer is designed for fast-turnaround delivery so leadership can understand exposure and start acting within days, not months."
   }
 ] as const;
 
@@ -81,11 +193,11 @@ export const PRICING_COMPARISON_ROWS = [
 ] as const;
 
 export const PRICING_COPY_BLOCKS = {
-  primaryCtaAnonymous: "Choose plan",
+  primaryCtaAnonymous: "Apply for Founding Client Access",
   primaryCtaOnboarding: "Continue with this plan",
   primaryCtaWorkspace: "Choose plan",
   primaryCtaCurrentPlan: "Current plan",
-  secondaryCta: "Book an executive walkthrough",
-  annualSavingsLabel: "Canonical public pricing",
+  secondaryCta: "Book a Call",
+  annualSavingsLabel: "Founding client offer",
   recommendationBadge: "Primary offer"
 } as const;
