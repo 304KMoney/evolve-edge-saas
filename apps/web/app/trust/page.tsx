@@ -45,7 +45,7 @@ export default function TrustCenterPage() {
 
         <AuthoritySection
           title="Trust artifacts foundation"
-          description="The first version is deliberately structured so a founder can publish credible materials now and extend into richer legal, security, and questionnaire artifacts later."
+          description="Review the materials that help buyers understand controls, delivery rigor, and operational readiness."
         >
           <AuthorityCardGrid
             items={TRUST_CENTER_CONTENT.trustArtifacts.map((artifact) => ({
@@ -59,7 +59,7 @@ export default function TrustCenterPage() {
 
         <AuthoritySection
           title="Coverage and methodology"
-          description="Use reusable framework and methodology pages to explain what Evolve Edge evaluates, how executive packages are produced, and what recurring visibility looks like after the first report."
+          description="See what Evolve Edge evaluates, how executive packages are produced, and how recurring visibility is maintained after the initial report."
         >
           <AuthorityCardGrid
             items={[
@@ -84,7 +84,7 @@ export default function TrustCenterPage() {
 
         <AuthoritySection
           title="Enterprise buyer FAQ"
-          description="Concise answers for regulated buyers evaluating product credibility, updateability, and trust posture."
+          description="Concise answers for regulated buyers evaluating product credibility and trust posture."
         >
           <AuthorityFaq items={[...TRUST_CENTER_CONTENT.enterpriseFaq, ...AUTHORITY_FAQ]} />
         </AuthoritySection>

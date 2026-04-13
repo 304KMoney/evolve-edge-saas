@@ -83,13 +83,13 @@ export const TRUST_CENTER_CONTENT = {
     },
     {
       title: "Security questionnaire pack",
-      summary: "Placeholder for a founder-maintained questionnaire response pack and platform architecture summary.",
+      summary: "Questionnaire response pack and platform architecture summary for security review workflows.",
       status: "planned",
       audience: "Security reviewers"
     },
     {
       title: "Data handling and retention summary",
-      summary: "Placeholder for legal and technical documentation covering customer data handling, retention, and deletion workflows.",
+      summary: "Legal and technical documentation covering customer data handling, retention, and deletion workflows.",
       status: "planned",
       audience: "Legal, privacy, procurement"
     }
@@ -103,12 +103,12 @@ export const TRUST_CENTER_CONTENT = {
     {
       question: "Can the trust center grow into formal legal and security pages later?",
       answer:
-        "Yes. This authority layer is intentionally modeled as reusable content sections so formal trust artifacts, legal pages, questionnaires, and downloadable assets can be added without redesigning the site."
+        "Yes. This authority layer is modeled as reusable content sections so formal trust artifacts, legal pages, questionnaires, and downloadable assets can be added without redesigning the site."
     },
     {
-      question: "How should a founder update this content now?",
+      question: "How is this content maintained over time?",
       answer:
-        "The first version is file-backed and typed in the app so updates remain explicit and reviewable. A future CMS or admin editor can map onto the same content structures later."
+        "The current version is file-backed and typed in the app so updates remain explicit and reviewable. A future CMS or admin editor can map onto the same content structures later."
     }
   ]
 } as const;
@@ -353,7 +353,7 @@ export const RESOURCE_SCAFFOLDS: ResourceScaffold[] = [
     title: "AI Governance Readiness Guide",
     format: "guide",
     audience: "Founders, COO, CISO",
-    summary: "Outline a founder-editable guide explaining how regulated teams should evaluate AI governance readiness before customer or board scrutiny increases.",
+    summary: "Guide explaining how regulated teams should evaluate AI governance readiness before customer or board scrutiny increases.",
     status: "draft-ready"
   },
   {
@@ -383,11 +383,11 @@ export const AUTHORITY_FAQ = [
   {
     question: "Can we publish formal trust artifacts later?",
     answer:
-      "Yes. This first version is intentionally modular so downloadable trust documents, legal pages, questionnaire packs, and customer proof can be added later."
+      "Yes. The authority layer is modular, so downloadable trust documents, legal pages, questionnaire packs, and customer proof can be added later."
   },
   {
     question: "Is the authority layer tied to a CMS today?",
     answer:
-      "Not yet. The first version is typed and file-backed so updates remain easy to review, but the structures are designed so a CMS or admin editor can map onto them later."
+      "Not yet. The current version is typed and file-backed so updates remain easy to review, and the structures can map to a CMS or admin editor later."
   }
 ] as const;

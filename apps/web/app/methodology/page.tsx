@@ -35,14 +35,14 @@ export default function MethodologyPage() {
       >
         <AuthoritySection
           title="Four-stage operating model"
-          description="The first version uses one reusable structure for all methodology sections so updates stay consistent and future marketing or trust work does not fork the narrative."
+          description="A clear operating model that shows how intake becomes findings, executive reporting, and ongoing visibility."
         >
           <AuthorityCardGrid
             items={stages.map((stage) => ({
               title: stage.name,
               body: stage.summary,
               eyebrow: stage.slug.replaceAll("-", " "),
-              footer: `${stage.outputs.length} outputs · ${stage.operatorNotes.length} operator notes`
+              footer: `${stage.outputs.length} outputs · ${stage.operatorNotes.length} operating notes`
             }))}
           />
         </AuthoritySection>
