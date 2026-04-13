@@ -6,16 +6,16 @@ import { getOptionalCurrentSession, isPasswordAuthEnabled } from "../lib/auth";
 
 const workflowSteps = [
   {
-    title: "Capture the operating reality",
-    body: "We gather the systems, policies, vendors, and use cases that shape your real risk profile."
+    title: "Capture your current AI footprint",
+    body: "We gather the policies, tools, vendors, and use cases shaping your actual exposure."
   },
   {
-    title: "Assess against what matters",
-    body: "We map gaps to the controls, obligations, and leadership concerns that carry the most weight."
+    title: "Prioritize what matters most",
+    body: "We connect gaps to the obligations, control areas, and business risks leadership needs to understand."
   },
   {
-    title: "Leave with a clear action plan",
-    body: "You get a report your executives can use immediately, plus next steps for the next 30 to 90 days."
+    title: "Equip leadership to act",
+    body: "You leave with an executive-ready report and a clear 30 to 90 day action plan."
   }
 ];
 
@@ -51,7 +51,7 @@ const solutionCards = [
 
 const outcomes = [
   "Risk score + breakdown",
-  "Top 5 critical findings",
+  "Top findings",
   "30-90 day remediation roadmap",
   "Executive briefing"
 ];
@@ -106,9 +106,9 @@ export default async function HomePage() {
 
   return (
     <MarketingShell ctaHref={workspaceHref} ctaLabel={workspaceLabel}>
-      <div className="grid gap-10 md:gap-14">
+      <div className="grid gap-14 md:gap-20">
         <section className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-stretch">
-          <div className="brand-surface relative overflow-hidden p-10 md:p-14">
+          <div className="brand-surface relative overflow-hidden p-10 md:p-16">
             <p className="text-sm font-semibold uppercase tracking-[0.32em] text-[#8debf4]">
               Premium AI risk assessment
             </p>
@@ -116,7 +116,7 @@ export default async function HomePage() {
               Know your AI risk posture in days — not months
             </h1>
             <p className="mt-6 max-w-3xl text-lg leading-8 text-white/[0.78]">
-              Identify compliance gaps, quantify risk, and deliver executive-ready reports your leadership can act on immediately.
+              Identify AI security and compliance gaps, prioritize remediation, and deliver executive-ready reporting your leadership can act on immediately.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
               <TrackedCtaLink
@@ -147,15 +147,15 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <div className="content-surface p-8 md:p-10">
+          <div className="content-surface p-8 md:p-12">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent">
               Executive-ready output
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-ink">
-              A polished assessment experience your leadership will actually use
+              A premium assessment experience built for high-stakes decisions
             </h2>
             <p className="mt-4 text-base leading-7 text-steel">
-              Built for buyers who need a credible readout fast, without the drag of a months-long advisory process.
+              Built for teams that need fast clarity, strong reporting, and a credible plan without a months-long consulting cycle.
             </p>
             <div className="mt-8 overflow-hidden rounded-[28px] border border-line bg-white">
               <Image
@@ -188,15 +188,15 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="content-surface p-8 md:p-12">
+        <section className="content-surface p-8 md:p-14">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
-                Trust layer
-              </p>
               <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
                 From uncertainty to actionable risk clarity
               </h2>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-steel">
+                Replace scattered concerns and vague remediation with a structured view leadership can trust.
+              </p>
             </div>
           </div>
           <div className="mt-8 grid gap-5 lg:grid-cols-3">
@@ -211,15 +211,15 @@ export default async function HomePage() {
         </section>
 
         <section id="deliverables" className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="content-surface p-8 md:p-10">
+          <div className="content-surface p-8 md:p-12">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
               What you walk away with
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-              Decision-ready outputs, not vague recommendations
+              Clear outputs your team can use immediately
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-steel">
-              Every engagement is built to help leadership understand where risk sits today and what to do next.
+              Every engagement is designed to give leadership a sharper view of risk, priority actions, and next steps.
             </p>
             <div className="mt-8 space-y-4">
               {outcomes.map((item) => (
@@ -230,12 +230,12 @@ export default async function HomePage() {
               ))}
             </div>
           </div>
-          <div className="brand-surface p-8 md:p-10">
+          <div className="brand-surface p-8 md:p-12">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#8debf4]">
               Sample report structure
             </p>
             <h3 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white">
-              A concise readout built for executive attention spans
+              Reporting designed for executive attention spans
             </h3>
             <div className="mt-8 space-y-4">
               {reportPreview.map((item) => (
@@ -250,7 +250,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="content-surface p-8 md:p-12">
+        <section className="content-surface p-8 md:p-14">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
@@ -277,7 +277,7 @@ export default async function HomePage() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-          <div className="content-surface p-8 md:p-10">
+          <div className="content-surface p-8 md:p-12">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
               Who this is for
             </p>
@@ -299,14 +299,14 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="content-surface p-8 md:p-12">
+        <section className="content-surface p-8 md:p-14">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
                 Pricing preview
               </p>
               <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-                Commercial structure that matches the product reality
+                Engagement options that match your level of urgency
               </h2>
             </div>
             <TrackedCtaLink
@@ -339,7 +339,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="brand-surface p-8 md:p-12">
+        <section className="brand-surface p-8 md:p-14">
           <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#8debf4]">

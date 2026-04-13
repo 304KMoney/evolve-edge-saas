@@ -56,7 +56,7 @@ export function MarketingShell({
           </div>
         </header>
 
-        <div className="relative z-10 px-4 py-10 md:px-6 md:py-14">{children}</div>
+        <div className="relative z-10 px-4 py-12 md:px-6 md:py-16">{children}</div>
 
         <footer className="relative z-10 border-t border-[#13233b] bg-[#081120] px-6 py-10 md:px-8">
           <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr_1fr]">
