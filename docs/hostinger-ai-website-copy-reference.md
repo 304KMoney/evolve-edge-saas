@@ -167,100 +167,100 @@ Use only these softer secondary CTA labels where needed:
 
 ### Homepage goal
 
-Help a first-time buyer understand what Evolve Edge does, who it is for, why it is trustworthy, and which next action to take.
+Help a first-time buyer understand what Evolve Edge does, who it is for, what they walk away with, and which next action to take.
 
 ### Recommended section order
 
 1. Hero
-2. Social proof / trust posture strip
-3. What Evolve Edge helps you do
+2. From uncertainty to actionable risk clarity
+3. What you walk away with
 4. How the workflow works
-5. Why teams choose Evolve Edge
+5. Who this is for
 6. Pricing preview
-7. Trust and controls
-8. FAQ preview
-9. Final CTA
+7. Final CTA
 
 ### Hero copy
 
-#### Headline option A
+#### Approved headline
 
-AI governance and risk workflows for high-trust teams.
+Know your AI risk posture in days — not months
 
-#### Headline option B
+#### Approved supporting copy
 
-Assess AI risk, collect evidence, and deliver executive-ready reports with one controlled workflow.
+Identify compliance gaps, quantify risk, and deliver executive-ready reports your leadership can act on immediately.
 
-#### Hero supporting copy
+#### Approved primary CTA
 
-Evolve Edge gives regulated and high-trust organizations a structured way to intake AI use cases, review evidence, map controls, generate reports, and keep follow-up work visible without scattering core logic across disconnected tools.
+- Label: `Get your risk assessment`
+- Target: app-owned intake flow
 
-#### Hero primary CTA
+#### Approved secondary CTA
 
-- Label: `Start with Starter`
-- Target: Starter checkout
+- Label: `View sample report`
+- Target: on-page sample report / deliverables section or a dedicated sample report page if one exists
 
-#### Hero secondary CTA
-
-- Label: `Contact sales`
-- Target: contact sales page or form
-
-### Trust strip copy
-
-Use short proof-oriented statements such as:
-
-- Multi-tenant access controls
-- Audit-friendly workflow history
-- Backend-owned workflow routing
-- Stripe-hosted billing
-- Executive-ready reporting
-
-### What Evolve Edge helps you do
+### From uncertainty to actionable risk clarity
 
 #### Section headline
 
-Move from AI risk uncertainty to a documented operating process.
+From uncertainty to actionable risk clarity
 
-#### Body copy
+#### Cards
 
-Evolve Edge helps teams turn fragmented AI governance work into a structured system. Capture intake details, collect supporting evidence, evaluate controls, generate concise or deep reports, and keep the next steps visible across delivery and operations.
+- `AI Risk Assessment`
+  - See where your current AI posture is exposed, what is driving the risk, and what needs attention first.
+- `Compliance Mapping`
+  - Connect your current state to the frameworks, policies, and obligations leadership needs to answer for.
+- `Executive Reporting`
+  - Turn technical findings into concise reporting that supports decisions, budget asks, and stakeholder alignment.
 
-#### Feature bullets
+### What you walk away with
 
-- Structured AI intake and assessment workflows
-- Evidence collection and review support
-- Framework mapping and control scoring
-- Executive-ready reporting and briefings
-- Workflow routing and delivery visibility
+#### Section headline
+
+What you walk away with
+
+#### Intro copy
+
+Every engagement should make it obvious what leadership is looking at now and what happens next.
+
+#### Deliverables list
+
+- Risk score + breakdown
+- Top 5 critical findings
+- 30–90 day remediation roadmap
+- Executive briefing
 
 ### Workflow explanation section
 
 #### Headline
 
-One controlled workflow from intake to report delivery.
+A fast path from intake to leadership-ready clarity.
 
 #### Body
 
-Evolve Edge normalizes commercial and workflow decisions in the application before handing off downstream execution. That keeps plan logic, access decisions, and workflow routing observable and consistent while still using best-fit systems for billing, orchestration, AI execution, and CRM visibility.
+Use simple, business-readable language. Avoid internal systems language on the homepage.
 
 #### Simple three-step explanation
 
-1. Capture the request, evidence, and context.
-2. Route the right audit workflow and reporting depth.
-3. Deliver structured outputs and keep follow-up visible.
+1. Capture the operating reality.
+2. Assess against what matters.
+3. Leave with a clear action plan.
 
-### Why teams choose Evolve Edge
+### Who this is for
 
 #### Headline
 
-Built for teams that cannot afford hidden workflow logic.
+Built for teams that need confidence before exposure grows.
 
-#### Bullets
+#### Audience cards
 
-- Keep business logic and product state in one application boundary
-- Preserve traceability across billing, workflow, reporting, and support
-- Give operators visibility into routing, delivery, and recovery states
-- Support regulated and high-trust evaluation processes without brittle handoffs
+- `Regulated operators`
+  - Create a credible view of AI risk without slowing the business down.
+- `Lean compliance teams`
+  - Replace scattered evidence and unclear priorities with a focused plan.
+- `Leadership under scrutiny`
+  - Give boards and executives a sharper picture of exposure, ownership, and next steps.
 
 ### Pricing preview copy
 
@@ -270,17 +270,22 @@ Choose the audit path that matches your operating depth.
 
 #### Intro
 
-Start with a structured audit engagement, expand into deeper reporting and operational visibility, or work directly with us on an enterprise rollout.
+Keep the pricing section short, premium, and outcome-oriented. Do not crowd it with feature grids.
 
 ### Final homepage CTA
 
 #### Headline
 
-Ready to put AI governance on a more controlled footing?
+Get a sharper view of AI risk before it becomes an expensive surprise.
 
 #### Body
 
-Choose Starter for a lighter-weight entry path, Scale for the primary operating offer, or contact us for enterprise coordination.
+Start with a focused assessment, align your stakeholders, and leave with a roadmap your team can execute.
+
+#### CTA labels
+
+- Primary: `Get your risk assessment`
+- Secondary: `Speak with an advisor`
 
 ## Pricing page reference
 

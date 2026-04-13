@@ -4,16 +4,30 @@
 
 :root {
   color-scheme: light;
+  --brand-navy: #081120;
+  --brand-navy-deep: #040b16;
+  --brand-indigo: #2a2d7c;
+  --brand-indigo-soft: #4556a5;
+  --brand-cyan: #1cc7d8;
+  --brand-cyan-soft: #7be6f1;
+  --brand-surface: rgba(255, 255, 255, 0.92);
+  --brand-surface-muted: rgba(243, 249, 255, 0.82);
+  --brand-border: rgba(216, 228, 242, 0.85);
+  --brand-text: #0b1530;
+  --brand-text-muted: #64748b;
+}
+
+html {
+  background: #f7f8fa;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(204, 251, 241, 0.8), transparent 30%),
-    linear-gradient(180deg, #f8fafc 0%, #eef4f7 100%);
-  color: #0f172a;
-  font-family: Arial, Helvetica, sans-serif;
+  background: #f7f8fa;
+  color: var(--brand-text);
+  font-family: var(--font-manrope, Arial), Arial, Helvetica, sans-serif;
+  position: relative;
 }
 
 a {
@@ -25,3 +39,52 @@ a {
   box-sizing: border-box;
 }
 
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top left, rgba(8, 17, 32, 0.03), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(28, 199, 216, 0.04), transparent 20%);
+  opacity: 1;
+}
+
+@layer components {
+  .site-shell {
+    @apply relative overflow-hidden rounded-[32px] border border-line bg-white shadow-panel;
+  }
+
+  .site-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at top right, rgba(28, 199, 216, 0.05), transparent 22%),
+      radial-gradient(circle at bottom left, rgba(8, 17, 32, 0.03), transparent 28%);
+  }
+
+  .brand-surface {
+    @apply rounded-[32px] border border-[#13233b] bg-[#081120] text-white shadow-panel;
+  }
+
+  .content-surface {
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(216, 228, 242, 0.9);
+    color: var(--brand-text);
+    @apply rounded-[28px] shadow-panel backdrop-blur;
+  }
+
+  .content-surface-muted {
+    background: #f8fafc;
+    border: 1px solid rgba(216, 228, 242, 0.82);
+    color: var(--brand-text);
+    @apply rounded-[24px] shadow-panel backdrop-blur;
+  }
+
+  .signal-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(28, 199, 216, 0.72), transparent);
+  }
+}

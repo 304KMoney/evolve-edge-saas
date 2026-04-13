@@ -1,29 +1,36 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Manrope } from "next/font/google";
 import { Suspense } from "react";
 import { AttributionCapture } from "../components/attribution-capture";
-import { DemoModeBanner } from "../components/demo-mode-banner";
-import { getDemoModeConfig } from "../lib/demo-mode";
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-manrope",
+  display: "swap"
+});
 
 export const metadata: Metadata = {
   title: "Evolve Edge",
-  description: "AI governance and compliance SaaS platform"
+  description: "AI governance and compliance SaaS platform",
+  icons: {
+    icon: "/brand/evolve-edge-logo.png",
+    shortcut: "/brand/evolve-edge-logo.png",
+    apple: "/brand/evolve-edge-logo.png"
+  },
+  openGraph: {
+    title: "Evolve Edge",
+    description: "AI governance and compliance SaaS platform",
+    images: ["/brand/evolve-edge-logo.png"]
+  }
 };
 
 export default function RootLayout({
   children
 }: Readonly<{ children: React.ReactNode }>) {
-  const demoMode = getDemoModeConfig();
-
   return (
     <html lang="en">
-      <body>
-        {demoMode.enabled ? (
-          <DemoModeBanner
-            label={demoMode.label}
-            resetCommand={demoMode.resetCommand}
-          />
-        ) : null}
+      <body className={manrope.variable}>
         <Suspense fallback={null}>
           <AttributionCapture />
         </Suspense>

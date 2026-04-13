@@ -6,6 +6,19 @@ For full page copy, section ordering, approved headlines, CTA usage, FAQ text, a
 
 - [hostinger-ai-website-copy-reference.md](C:\Users\kielg\OneDrive\Desktop\Evolve%20Edge\docs\hostinger-ai-website-copy-reference.md)
 
+## Homepage quick reference
+
+- Hero headline: `Know your AI risk posture in days — not months`
+- Hero supporting copy: `Identify compliance gaps, quantify risk, and deliver executive-ready reports your leadership can act on immediately.`
+- Primary CTA: `Get your risk assessment`
+- Secondary CTA: `View sample report`
+- Deliverables section title: `What you walk away with`
+- Deliverables:
+  - `Risk score + breakdown`
+  - `Top 5 critical findings`
+  - `30–90 day remediation roadmap`
+  - `Executive briefing`
+
 ## Public pricing cards
 
 ### Starter
