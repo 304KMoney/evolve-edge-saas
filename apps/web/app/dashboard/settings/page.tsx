@@ -51,6 +51,10 @@ import { getOrganizationEntitlements, requireEntitlement } from "../../../lib/en
 import { getExpansionOffers } from "../../../lib/expansion-engine";
 import { getOrganizationActivationSnapshot } from "../../../lib/activation";
 import { trackProductAnalyticsEvent } from "../../../lib/product-analytics";
+import {
+  isPrismaRuntimeCompatibilityError,
+  logPrismaRuntimeCompatibilityError
+} from "../../../lib/prisma-runtime";
 import { getPlanTransitionDirection } from "../../../lib/revenue-catalog";
 import { getOrganizationRetentionSnapshot } from "../../../lib/retention";
 import { getAppUrl } from "../../../lib/runtime-config";
@@ -89,6 +93,44 @@ function formatDateTime(date: Date | null | undefined) {
     hour: "numeric",
     minute: "2-digit"
   }).format(date);
+}
+
+function renderSettingsRuntimeCompatibilityFallback(input: {
+  organizationName: string;
+}) {
+  return (
+    <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
+      <div className="rounded-[28px] border border-white/70 bg-white/90 p-8 shadow-panel">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-accent">Billing & Settings</p>
+            <h1 className="mt-2 text-3xl font-semibold text-ink">
+              Workspace controls temporarily limited
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-steel">
+              {input.organizationName} is reachable, but some billing and
+              operational support records are unavailable in this deployment.
+              Settings is staying in a safe read-only fallback until the
+              production database schema is aligned with the current Prisma
+              client.
+            </p>
+          </div>
+          <Link
+            href="/dashboard"
+            className="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink"
+          >
+            Back to dashboard
+          </Link>
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-warning">
+          Billing management, usage controls, and workflow diagnostics are
+          intentionally hidden in this fallback view to avoid partial writes
+          against an incompatible production schema.
+        </div>
+      </div>
+    </main>
+  );
 }
 
 async function addMemberAction(formData: FormData) {
@@ -787,7 +829,96 @@ export default async function SettingsPage({
 }) {
   const session = await requireCurrentSession({ requireOrganization: true });
   const authz = getSessionAuthorizationContext(session);
-  const [
+  const loadSettingsData = async () => {
+    const [
+      organization,
+      entitlements,
+      usage,
+      subscription,
+      plans,
+      failedDeliveries,
+      findingsCount,
+      params,
+      billingAdminSnapshot
+    ] = await Promise.all([
+      prisma.organization.findUnique({
+        where: { id: session.organization!.id },
+        include: {
+          members: {
+            include: { user: true },
+            orderBy: { createdAt: "asc" }
+          },
+          invites: {
+            orderBy: { createdAt: "desc" }
+          },
+          vendors: {
+            orderBy: { createdAt: "desc" }
+          },
+          models: {
+            orderBy: { createdAt: "desc" }
+          }
+        }
+      }),
+      getOrganizationEntitlements(session.organization!.id),
+      getOrganizationUsageSnapshot(session.organization!.id),
+      getLatestSubscription(session.organization!.id),
+      listBillablePlans(),
+      getFailedWebhookDeliveries({
+        limit: 8,
+        orgId: session.organization!.id
+      }),
+      prisma.finding.count({
+        where: {
+          assessment: {
+            organizationId: session.organization!.id
+          }
+        }
+      }),
+      searchParams,
+      getOrganizationBillingManagementSnapshot(session.organization!.id)
+    ]);
+    const usageMetering = await getOrganizationUsageMeteringSnapshot(
+      session.organization!.id,
+      entitlements.planCode
+    );
+    const activation = await getOrganizationActivationSnapshot(
+      session.organization!.id,
+      entitlements
+    );
+
+    return {
+      organization,
+      entitlements,
+      usage,
+      subscription,
+      plans,
+      failedDeliveries,
+      findingsCount,
+      params,
+      billingAdminSnapshot,
+      usageMetering,
+      activation
+    };
+  };
+
+  let loaded: Awaited<ReturnType<typeof loadSettingsData>>;
+
+  try {
+    loaded = await loadSettingsData();
+  } catch (error) {
+    if (!isPrismaRuntimeCompatibilityError(error)) {
+      throw error;
+    }
+
+    logPrismaRuntimeCompatibilityError("dashboard.settings", error, {
+      organizationId: session.organization!.id
+    });
+    return renderSettingsRuntimeCompatibilityFallback({
+      organizationName: session.organization!.name
+    });
+  }
+
+  const {
     organization,
     entitlements,
     usage,
@@ -796,52 +927,10 @@ export default async function SettingsPage({
     failedDeliveries,
     findingsCount,
     params,
-    billingAdminSnapshot
-  ] = await Promise.all([
-    prisma.organization.findUnique({
-      where: { id: session.organization!.id },
-      include: {
-        members: {
-          include: { user: true },
-          orderBy: { createdAt: "asc" }
-        },
-        invites: {
-          orderBy: { createdAt: "desc" }
-        },
-        vendors: {
-          orderBy: { createdAt: "desc" }
-        },
-        models: {
-          orderBy: { createdAt: "desc" }
-        }
-      }
-    }),
-    getOrganizationEntitlements(session.organization!.id),
-    getOrganizationUsageSnapshot(session.organization!.id),
-    getLatestSubscription(session.organization!.id),
-    listBillablePlans(),
-    getFailedWebhookDeliveries({
-      limit: 8,
-      orgId: session.organization!.id
-    }),
-    prisma.finding.count({
-      where: {
-        assessment: {
-          organizationId: session.organization!.id
-        }
-      }
-    }),
-    searchParams,
-    getOrganizationBillingManagementSnapshot(session.organization!.id)
-  ]);
-  const usageMetering = await getOrganizationUsageMeteringSnapshot(
-    session.organization!.id,
-    entitlements.planCode
-  );
-  const activation = await getOrganizationActivationSnapshot(
-    session.organization!.id,
-    entitlements
-  );
+    billingAdminSnapshot,
+    usageMetering,
+    activation
+  } = loaded;
   const canManageMembers =
     canManageOrganizationMembers(authz) && entitlements.canManageMembers;
   const canManageBillingControls =

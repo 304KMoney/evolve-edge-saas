@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@evolve-edge/db";
+import { Prisma, prisma } from "@evolve-edge/db";
 import { ActivationTipCard } from "../../../components/activation-guide";
 import { requireCurrentSession } from "../../../lib/auth";
 import { getOrganizationActivationSnapshot } from "../../../lib/activation";
@@ -8,12 +8,22 @@ import { UpsellOfferStack } from "../../../components/upsell-offer-stack";
 import { getOrganizationEntitlements } from "../../../lib/entitlements";
 import { getExpansionOffers } from "../../../lib/expansion-engine";
 import {
+  isPrismaRuntimeCompatibilityError,
+  logPrismaRuntimeCompatibilityError
+} from "../../../lib/prisma-runtime";
+import {
   getOrganizationUsageMeteringSnapshot,
   getUsageMetricSnapshot
 } from "../../../lib/usage-metering";
 import { createAssessmentAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const assessmentListInclude = {
+  sections: {
+    orderBy: { orderIndex: "asc" }
+  }
+} satisfies Prisma.AssessmentInclude;
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("en-US", {
@@ -29,40 +39,60 @@ export default async function AssessmentsPage({
   searchParams: Promise<{ error?: string; created?: string }>;
 }) {
   const session = await requireCurrentSession({ requireOrganization: true });
-  const [assessments, entitlements, currentSubscription, params] = await Promise.all([
-    prisma.assessment.findMany({
-      where: { organizationId: session.organization!.id },
-      include: {
-        sections: {
-          orderBy: { orderIndex: "asc" }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    }),
-    getOrganizationEntitlements(session.organization!.id),
-    getCurrentSubscription(session.organization!.id),
-    searchParams
-  ]);
-  const usageMetering = await getOrganizationUsageMeteringSnapshot(
-    session.organization!.id,
-    entitlements.planCode
-  );
-  const activation = await getOrganizationActivationSnapshot(
-    session.organization!.id,
-    entitlements
-  );
-  const assessmentUsage = getUsageMetricSnapshot(
-    usageMetering,
-    "activeAssessments"
-  );
-  const upsellOffers = getExpansionOffers({
-    placement: "assessments",
-    session,
-    entitlements,
-    usageMetering,
-    currentPlanCode: currentSubscription?.plan.code ?? entitlements.planCode,
-    hasStripeCustomer: Boolean(currentSubscription?.stripeCustomerId)
-  });
+  type AssessmentListItem = Prisma.AssessmentGetPayload<{
+    include: typeof assessmentListInclude;
+  }>;
+
+  let assessments: AssessmentListItem[] = [];
+  const params = await searchParams;
+  let entitlements:
+    | Awaited<ReturnType<typeof getOrganizationEntitlements>>
+    | null = null;
+  let currentSubscription: Awaited<ReturnType<typeof getCurrentSubscription>> | null = null;
+  let assessmentUsage: ReturnType<typeof getUsageMetricSnapshot> = null;
+  let activation:
+    | Awaited<ReturnType<typeof getOrganizationActivationSnapshot>>
+    | null = null;
+  let upsellOffers: ReturnType<typeof getExpansionOffers> = [];
+  let runtimeCompatibilityWarning = false;
+
+  try {
+    [assessments, entitlements, currentSubscription] = await Promise.all([
+      prisma.assessment.findMany({
+        where: { organizationId: session.organization!.id },
+        include: assessmentListInclude,
+        orderBy: { createdAt: "desc" }
+      }),
+      getOrganizationEntitlements(session.organization!.id),
+      getCurrentSubscription(session.organization!.id)
+    ]);
+    const usageMetering = await getOrganizationUsageMeteringSnapshot(
+      session.organization!.id,
+      entitlements.planCode
+    );
+    activation = await getOrganizationActivationSnapshot(
+      session.organization!.id,
+      entitlements
+    );
+    assessmentUsage = getUsageMetricSnapshot(usageMetering, "activeAssessments");
+    upsellOffers = getExpansionOffers({
+      placement: "assessments",
+      session,
+      entitlements,
+      usageMetering,
+      currentPlanCode: currentSubscription?.plan.code ?? entitlements.planCode,
+      hasStripeCustomer: Boolean(currentSubscription?.stripeCustomerId)
+    });
+  } catch (error) {
+    if (!isPrismaRuntimeCompatibilityError(error)) {
+      throw error;
+    }
+
+    runtimeCompatibilityWarning = true;
+    logPrismaRuntimeCompatibilityError("dashboard.assessments", error, {
+      organizationId: session.organization!.id
+    });
+  }
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
@@ -89,8 +119,17 @@ export default async function AssessmentsPage({
           </div>
         ) : null}
 
-        {!entitlements.canCreateAssessment &&
-        entitlements.workspaceMode === "INACTIVE" ? (
+        {runtimeCompatibilityWarning ? (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
+            Workspace support data is temporarily unavailable in this deployment,
+            so billing-aware assessment controls are running in a safe fallback
+            mode until the production database schema is aligned.
+          </div>
+        ) : null}
+
+        {!runtimeCompatibilityWarning &&
+        !entitlements?.canCreateAssessment &&
+        entitlements?.workspaceMode === "INACTIVE" ? (
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
             This workspace is inactive. Reactivate billing before creating new
             assessments.
@@ -125,7 +164,9 @@ export default async function AssessmentsPage({
           </div>
         ) : null}
 
-        {!activation.steps.find((step) => step.key === "assessmentStarted")?.completed ? (
+        {!runtimeCompatibilityWarning &&
+        activation &&
+        !activation.steps.find((step) => step.key === "assessmentStarted")?.completed ? (
           <div className="mt-6">
             <ActivationTipCard
               title="Start the first assessment to unlock the real workflow"
@@ -144,7 +185,9 @@ export default async function AssessmentsPage({
               </p>
               <p className="mt-2 text-sm text-steel">
                 {assessmentUsage?.usageLabel ??
-                  `${entitlements.activeAssessments} of ${entitlements.activeAssessmentsLimit ?? "unlimited"} assessment slots are currently in use.`}
+                  (runtimeCompatibilityWarning
+                    ? "Assessment capacity details are temporarily unavailable while workspace support tables recover."
+                    : `${entitlements?.activeAssessments ?? assessments.length} of ${entitlements?.activeAssessmentsLimit ?? "unlimited"} assessment slots are currently in use.`)}
               </p>
             </div>
             <form
@@ -158,7 +201,7 @@ export default async function AssessmentsPage({
               />
               <button
                 type="submit"
-                disabled={!entitlements.canCreateAssessment}
+                disabled={runtimeCompatibilityWarning || !entitlements?.canCreateAssessment}
                 className="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Create
@@ -193,12 +236,15 @@ export default async function AssessmentsPage({
 
           {assessments.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-line bg-white p-8 text-sm text-steel">
-              No assessments exist yet. Create the first one to start the
-              product&apos;s core workflow.
+              {runtimeCompatibilityWarning
+                ? "Assessment records are not fully available yet. Setup may still be finishing, so this page is showing a safe empty state."
+                : "No assessments exist yet. Create the first one to start the product's core workflow."}
             </div>
           ) : null}
 
           {assessments.length > 0 &&
+          !runtimeCompatibilityWarning &&
+          activation &&
           !activation.steps.find((step) => step.key === "assessmentSubmitted")?.completed ? (
             <ActivationTipCard
               title="Complete enough intake to queue analysis"

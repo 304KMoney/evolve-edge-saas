@@ -1,4 +1,4 @@
-import { prisma } from "@evolve-edge/db";
+import { Prisma, prisma } from "@evolve-edge/db";
 import type { DashboardData } from "../components/dashboard-shell";
 import { getOrganizationActivationSnapshot } from "./activation";
 import { requireCurrentSession } from "./auth";
@@ -8,6 +8,10 @@ import { getMonitoringDashboardSnapshot } from "./continuous-monitoring";
 import { isDemoModeEnabled } from "./demo-mode";
 import { getExpansionOffers } from "./expansion-engine";
 import { logServerEvent } from "./monitoring";
+import {
+  isPrismaRuntimeCompatibilityError,
+  logPrismaRuntimeCompatibilityError
+} from "./prisma-runtime";
 import { buildProductSurfaceModel } from "./product-surface";
 import { getOrganizationRetentionSnapshot } from "./retention";
 import { getOrganizationUsageMeteringSnapshot } from "./usage-metering";
@@ -209,93 +213,110 @@ function buildFallbackDashboardData(organizationName: string): DashboardData {
   };
 }
 
+const dashboardOrganizationInclude = {
+  subscriptions: {
+    include: { plan: true },
+    orderBy: { createdAt: "desc" },
+    take: 1
+  },
+  frameworkSelections: {
+    include: { framework: true }
+  },
+  vendors: {
+    orderBy: { createdAt: "desc" },
+    take: 3
+  },
+  models: {
+    orderBy: { createdAt: "desc" },
+    take: 3
+  },
+  notifications: {
+    orderBy: { createdAt: "desc" },
+    take: 4
+  },
+  _count: {
+    select: {
+      members: true,
+      vendors: true,
+      models: true
+    }
+  },
+  assessments: {
+    orderBy: { createdAt: "desc" },
+    take: 1,
+    include: {
+      sections: {
+        orderBy: { orderIndex: "asc" }
+      },
+      findings: {
+        orderBy: { sortOrder: "asc" },
+        take: 3
+      },
+      recommendations: {
+        orderBy: { sortOrder: "asc" },
+        take: 3
+      },
+      analysisJobs: {
+        orderBy: { createdAt: "desc" },
+        take: 1
+      }
+    }
+  },
+  reports: {
+    orderBy: { publishedAt: "desc" },
+    take: 2
+  }
+} satisfies Prisma.OrganizationInclude;
+
 export async function getDashboardData(): Promise<DashboardData> {
   const session = await requireCurrentSession({ requireOrganization: true });
-  const [entitlements, currentSubscription] = await Promise.all([
-    getOrganizationEntitlements(session.organization!.id),
-    getCurrentSubscription(session.organization!.id)
-  ]);
-  const monitoring = await getMonitoringDashboardSnapshot(session.organization!.id);
-  const [usageMetering, auditsQuota, evidenceUploadsQuota] = await Promise.all([
-    getOrganizationUsageMeteringSnapshot(session.organization!.id, entitlements.planCode),
-    getUsageRemaining(session.organization!.id, "audits"),
-    getUsageRemaining(session.organization!.id, "evidence_uploads")
-  ]);
-  const activation = await getOrganizationActivationSnapshot(
-    session.organization!.id,
-    entitlements
-  );
+  const organizationId = session.organization!.id;
+  const organizationName = session.organization!.name;
 
-  let organization = null;
+  let entitlements: Awaited<ReturnType<typeof getOrganizationEntitlements>>;
+  let currentSubscription: Awaited<ReturnType<typeof getCurrentSubscription>>;
+  let monitoring: Awaited<ReturnType<typeof getMonitoringDashboardSnapshot>>;
+  let usageMetering: Awaited<ReturnType<typeof getOrganizationUsageMeteringSnapshot>>;
+  let auditsQuota: Awaited<ReturnType<typeof getUsageRemaining>>;
+  let evidenceUploadsQuota: Awaited<ReturnType<typeof getUsageRemaining>>;
+  let activation: Awaited<ReturnType<typeof getOrganizationActivationSnapshot>>;
+  let organization: Prisma.OrganizationGetPayload<{
+    include: typeof dashboardOrganizationInclude;
+  }> | null;
 
   try {
+    [entitlements, currentSubscription] = await Promise.all([
+      getOrganizationEntitlements(organizationId),
+      getCurrentSubscription(organizationId)
+    ]);
+    monitoring = await getMonitoringDashboardSnapshot(organizationId);
+    [usageMetering, auditsQuota, evidenceUploadsQuota] = await Promise.all([
+      getOrganizationUsageMeteringSnapshot(organizationId, entitlements.planCode),
+      getUsageRemaining(organizationId, "audits"),
+      getUsageRemaining(organizationId, "evidence_uploads")
+    ]);
+    activation = await getOrganizationActivationSnapshot(organizationId, entitlements);
     organization = await prisma.organization.findFirst({
-      where: { id: session.organization!.id },
-      include: {
-        subscriptions: {
-          include: { plan: true },
-          orderBy: { createdAt: "desc" },
-          take: 1
-        },
-        frameworkSelections: {
-          include: { framework: true }
-        },
-        vendors: {
-          orderBy: { createdAt: "desc" },
-          take: 3
-        },
-        models: {
-          orderBy: { createdAt: "desc" },
-          take: 3
-        },
-        notifications: {
-          orderBy: { createdAt: "desc" },
-          take: 4
-        },
-        _count: {
-          select: {
-            members: true,
-            vendors: true,
-            models: true
-          }
-        },
-        assessments: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          include: {
-            sections: {
-              orderBy: { orderIndex: "asc" }
-            },
-            findings: {
-              orderBy: { sortOrder: "asc" },
-              take: 3
-            },
-            recommendations: {
-              orderBy: { sortOrder: "asc" },
-              take: 3
-            },
-            analysisJobs: {
-              orderBy: { createdAt: "desc" },
-              take: 1
-            }
-          }
-        },
-        reports: {
-          orderBy: { publishedAt: "desc" },
-          take: 2
-        }
-      }
+      where: { id: organizationId },
+      include: dashboardOrganizationInclude
     });
   } catch (error) {
-    logServerEvent("error", "dashboard.data.fallback", {
-      organizationId: session.organization!.id,
+    if (isPrismaRuntimeCompatibilityError(error)) {
+      logPrismaRuntimeCompatibilityError("dashboard.data", error, {
+        organizationId
+      });
+      return buildFallbackDashboardData(organizationName);
+    }
+
+    logServerEvent("error", "dashboard.data.error", {
+      organizationId,
       message: error instanceof Error ? error.message : "Unknown error"
     });
-    return buildFallbackDashboardData(session.organization!.name);
+    throw error;
   }
 
   if (!organization) {
-    return buildFallbackDashboardData(session.organization!.name);
+    return buildFallbackDashboardData(organizationName);
   }
 
   const subscription = organization.subscriptions[0];

@@ -5,6 +5,10 @@ import {
   isKnownProductAnalyticsEventName,
   trackProductAnalyticsEvent
 } from "../../../../lib/product-analytics";
+import {
+  isPrismaRuntimeCompatibilityError,
+  logPrismaRuntimeCompatibilityError
+} from "../../../../lib/prisma-runtime";
 import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
 import {
   expectObject,
@@ -67,16 +71,32 @@ export async function POST(request: Request) {
   }
 
   const session = await getOptionalCurrentSession();
-  await trackProductAnalyticsEvent({
-    name: name as ProductAnalyticsEventName,
-    payload: payload as ProductAnalyticsEventMap[ProductAnalyticsEventName],
-    source,
-    path: readOptionalString(body, "path", { maxLength: 500 }) ?? new URL(request.url).pathname,
-    referrer: readOptionalString(body, "referrer", { maxLength: 1000 }),
-    anonymousId: readOptionalString(body, "anonymousId", { maxLength: 200 }),
-    sessionId: readOptionalString(body, "sessionId", { maxLength: 200 }),
-    session
-  });
+  try {
+    await trackProductAnalyticsEvent({
+      name: name as ProductAnalyticsEventName,
+      payload: payload as ProductAnalyticsEventMap[ProductAnalyticsEventName],
+      source,
+      path:
+        readOptionalString(body, "path", { maxLength: 500 }) ?? new URL(request.url).pathname,
+      referrer: readOptionalString(body, "referrer", { maxLength: 1000 }),
+      anonymousId: readOptionalString(body, "anonymousId", { maxLength: 200 }),
+      sessionId: readOptionalString(body, "sessionId", { maxLength: 200 }),
+      session
+    });
+  } catch (error) {
+    if (isPrismaRuntimeCompatibilityError(error)) {
+      logPrismaRuntimeCompatibilityError("api.analytics.track", error, {
+        name,
+        source
+      });
+    } else {
+      console.error("product-analytics.track_failed", {
+        name,
+        source,
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }
