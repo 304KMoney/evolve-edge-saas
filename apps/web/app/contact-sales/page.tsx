@@ -40,12 +40,41 @@ const foundingNextSteps = [
 export default async function ContactSalesPage({
   searchParams
 }: {
-  searchParams: Promise<{ intent?: string; source?: string; submitted?: string; error?: string }>;
+  searchParams: Promise<{
+    intent?: string | string[];
+    source?: string | string[];
+    submitted?: string | string[];
+    error?: string | string[];
+  }>;
 }) {
   const session = await getOptionalCurrentSession();
-  const params = await searchParams;
+  const rawParams = await searchParams;
+  const intent =
+    typeof rawParams.intent === "string"
+      ? rawParams.intent
+      : Array.isArray(rawParams.intent)
+        ? rawParams.intent[0] ?? ""
+        : "";
+  const source =
+    typeof rawParams.source === "string"
+      ? rawParams.source
+      : Array.isArray(rawParams.source)
+        ? rawParams.source[0] ?? ""
+        : "";
+  const submitted =
+    typeof rawParams.submitted === "string"
+      ? rawParams.submitted
+      : Array.isArray(rawParams.submitted)
+        ? rawParams.submitted[0] ?? ""
+        : "";
+  const error =
+    typeof rawParams.error === "string"
+      ? rawParams.error
+      : Array.isArray(rawParams.error)
+        ? rawParams.error[0] ?? ""
+        : "";
   const salesEmail = getSalesContactEmail();
-  const isFoundingAuditIntent = (params.intent ?? "").includes("founding-risk-audit");
+  const isFoundingAuditIntent = intent.includes("founding-risk-audit");
   const primaryHref = session
     ? session.onboardingRequired
       ? "/onboarding"
@@ -153,25 +182,31 @@ export default async function ContactSalesPage({
             </a>
           </div>
 
-          {params.submitted ? (
+          {submitted ? (
             <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-[#0f766e]">
               {successMessage}
             </div>
           ) : null}
-          {params.error === "missing-required" ? (
+          {error === "missing-required" ? (
             <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-[#b42318]">
               Work email and company name are required so we can prepare the right next step for your team.
             </div>
           ) : null}
+          {error === "submission-failed" ? (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-[#92400e]">
+              We could not submit your request just now. Please try again, or email {salesEmail} if
+              you need an immediate response.
+            </div>
+          ) : null}
 
           <form action={submitContactSalesLeadAction} className="mt-8 grid gap-4">
-            <input type="hidden" name="intent" value={params.intent ?? "general-sales"} />
-            <input type="hidden" name="source" value={params.source ?? "contact-sales-page"} />
-            <input type="hidden" name="sourcePath" value="/contact-sales" />
+            <input type="hidden" name="intent" value={intent || "general-sales"} />
+            <input type="hidden" name="source" value={source || "contact-sales-page"} />
+            <input type="hidden" name="sourcePath" value="/contact" />
             <input
               type="hidden"
               name="requestedPlanCode"
-              value={params.intent?.includes("enterprise") ? "enterprise-annual" : ""}
+              value={intent.includes("enterprise") ? "enterprise-annual" : ""}
             />
 
             <div className="grid gap-4 md:grid-cols-2">

@@ -18,60 +18,89 @@ export async function submitContactSalesLeadAction(formData: FormData) {
   const teamSize = String(formData.get("teamSize") ?? "").trim();
   const intent = String(formData.get("intent") ?? "").trim() || "general-sales";
   const source = String(formData.get("source") ?? "").trim() || "contact-sales-page";
-  const sourcePath = String(formData.get("sourcePath") ?? "").trim() || "/contact-sales";
+  const sourcePath = String(formData.get("sourcePath") ?? "").trim() || "/contact";
   const requestedPlanCode = String(formData.get("requestedPlanCode") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
 
   if (!email || !companyName) {
     redirect(
-      `/contact-sales?error=missing-required&intent=${encodeURIComponent(intent)}&source=${encodeURIComponent(source)}` as never
+      `/contact?error=missing-required&intent=${encodeURIComponent(intent)}&source=${encodeURIComponent(source)}` as never
     );
   }
 
-  const [requestContext, attribution] = await Promise.all([
-    getServerAuditRequestContext(),
-    readLeadAttributionFromCookies()
-  ]);
+  let attribution = null;
 
-  const leadCapture = await captureLeadSubmission({
-    source: intent === "demo-request" ? "demo_request" : "contact_sales",
-    email,
-    firstName,
-    lastName,
-    companyName,
-    jobTitle,
-    phone,
-    teamSize,
-    intent,
-    sourcePath,
-    requestedPlanCode: requestedPlanCode || null,
-    attribution,
-    payload: {
-      message
-    },
-    actorLabel: email,
-    requestContext
-  });
+  try {
+    const [requestContext, capturedAttribution] = await Promise.all([
+      getServerAuditRequestContext(),
+      readLeadAttributionFromCookies()
+    ]);
 
-  if (!leadCapture.deduped) {
-    await trackProductAnalyticsEvent({
-      name: "funnel.lead_captured",
+    attribution = capturedAttribution;
+
+    const leadCapture = await captureLeadSubmission({
+      source: intent === "demo-request" ? "demo_request" : "contact_sales",
+      email,
+      firstName,
+      lastName,
+      companyName,
+      jobTitle,
+      phone,
+      teamSize,
+      intent,
+      sourcePath,
+      requestedPlanCode: requestedPlanCode || null,
+      attribution,
       payload: {
-        source: intent === "demo-request" ? "demo_request" : "contact_sales",
-        intent,
-        requestedPlanCode: requestedPlanCode || null,
-        companyName,
-        deduped: false
+        message
       },
-      source: "contact-sales",
-      path: sourcePath,
-      organizationId: null,
-      userId: null,
-      attribution
+      actorLabel: email,
+      requestContext
     });
+
+    if (!leadCapture.deduped) {
+      try {
+        await trackProductAnalyticsEvent({
+          name: "funnel.lead_captured",
+          payload: {
+            source: intent === "demo-request" ? "demo_request" : "contact_sales",
+            intent,
+            requestedPlanCode: requestedPlanCode || null,
+            companyName,
+            deduped: false
+          },
+          source: "contact-sales",
+          path: sourcePath,
+          organizationId: null,
+          userId: null,
+          attribution
+        });
+      } catch (error) {
+        console.error("[contact] Lead analytics tracking failed.", {
+          email,
+          intent,
+          source,
+          error
+        });
+      }
+    }
+  } catch (error) {
+    console.error("[contact] Lead submission failed.", {
+      email,
+      companyName,
+      intent,
+      source,
+      sourcePath,
+      attribution,
+      error
+    });
+
+    redirect(
+      `/contact?error=submission-failed&intent=${encodeURIComponent(intent)}&source=${encodeURIComponent(source)}` as never
+    );
   }
 
   redirect(
-    `/contact-sales?submitted=1&intent=${encodeURIComponent(intent)}&source=${encodeURIComponent(source)}` as never
+    `/contact?submitted=1&intent=${encodeURIComponent(intent)}&source=${encodeURIComponent(source)}` as never
   );
 }

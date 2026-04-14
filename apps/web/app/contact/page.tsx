@@ -1,2 +1,12 @@
-export { metadata } from "../contact-sales/page";
-export { default } from "../contact-sales/page";
+import ContactSalesPage, { metadata } from "../contact-sales/page";
+
+export { metadata };
+
+export default async function ContactPage(props: Parameters<typeof ContactSalesPage>[0]) {
+  try {
+    return await ContactSalesPage(props);
+  } catch (err) {
+    console.error("CONTACT RENDER FAIL:", err);
+    throw err;
+  }
+}

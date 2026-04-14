@@ -283,54 +283,68 @@ export async function captureLeadSubmission(
       });
 
   if (!existingLead) {
-    await publishDomainEvent(db, {
-      type: "lead.captured",
-      aggregateType: "leadSubmission",
-      aggregateId: lead.id,
-      orgId: input.organizationId ?? null,
-      userId: input.userId ?? null,
-      idempotencyKey: `lead.captured:${lead.id}`,
-      payload: {
-        leadId: lead.id,
-        normalizedEmail,
-        firstName: trimOrNull(input.firstName, 120),
-        lastName: trimOrNull(input.lastName, 120),
-        companyName: trimOrNull(input.companyName, 200),
-        jobTitle: trimOrNull(input.jobTitle, 160),
-        phone: trimOrNull(input.phone, 60),
-        teamSize: trimOrNull(input.teamSize, 80),
-        source: input.source,
-        intent,
-        sourcePath,
-        requestedPlanCode,
-        pricingContext: trimOrNull(input.pricingContext, 160),
-        attribution,
-        ...crmSafePayload
-      } satisfies Prisma.InputJsonValue
-    });
+    try {
+      await publishDomainEvent(db, {
+        type: "lead.captured",
+        aggregateType: "leadSubmission",
+        aggregateId: lead.id,
+        orgId: input.organizationId ?? null,
+        userId: input.userId ?? null,
+        idempotencyKey: `lead.captured:${lead.id}`,
+        payload: {
+          leadId: lead.id,
+          normalizedEmail,
+          firstName: trimOrNull(input.firstName, 120),
+          lastName: trimOrNull(input.lastName, 120),
+          companyName: trimOrNull(input.companyName, 200),
+          jobTitle: trimOrNull(input.jobTitle, 160),
+          phone: trimOrNull(input.phone, 60),
+          teamSize: trimOrNull(input.teamSize, 80),
+          source: input.source,
+          intent,
+          sourcePath,
+          requestedPlanCode,
+          pricingContext: trimOrNull(input.pricingContext, 160),
+          attribution,
+          ...crmSafePayload
+        } satisfies Prisma.InputJsonValue
+      });
 
-    await writeAuditLog(db, {
-      organizationId: input.organizationId ?? null,
-      userId: input.userId ?? null,
-      actorType: input.userId ? AuditActorType.USER : AuditActorType.SYSTEM,
-      actorLabel: input.actorLabel ?? normalizedEmail,
-      action: "lead.captured",
-      entityType: "leadSubmission",
-      entityId: lead.id,
-      metadata: {
-        source: input.source,
-        intent,
-        requestedPlanCode,
-        normalizedEmail
-      },
-      requestContext: input.requestContext ?? null
-    });
+      await writeAuditLog(db, {
+        organizationId: input.organizationId ?? null,
+        userId: input.userId ?? null,
+        actorType: input.userId ? AuditActorType.USER : AuditActorType.SYSTEM,
+        actorLabel: input.actorLabel ?? normalizedEmail,
+        action: "lead.captured",
+        entityType: "leadSubmission",
+        entityId: lead.id,
+        metadata: {
+          source: input.source,
+          intent,
+          requestedPlanCode,
+          normalizedEmail
+        },
+        requestContext: input.requestContext ?? null
+      });
+    } catch (error) {
+      console.error("[lead-pipeline] Lead follow-up event logging failed.", {
+        leadSubmissionId: lead.id,
+        error
+      });
+    }
   }
 
-  await upsertCustomerAccountFromLead({
-    leadSubmissionId: lead.id,
-    db
-  });
+  try {
+    await upsertCustomerAccountFromLead({
+      leadSubmissionId: lead.id,
+      db
+    });
+  } catch (error) {
+    console.error("[lead-pipeline] Customer account sync from lead failed.", {
+      leadSubmissionId: lead.id,
+      error
+    });
+  }
 
   return {
     lead,

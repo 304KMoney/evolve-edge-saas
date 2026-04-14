@@ -442,7 +442,12 @@ export async function getCurrentSession(): Promise<AppSession> {
 }
 
 export async function getOptionalCurrentSession() {
-  return resolveCurrentSession({ redirectOnMissing: false });
+  try {
+    return await resolveCurrentSession({ redirectOnMissing: false });
+  } catch (error) {
+    console.error("[auth] Optional session resolution failed.", error);
+    return null;
+  }
 }
 
 export async function requireCurrentSession(options?: {
