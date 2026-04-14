@@ -50,6 +50,7 @@ import { queueEmailNotification } from "../../../lib/email";
 import { getOrganizationEntitlements, requireEntitlement } from "../../../lib/entitlements";
 import { getExpansionOffers } from "../../../lib/expansion-engine";
 import { getOrganizationActivationSnapshot } from "../../../lib/activation";
+import { logServerEvent } from "../../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../../lib/product-analytics";
 import {
   isPrismaRuntimeCompatibilityError,
@@ -839,7 +840,8 @@ export default async function SettingsPage({
       failedDeliveries,
       findingsCount,
       params,
-      billingAdminSnapshot
+      billingAdminSnapshot,
+      currentStripeSubscription
     ] = await Promise.all([
       prisma.organization.findUnique({
         where: { id: session.organization!.id },
@@ -875,7 +877,8 @@ export default async function SettingsPage({
         }
       }),
       searchParams,
-      getOrganizationBillingManagementSnapshot(session.organization!.id)
+      getOrganizationBillingManagementSnapshot(session.organization!.id),
+      getCurrentSubscription(session.organization!.id)
     ]);
     const usageMetering = await getOrganizationUsageMeteringSnapshot(
       session.organization!.id,
@@ -896,23 +899,28 @@ export default async function SettingsPage({
       findingsCount,
       params,
       billingAdminSnapshot,
+      currentStripeSubscription,
       usageMetering,
       activation
     };
   };
 
-  let loaded: Awaited<ReturnType<typeof loadSettingsData>>;
+  let loaded: Awaited<ReturnType<typeof loadSettingsData>> | null = null;
 
   try {
     loaded = await loadSettingsData();
   } catch (error) {
-    if (!isPrismaRuntimeCompatibilityError(error)) {
-      throw error;
+    if (isPrismaRuntimeCompatibilityError(error)) {
+      logPrismaRuntimeCompatibilityError("dashboard.settings", error, {
+        organizationId: session.organization!.id
+      });
+    } else {
+      logServerEvent("error", "dashboard.settings.fallback", {
+        organizationId: session.organization!.id,
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
     }
 
-    logPrismaRuntimeCompatibilityError("dashboard.settings", error, {
-      organizationId: session.organization!.id
-    });
     return renderSettingsRuntimeCompatibilityFallback({
       organizationName: session.organization!.name
     });
@@ -928,6 +936,7 @@ export default async function SettingsPage({
     findingsCount,
     params,
     billingAdminSnapshot,
+    currentStripeSubscription,
     usageMetering,
     activation
   } = loaded;
@@ -940,9 +949,6 @@ export default async function SettingsPage({
   const canManageInventoryControls = canManageInventoryWithContext(authz);
   const isWorkspaceOwner = session.organization!.role === "OWNER";
   const currentPlanCode = subscription?.plan.code ?? entitlements.planCode;
-  const currentStripeSubscription = await getCurrentSubscription(
-    session.organization!.id
-  );
   const upsellOffers = getExpansionOffers({
     placement: "settings",
     session,
