@@ -12,7 +12,6 @@
     "reset:demo": "prisma migrate reset --force --skip-seed && tsx prisma/demo-seed.ts"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^6.19.3",
     "@prisma/client": "^6.6.0",
     "pg": "^8.16.3"
   },
