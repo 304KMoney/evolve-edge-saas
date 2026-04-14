@@ -11,6 +11,7 @@ import {
   isPrismaRuntimeCompatibilityError,
   logPrismaRuntimeCompatibilityError
 } from "../../../lib/prisma-runtime";
+import { logServerEvent } from "../../../lib/monitoring";
 import {
   getOrganizationUsageMeteringSnapshot,
   getUsageMetricSnapshot
@@ -44,7 +45,7 @@ export default async function AssessmentsPage({
   }>;
 
   let assessments: AssessmentListItem[] = [];
-  const params = await searchParams;
+  let params: Awaited<typeof searchParams> = {};
   let entitlements:
     | Awaited<ReturnType<typeof getOrganizationEntitlements>>
     | null = null;
@@ -55,6 +56,17 @@ export default async function AssessmentsPage({
     | null = null;
   let upsellOffers: ReturnType<typeof getExpansionOffers> = [];
   let runtimeCompatibilityWarning = false;
+  let assessmentDataUnavailable = false;
+
+  try {
+    params = await searchParams;
+  } catch (error) {
+    assessmentDataUnavailable = true;
+    logServerEvent("warn", "dashboard.assessments.params_unavailable", {
+      organizationId: session.organization!.id,
+      message: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
 
   try {
     [assessments, entitlements, currentSubscription] = await Promise.all([
@@ -84,14 +96,19 @@ export default async function AssessmentsPage({
       hasStripeCustomer: Boolean(currentSubscription?.stripeCustomerId)
     });
   } catch (error) {
-    if (!isPrismaRuntimeCompatibilityError(error)) {
-      throw error;
-    }
+    assessmentDataUnavailable = true;
 
-    runtimeCompatibilityWarning = true;
-    logPrismaRuntimeCompatibilityError("dashboard.assessments", error, {
-      organizationId: session.organization!.id
-    });
+    if (isPrismaRuntimeCompatibilityError(error)) {
+      runtimeCompatibilityWarning = true;
+      logPrismaRuntimeCompatibilityError("dashboard.assessments", error, {
+        organizationId: session.organization!.id
+      });
+    } else {
+      logServerEvent("error", "dashboard.assessments.fallback", {
+        organizationId: session.organization!.id,
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   }
 
   return (
@@ -124,6 +141,13 @@ export default async function AssessmentsPage({
             Workspace support data is temporarily unavailable in this deployment,
             so billing-aware assessment controls are running in a safe fallback
             mode until the production database schema is aligned.
+          </div>
+        ) : null}
+
+        {assessmentDataUnavailable && !runtimeCompatibilityWarning ? (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
+            Assessment data is unavailable right now, so this page is rendering
+            a safe fallback state instead of live workspace data.
           </div>
         ) : null}
 
@@ -201,7 +225,11 @@ export default async function AssessmentsPage({
               />
               <button
                 type="submit"
-                disabled={runtimeCompatibilityWarning || !entitlements?.canCreateAssessment}
+                disabled={
+                  assessmentDataUnavailable ||
+                  runtimeCompatibilityWarning ||
+                  !entitlements?.canCreateAssessment
+                }
                 className="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Create
@@ -238,7 +266,9 @@ export default async function AssessmentsPage({
             <div className="rounded-2xl border border-dashed border-line bg-white p-8 text-sm text-steel">
               {runtimeCompatibilityWarning
                 ? "Assessment records are not fully available yet. Setup may still be finishing, so this page is showing a safe empty state."
-                : "No assessments exist yet. Create the first one to start the product's core workflow."}
+                : assessmentDataUnavailable
+                  ? "Assessment data is unavailable right now. This page is showing a safe empty state until workspace records are available again."
+                  : "No assessments exist yet. Create the first one to start the product's core workflow."}
             </div>
           ) : null}
 
