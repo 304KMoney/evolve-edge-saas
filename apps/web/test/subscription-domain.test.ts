@@ -6,13 +6,17 @@ import {
 } from "@evolve-edge/db";
 import {
   CANONICAL_PLAN_KEYS,
-  getCanonicalPlanCatalog,
-  getCanonicalPlanDefinition,
   getCanonicalPlanKeyFromPlanCode,
   getDefaultRevenuePlanCodeForCanonicalKey,
   getRevenuePlanDefinition
 } from "../lib/revenue-catalog";
-import { deriveBillingAccessStateFromSubscriptionStatus } from "../lib/subscription-domain";
+import {
+  deriveBillingAccessStateFromSubscriptionStatus,
+  listCanonicalPlans,
+  normalizeBillingAmountCents,
+  normalizeBillingCurrency,
+  retrieveCanonicalPlan
+} from "../lib/subscription-domain";
 
 function runSubscriptionDomainTests() {
   assert.deepEqual(CANONICAL_PLAN_KEYS, [
@@ -22,10 +26,15 @@ function runSubscriptionDomainTests() {
     CanonicalPlanKey.ENTERPRISE
   ]);
 
-  assert.equal(getCanonicalPlanCatalog().length, 4);
-  assert.equal(getCanonicalPlanDefinition(CanonicalPlanKey.GROWTH)?.label, "Growth");
+  const publicPlans = listCanonicalPlans();
+  assert.equal(publicPlans.length, 3);
+  assert.deepEqual(
+    publicPlans.map((plan: (typeof publicPlans)[number]) => plan.code),
+    ["starter", "scale", "enterprise"]
+  );
+  assert.equal(retrieveCanonicalPlan(CanonicalPlanKey.GROWTH)?.displayName, "Scale");
   assert.equal(
-    getCanonicalPlanDefinition(CanonicalPlanKey.ENTERPRISE)?.defaultRevenuePlanCode,
+    retrieveCanonicalPlan(CanonicalPlanKey.ENTERPRISE)?.publicRevenuePlanCode,
     "enterprise-annual"
   );
   assert.equal(
@@ -46,6 +55,14 @@ function runSubscriptionDomainTests() {
     CanonicalPlanKey.ENTERPRISE
   );
   assert.equal(getCanonicalPlanKeyFromPlanCode("unknown-plan"), null);
+  assert.equal(normalizeBillingAmountCents(2500), 2500);
+  assert.equal(normalizeBillingAmountCents("7500"), 7500);
+  assert.equal(normalizeBillingAmountCents(""), null);
+  assert.equal(normalizeBillingAmountCents(undefined), null);
+  assert.equal(normalizeBillingCurrency("USD"), "usd");
+  assert.equal(normalizeBillingCurrency(" usd "), "usd");
+  assert.equal(normalizeBillingCurrency(""), null);
+  assert.equal(normalizeBillingCurrency(null), null);
 
   assert.equal(
     deriveBillingAccessStateFromSubscriptionStatus(SubscriptionStatus.TRIALING),

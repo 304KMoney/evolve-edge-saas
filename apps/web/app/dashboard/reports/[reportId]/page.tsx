@@ -1,16 +1,28 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Prisma, ReportStatus, prisma } from "@evolve-edge/db";
 import {
   getSessionAuthorizationContext,
-  requireCurrentSession
+  requireOrganizationPermission
 } from "../../../../lib/auth";
 import {
   canManageReportDelivery,
   hasPermission
 } from "../../../../lib/authorization";
+import { createPlaceholderCustomerAccessGrant } from "../../../../lib/customer-access-grants";
+import { findLatestCustomerAccessGrant } from "../../../../lib/customer-access-grant-records";
+import { toCustomerAccessSession } from "../../../../lib/customer-access-session";
 import { publishDomainEvent } from "../../../../lib/domain-events";
 import { getReportExecutiveDeliveryPackage } from "../../../../lib/executive-delivery";
+import {
+  buildReportAccessStateHref,
+  evaluateCustomerReportAccess,
+  mapReportAccessDecisionToStateReason
+} from "../../../../lib/report-access-control";
+import {
+  getDashboardReportDetailViewForAccessSession,
+  getReportAccessCandidateById
+} from "../../../../lib/report-records";
 import {
   approveReportPackageQaAction,
   bookReportBriefingAction,
@@ -74,25 +86,56 @@ export default async function ReportDetailPage({
     briefingCompleted?: string;
   }>;
 }) {
-  const session = await requireCurrentSession({ requireOrganization: true });
+  const session = await requireOrganizationPermission("reports.view");
   const { reportId } = await params;
   const query = await searchParams;
-
-  const report = await prisma.report.findFirst({
-    where: {
-      id: reportId,
-      organizationId: session.organization!.id
-    },
-    include: {
-      assessment: true,
-      deliveredBy: true,
-      viewedBy: true
-    }
+  const accessSession = toCustomerAccessSession(session);
+  const reportView = await getDashboardReportDetailViewForAccessSession({
+    reportId,
+    accessSession
   });
+  const report = reportView?.report ?? null;
 
   if (!report) {
+    const reportAccessCandidate = await getReportAccessCandidateById(reportId);
+
+    if (!reportAccessCandidate) {
+      notFound();
+    }
+
+    const durableAccessGrant = await findLatestCustomerAccessGrant({
+      organizationId: accessSession.organizationId,
+      userId: accessSession.customerId,
+      reportId
+    });
+
+    const reportAccessDecision = evaluateCustomerReportAccess({
+      reportId,
+      reportOrganizationId: reportAccessCandidate.organizationId,
+      accessSession,
+      requiredScope: "reports",
+      accessGrant:
+        durableAccessGrant ??
+        createPlaceholderCustomerAccessGrant({
+          accessSession,
+          requiredScope: "reports",
+          reportId
+        })
+    });
+
+    if (!reportAccessDecision.allowed) {
+      redirect(
+        buildReportAccessStateHref({
+          reason: mapReportAccessDecisionToStateReason(reportAccessDecision),
+          reportId
+        })
+      );
+    }
+
     notFound();
   }
+
+  const hydratedReportView = reportView!;
 
   if (!report.viewedAt) {
     const viewedAt = new Date();
@@ -168,10 +211,11 @@ export default async function ReportDetailPage({
   const canManageDeliveryControls = canManageReportDelivery(authz);
   const canApproveQa = hasPermission(authz, "reports.review");
   const canFounderReview = hasPermission(authz, "organization.manage");
+  const artifactAvailability = hydratedReportView.artifactAvailability;
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
-      <div className="rounded-[28px] border border-white/70 bg-white/90 p-8 shadow-panel">
+      <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(243,249,255,0.9))] p-8 shadow-panel backdrop-blur">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-medium text-accent">Executive Report</p>
@@ -180,14 +224,28 @@ export default async function ReportDetailPage({
               {report.assessment.name} · {report.versionLabel} · {formatStatus(report.status)} · Published{" "}
               {formatDate(report.publishedAt ?? report.createdAt)}
             </p>
+            {hydratedReportView.deliveryStatus ? (
+              <p className="mt-2 text-sm text-steel">
+                Delivery {formatStatus(hydratedReportView.deliveryStatus)}
+                {hydratedReportView.deliveryMessage
+                  ? ` · ${hydratedReportView.deliveryMessage}`
+                  : ""}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <a
-              href={`/api/reports/${report.id}/export`}
-              className="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink"
-            >
-              Download HTML
-            </a>
+            {artifactAvailability.canDownload ? (
+              <a
+                href={`/api/reports/${report.id}/export`}
+                className="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink"
+              >
+                Download HTML
+              </a>
+            ) : (
+              <span className="rounded-full border border-line bg-mist px-4 py-2 text-sm font-semibold text-steel">
+                Export pending
+              </span>
+            )}
             <Link
               href="/dashboard/roadmap"
               className="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink"
@@ -234,6 +292,17 @@ export default async function ReportDetailPage({
           </div>
         ) : null}
 
+        {!artifactAvailability.canDownload ? (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <p className="text-sm font-semibold text-warning">
+              Download artifact not available yet
+            </p>
+            <p className="mt-2 text-sm leading-6 text-warning">
+              {artifactAvailability.customerMessage}
+            </p>
+          </div>
+        ) : null}
+
         {deliveryPackage?.requiresFounderReview ? (
           <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-5">
             <p className="text-sm font-semibold text-danger">Founder review required</p>
@@ -248,10 +317,12 @@ export default async function ReportDetailPage({
           <div className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Delivery Status</p>
             <p className="mt-2 text-lg font-semibold text-ink">
-              {formatStatus(report.status)}
+              {formatStatus(hydratedReportView.deliveryStatus ?? report.status)}
             </p>
             <p className="mt-2 text-sm text-steel">
-              {report.deliveredAt
+              {hydratedReportView.deliveryMessage
+                ? hydratedReportView.deliveryMessage
+                : report.deliveredAt
                 ? `Delivered ${formatDate(report.deliveredAt)}`
                 : "Ready for customer delivery"}
             </p>
@@ -281,12 +352,18 @@ export default async function ReportDetailPage({
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-mist p-5">
-            <p className="text-sm font-medium text-steel">Executive package</p>
+            <p className="text-sm font-medium text-steel">Artifact state</p>
             <p className="mt-2 text-lg font-semibold text-ink">
-              {deliveryPackage ? formatStatus(deliveryPackage.deliveryStatus) : "Pending"}
+              {typeof hydratedReportView.artifactMetadata?.downloadStatus === "string"
+                ? formatStatus(hydratedReportView.artifactMetadata.downloadStatus)
+                : artifactAvailability.canDownload
+                  ? "Ready"
+                  : "Pending"}
             </p>
             <p className="mt-2 text-sm text-steel">
-              QA {deliveryPackage ? formatStatus(deliveryPackage.qaStatus) : "Pending"}
+              {typeof hydratedReportView.artifactMetadata?.fileName === "string"
+                ? hydratedReportView.artifactMetadata.fileName
+                : artifactAvailability.customerMessage}
             </p>
           </div>
         </div>
@@ -323,7 +400,7 @@ export default async function ReportDetailPage({
                       />
                       <button
                         type="submit"
-                        className="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
+                        className="rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-5 py-3 text-sm font-semibold text-[#05111d]"
                       >
                         Approve for delivery
                       </button>
@@ -397,7 +474,7 @@ export default async function ReportDetailPage({
                     />
                     <button
                       type="submit"
-                      className="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
+                      className="rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-5 py-3 text-sm font-semibold text-[#05111d]"
                     >
                       Mark package sent
                     </button>
@@ -449,16 +526,16 @@ export default async function ReportDetailPage({
           <div className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Posture Score</p>
             <p className="mt-2 text-2xl font-semibold text-ink">
-              {typeof reportJson.postureScore === "number"
-                ? `${reportJson.postureScore}/100`
+              {typeof reportView?.overallRiskPosture.score === "number"
+                ? `${reportView.overallRiskPosture.score}/100`
                 : "Pending"}
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Risk Level</p>
             <p className="mt-2 text-2xl font-semibold text-ink">
-              {typeof reportJson.riskLevel === "string"
-                ? reportJson.riskLevel
+              {typeof reportView?.overallRiskPosture.level === "string"
+                ? reportView.overallRiskPosture.level
                 : "Not scored"}
             </p>
           </div>
@@ -480,8 +557,8 @@ export default async function ReportDetailPage({
         <section className="mt-8 rounded-2xl border border-line bg-white p-6">
           <p className="text-sm font-medium text-steel">Executive Summary</p>
           <p className="mt-3 text-sm leading-7 text-ink">
-            {typeof reportJson.executiveSummary === "string"
-              ? reportJson.executiveSummary
+            {reportView?.executiveSummary
+              ? reportView.executiveSummary
               : "No executive summary was generated for this report yet."}
           </p>
         </section>

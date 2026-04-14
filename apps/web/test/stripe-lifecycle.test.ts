@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { CanonicalPlanKey, SubscriptionStatus } from "@evolve-edge/db";
 import { resolveStripeSubscriptionStatus } from "../lib/billing";
+import { resolveRevenuePlanCodeForCanonicalPlan } from "../lib/commercial-catalog";
 import {
   getCanonicalPlanKeyFromPlanCode,
   getRevenuePlanDefinition
@@ -52,6 +53,8 @@ function runStripeLifecycleTests() {
     getCanonicalPlanKeyFromPlanCode("scale-monthly"),
     CanonicalPlanKey.SCALE
   );
+  assert.equal(resolveRevenuePlanCodeForCanonicalPlan("scale"), "scale-annual");
+  assert.equal(resolveRevenuePlanCodeForCanonicalPlan("starter"), "starter-annual");
 
   console.log("stripe-lifecycle tests passed");
 }

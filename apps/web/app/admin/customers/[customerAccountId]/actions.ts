@@ -262,9 +262,10 @@ export async function updateCustomerAccountFounderReviewAction(formData: FormDat
 export async function retryCustomerRunFromCustomerAccountAction(formData: FormData) {
   const session = await requireAdminSession();
   const customerAccountId = String(formData.get("customerAccountId") ?? "");
+  const organizationId = String(formData.get("organizationId") ?? "");
   const runId = String(formData.get("runId") ?? "");
 
-  if (!customerAccountId || !runId) {
+  if (!customerAccountId || !organizationId || !runId) {
     redirect("/admin?error=missing-customer-run");
   }
 
@@ -274,6 +275,7 @@ export async function retryCustomerRunFromCustomerAccountAction(formData: FormDa
     requireOperatorConfirmation(formData.get("confirmation"), "RETRY");
 
     const result = await retryCustomerRun(runId, {
+      organizationId,
       actorEmail: session.user.email,
       reason
     });

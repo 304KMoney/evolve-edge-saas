@@ -43,6 +43,14 @@ Implemented:
 - append-only `BillingEventLog`
 - replay tooling via `/admin/replays`
 
+Stripe webhook lifecycle safety notes:
+
+- the app verifies the raw webhook payload against `STRIPE_WEBHOOK_SECRET` before it trusts the parsed event body
+- a Stripe event is claimed into a canonical `BillingEvent` receipt before processing continues
+- duplicate deliveries do not rewrite already-claimed receipts unless the event is actively reclaimed for processing
+- terminal `BillingEvent` transitions only apply from `PROCESSING`, which prevents a stale retry path from overwriting a newer terminal state
+- `processingStartedAt` is an in-flight marker only and is cleared when the receipt reaches `PROCESSED` or `FAILED`
+
 Primary handler:
 
 - [route.ts](/Users/kielg/OneDrive/Desktop/Evolve%20Edge/apps/web/app/api/stripe/webhook/route.ts)
@@ -73,6 +81,7 @@ Workflow routing:
 Implemented:
 
 - queued analysis jobs
+- typed adapter boundary for Dify request/response normalization
 - idempotent request hashing
 - blocking workflow call
 - timeout handling
@@ -82,6 +91,10 @@ Implemented:
 Primary service:
 
 - [dify.ts](/Users/kielg/OneDrive/Desktop/Evolve%20Edge/apps/web/lib/dify.ts)
+
+Typed adapter:
+
+- [dify-adapter.ts](/Users/kielg/OneDrive/Desktop/Evolve%20Edge/apps/web/lib/dify-adapter.ts)
 
 ### HubSpot
 
@@ -147,13 +160,30 @@ The signed n8n envelope now includes:
 - `environment`
 - `correlationId`
 - `event.occurredAt`
-- optional `routing`
+
+### HubSpot projection boundary
+
+HubSpot sync remains bounded to projection-only responsibilities:
+
+- the backend decides whether an event is eligible for CRM sync
+- only an allowlisted event set is accepted by `syncDomainEventToHubSpot()`
+- HubSpot writes may update local external reference fields such as
+  `hubspotCompanyId` or `hubspotContactId`
+- HubSpot does not define billing state, entitlements, routing, delivery state,
+  or report truth
+
+If a new event needs CRM visibility, it must be explicitly added to the
+HubSpot allowlist rather than relying on ad hoc direct calls.
 
 This makes downstream routing and debugging easier without changing the app-owned event source model.
 
 ### Dify output normalization
 
-Dify result validation now accepts and normalizes these aliases:
+The backend now owns a dedicated Dify adapter layer. `dify.ts` is responsible
+for job orchestration and retries, while `dify-adapter.ts` is responsible for
+contract typing, response validation, and normalization.
+
+Dify result validation accepts and normalizes these aliases:
 
 - `executiveSummary` or `executive_summary`
 - `riskLevel` or `risk_level`
@@ -186,12 +216,23 @@ The `report.generated` sync path also now carries:
 
 ### Stripe
 
+Required for current first-customer setup:
+
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_STARTER_ANNUAL`
+- `STRIPE_PRICE_SCALE_ANNUAL`
+- `STRIPE_PRICE_ENTERPRISE_ANNUAL`
+- `STRIPE_PRODUCT_STARTER`
+- `STRIPE_PRODUCT_SCALE`
+- `STRIPE_PRODUCT_ENTERPRISE`
+
+Compatibility-only legacy envs may still exist in local or older environments:
+
 - `STRIPE_PRICE_GROWTH_MONTHLY`
 - `STRIPE_PRICE_GROWTH_ANNUAL`
-- `STRIPE_PRICE_ENTERPRISE_MONTHLY`
-- `STRIPE_PRICE_ENTERPRISE_ANNUAL`
+
+Those should not be used as the canonical first-customer configuration path.
 
 ### n8n
 
@@ -256,6 +297,60 @@ Expected workflow names:
 
 The app dispatches to these by workflow name, not by hidden custom routing logic.
 
+### n8n-bound domain-event governance
+
+For the generic n8n event envelope path, the app forwards allowlisted
+domain-event payloads as published. That contract is intentionally broader than
+the dedicated `audit.requested` payload, so changes to those event payloads
+should be treated carefully.
+
+Rules:
+
+- keep n8n-bound event payloads operationally minimal
+- include identifiers, lifecycle context, and workflow-safe summaries only
+- do not add secrets, raw evidence blobs, full report bodies, or broad customer
+  state dumps
+- avoid adding fields just because n8n "might use them later"
+- if a workflow needs app-owned routing or commercial policy, prefer sending the
+  normalized backend decision rather than raw billing/provider details
+
+Highest-sensitivity generic n8n-bound event families today:
+
+- `lead.captured`
+- `customer_account.stage_changed`
+- `payment.failed`
+
+## First-customer setup order
+
+Use this order when preparing a real customer environment:
+
+1. Set auth and app env:
+   - `AUTH_SECRET`
+   - `AUTH_ACCESS_EMAIL`
+   - `AUTH_ACCESS_PASSWORD`
+   - `NEXT_PUBLIC_APP_URL`
+2. Set Neon and billing env:
+   - `DATABASE_URL`
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_WEBHOOK_SECRET`
+   - canonical Stripe price and product env vars
+3. Set orchestration env:
+   - `OUTBOUND_DISPATCH_SECRET`
+   - `N8N_CALLBACK_SECRET`
+   - `N8N_WORKFLOW_DESTINATIONS`
+4. Set secure report access env:
+   - `REPORT_DOWNLOAD_SIGNING_SECRET`
+   - `REPORT_DOWNLOAD_REQUIRE_AUTH=true`
+5. Set optional but recommended external integrations:
+   - `DIFY_API_BASE_URL`
+   - `DIFY_API_KEY`
+   - `DIFY_WORKFLOW_ID`
+   - `HUBSPOT_ACCESS_TOKEN`
+6. Run:
+   - `pnpm preflight:first-customer`
+   - focused tests
+   - one manual end-to-end paid request verification
+
 ## Dify payload contract
 
 Input contract:
@@ -280,10 +375,31 @@ Input contract:
     }
   ],
   "reportUrl": "https://app.example.com/dashboard/reports",
+  "commercial_context": {
+    "company_name": "Example Org",
+    "contact_name": null,
+    "contact_email": null,
+    "industry": null,
+    "frameworks": ["soc2"],
+    "plan_code": "scale",
+    "workflow_code": "audit_scale",
+    "report_template": "scale_operating_report",
+    "processing_depth": "scale",
+    "top_concerns": []
+  },
+  "routing_context": {
+    "routing_decision_id": "route_123",
+    "workflow_family": "assessment_analysis",
+    "route_key": "analysis.scale_enhanced",
+    "processing_tier": "scale",
+    "report_template": "scale_operating_report",
+    "workflow_code": "audit_scale",
+    "processing_depth": "scale"
+  },
   "workflowRouting": {
     "decisionId": "route_123",
     "workflowFamily": "assessment_analysis",
-    "routeKey": "analysis.growth_standard",
+    "routeKey": "analysis.scale_standard",
     "processingTier": "standard",
     "reportDepth": "standard",
     "analysisDepth": "standard",
@@ -299,6 +415,18 @@ Input contract:
   }
 }
 ```
+
+Notes:
+
+- `commercial_context` and `routing_context` are the current canonical Dify
+  request fields
+- `workflowRouting` is still sent as a compatibility payload for existing prompt
+  or workflow expectations
+- the overlap is intentional today and should be treated as a compatibility
+  boundary, not as two competing sources of truth
+- if fallback values ever differ between `routing_context` and `workflowRouting`,
+  treat `routing_context` as authoritative and `workflowRouting` as legacy
+  compatibility context only
 
 Accepted output aliases:
 
@@ -324,6 +452,12 @@ Normalized stored output:
   }
 }
 ```
+
+Important:
+
+- raw Dify output is not trusted directly
+- the app validates required fields before updating assessment/report state
+- Dify remains an execution dependency, not a product-state authority
 
 ## Required HubSpot properties
 

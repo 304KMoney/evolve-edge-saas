@@ -1,5 +1,6 @@
 import { AUTH_SESSION_COOKIE, revokeSession } from "../../lib/auth";
 import { buildAuditRequestContextFromRequest, writeAuditLog } from "../../lib/audit";
+import { getRuntimeEnvironment } from "../../lib/runtime-config";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { hashOpaqueToken, prisma } from "@evolve-edge/db";
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
   response.cookies.set(AUTH_SESSION_COOKIE, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: getRuntimeEnvironment() === "production",
     path: "/",
     maxAge: 0
   });

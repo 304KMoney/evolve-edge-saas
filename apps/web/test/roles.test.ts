@@ -3,11 +3,14 @@ import {
   canManageBilling,
   canManageDelivery,
   canManageMonitoringFindings,
+  getCanonicalCustomerRoleFromOrganizationRole,
   getPrimaryOwnerMembership,
   hasPlatformRole,
   hasOrganizationRole,
   isOrganizationRole,
-  isPlatformUserRole
+  isPlatformUserRole,
+  isCanonicalCustomerRole,
+  mapCanonicalCustomerRoleToOrganizationRole
 } from "../lib/roles";
 
 function runRoleTests() {
@@ -15,6 +18,8 @@ function runRoleTests() {
   assert.equal(isOrganizationRole("unknown"), false);
   assert.equal(isPlatformUserRole("SUPER_ADMIN"), true);
   assert.equal(isPlatformUserRole("not-a-role"), false);
+  assert.equal(isCanonicalCustomerRole("admin"), true);
+  assert.equal(isCanonicalCustomerRole("viewer"), false);
 
   assert.equal(hasOrganizationRole("ADMIN", ["OWNER", "ADMIN"]), true);
   assert.equal(hasOrganizationRole("VIEWER", ["OWNER", "ADMIN"]), false);
@@ -29,6 +34,24 @@ function runRoleTests() {
 
   assert.equal(canManageDelivery("ADMIN"), true);
   assert.equal(canManageDelivery("VIEWER"), false);
+
+  assert.equal(mapCanonicalCustomerRoleToOrganizationRole("admin"), "ADMIN");
+  assert.equal(mapCanonicalCustomerRoleToOrganizationRole("analyst"), "ANALYST");
+  assert.equal(
+    mapCanonicalCustomerRoleToOrganizationRole("client_viewer"),
+    "VIEWER"
+  );
+
+  assert.equal(getCanonicalCustomerRoleFromOrganizationRole("OWNER"), "admin");
+  assert.equal(getCanonicalCustomerRoleFromOrganizationRole("ADMIN"), "admin");
+  assert.equal(
+    getCanonicalCustomerRoleFromOrganizationRole("ANALYST"),
+    "analyst"
+  );
+  assert.equal(
+    getCanonicalCustomerRoleFromOrganizationRole("VIEWER"),
+    "client_viewer"
+  );
 
   {
     const ownerMembership = getPrimaryOwnerMembership([

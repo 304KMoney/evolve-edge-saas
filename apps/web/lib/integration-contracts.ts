@@ -1,11 +1,25 @@
+import "server-only";
+
 import { getOptionalEnv } from "./runtime-config";
+export {
+  buildTopConcernsFromFindings,
+  normalizeDifyContractShape,
+  normalizeDifyWorkflowOutputs,
+  type DifyAssessmentPayload,
+  type DifyFinding,
+  type DifyRecommendation,
+  type DifyRunResponse,
+  type NormalizedDifyContract
+} from "./dify-adapter";
 
 export type StripeContextMetadata = {
   organizationId: string | null;
   customerEmail: string | null;
+  customerId: string | null;
   planKey: string | null;
   planCode: string | null;
   revenuePlanCode: string | null;
+  correlationId: string | null;
   addOns: string[];
   environment: string | null;
   source: string | null;
@@ -15,9 +29,11 @@ export type StripeContextMetadata = {
 type StripeMetadataBuilderInput = {
   organizationId: string;
   customerEmail: string;
+  customerId?: string | null;
   planKey: string | null;
   planCode: string;
   revenuePlanCode?: string | null;
+  correlationId?: string | null;
   addOns?: string[] | null;
   source: string;
   workflowType: string;
@@ -36,17 +52,24 @@ export function buildStripeContextMetadata(
 ) {
   const environment = getIntegrationEnvironmentLabel();
 
+  // Keep checkout-session metadata narrow and reconciliation-oriented.
+  // These fields are the preferred Stripe-side bridge for webhook-driven
+  // payment-to-customer-to-report binding later.
   return {
     org_id: input.organizationId,
     organizationId: input.organizationId,
     customer_email: input.customerEmail,
     customerEmail: input.customerEmail,
+    customer_id: input.customerId ?? "",
+    customerId: input.customerId ?? "",
     plan_key: input.planKey ?? input.planCode,
     planKey: input.planKey ?? input.planCode,
     plan_code: input.planCode,
     planCode: input.planCode,
     revenue_plan_code: input.revenuePlanCode ?? "",
     revenuePlanCode: input.revenuePlanCode ?? "",
+    correlation_id: input.correlationId ?? "",
+    correlationId: input.correlationId ?? "",
     add_ons:
       input.addOns && input.addOns.length > 0 ? input.addOns.join(",") : "",
     addOns:
@@ -80,9 +103,11 @@ export function readStripeContextMetadata(
   return {
     organizationId: readString("org_id", "organizationId", "organization_id"),
     customerEmail: readString("customer_email", "customerEmail", "email"),
+    customerId: readString("customer_id", "customerId"),
     planKey: readString("plan_key", "planKey"),
     planCode: readString("plan_code", "planCode"),
     revenuePlanCode: readString("revenue_plan_code", "revenuePlanCode"),
+    correlationId: readString("correlation_id", "correlationId"),
     addOns: readString("add_ons", "addOns")
       ?.split(",")
       .map((value) => value.trim())
@@ -105,68 +130,4 @@ export function stripEmptyStringProperties(
       return value.trim().length > 0;
     })
   );
-}
-
-type DifyFinding = {
-  title: string;
-  summary: string;
-  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  riskDomain: string;
-  impactedFrameworks: string[];
-  score?: number | null;
-};
-
-type DifyRecommendation = {
-  title: string;
-  description: string;
-  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-  ownerRole?: string | null;
-  effort?: string | null;
-  targetTimeline?: string | null;
-};
-
-export type NormalizedDifyContract = {
-  finalReport: string | null;
-  executiveSummary: string;
-  postureScore: number;
-  riskLevel: string;
-  topConcerns: string[];
-  findings: DifyFinding[];
-  roadmap: DifyRecommendation[];
-  recommendations: DifyRecommendation[];
-};
-
-export function buildTopConcernsFromFindings(findings: DifyFinding[]) {
-  return findings
-    .slice(0, 3)
-    .map((finding) => `${finding.title}: ${finding.summary}`)
-    .filter((value) => value.trim().length > 0);
-}
-
-export function normalizeDifyContractShape(input: {
-  finalReport?: string | null;
-  executiveSummary: string;
-  postureScore: number;
-  riskLevel: string;
-  findings: DifyFinding[];
-  recommendations: DifyRecommendation[];
-  topConcerns?: string[] | null;
-  roadmap?: DifyRecommendation[] | null;
-}) {
-  const recommendations = input.roadmap ?? input.recommendations;
-  const topConcerns =
-    input.topConcerns && input.topConcerns.length > 0
-      ? input.topConcerns
-      : buildTopConcernsFromFindings(input.findings);
-
-  return {
-    finalReport: input.finalReport ?? null,
-    executiveSummary: input.executiveSummary,
-    postureScore: input.postureScore,
-    riskLevel: input.riskLevel,
-    topConcerns,
-    findings: input.findings,
-    roadmap: recommendations,
-    recommendations
-  } satisfies NormalizedDifyContract;
 }

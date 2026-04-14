@@ -8,14 +8,17 @@
 - `AUTH_ACCESS_EMAIL`
 - `AUTH_ACCESS_PASSWORD`
 - `INTERNAL_ADMIN_EMAILS`
-- `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_PRICE_GROWTH_ANNUAL`
-- `STRIPE_PRICE_ENTERPRISE_ANNUAL`
-- `OUTBOUND_DISPATCH_SECRET`
-- `PROVISION_ORG_API_TOKEN`
-- `N8N_WORKFLOW_DESTINATIONS`
-- `HUBSPOT_ACCESS_TOKEN`
+  - `STRIPE_SECRET_KEY`
+  - `STRIPE_WEBHOOK_SECRET`
+  - `STRIPE_PRICE_SCALE_ANNUAL`
+  - `STRIPE_PRICE_ENTERPRISE_ANNUAL`
+  - `OUTBOUND_DISPATCH_SECRET`
+  - `PROVISION_ORG_API_TOKEN`
+  - `N8N_WORKFLOW_DESTINATIONS`
+  - `HUBSPOT_ACCESS_TOKEN`
+
+Legacy `growth` Stripe envs may still exist in older environments, but they are
+compatibility-only and should not be treated as the canonical go-live path.
 - `RESEND_API_KEY`
 - `EMAIL_FROM_ADDRESS`
 - `NOTIFICATION_DISPATCH_SECRET`
@@ -80,6 +83,44 @@
 - Scheduled jobs route runs cleanly
 - `/admin` shows healthy or understandable degraded state
 - `/api/internal/ops/readiness` returns an accurate snapshot
+
+## Fulfillment verification checklist
+
+Use this as the final operator checklist for fulfillment readiness in the target
+environment.
+
+1. Fulfillment health route
+   - Verify `GET /api/fulfillment/health` exists and is reachable.
+   - Expected: returns truthful route-liveness plus compact fulfillment status
+     or counts.
+   - If the route is missing, treat fulfillment verification as incomplete.
+2. Fulfillment dispatch-health route
+   - Verify `GET /api/fulfillment/dispatch-health` exists and is reachable.
+   - Expected: returns truthful dispatch target configuration and a recent
+     outcome when the system stores one; otherwise `recentOutcome` or similar
+     should be explicitly `null`.
+   - If the route is missing, treat dispatch verification as incomplete.
+3. Manual fulfillment run
+   - Verify the repo-owned fulfillment run path exists and can be invoked in the
+     deployed environment.
+   - Expected: the run advances only the items operators expect to move and does
+     not fabricate success.
+4. Cron expectation
+   - Verify the deployed environment includes the intended fulfillment cron
+     schedule.
+   - Expected: operators know the cadence and can confirm the route or job fires
+     in production.
+5. n8n webhook expectation
+   - Verify the configured n8n workflow destinations are the production
+     destinations intended for launch.
+   - Expected: live webhook execution succeeds end to end and callback/writeback
+     behavior remains healthy.
+
+No-go rule for fulfillment:
+
+- Do not treat fulfillment as operationally verified if the fulfillment health
+  routes are missing, if the run path cannot be exercised safely, if cron is
+  unverified, or if n8n dispatch has not been proven in the target environment.
 
 ## Common failure modes
 

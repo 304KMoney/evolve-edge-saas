@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import {
+  approveReportPackageQa,
+  buildReportPackageSendBlockedFinding,
   buildBriefingPacketSnapshot,
   buildExecutiveSummarySnapshot,
   buildFrameworkSummarySnapshot,
@@ -10,7 +12,7 @@ import {
   ReportPackageQaStatus
 } from "../lib/executive-delivery";
 
-function runExecutiveDeliveryTests() {
+async function runExecutiveDeliveryTests() {
   {
     const executiveSummary = buildExecutiveSummarySnapshot({
       reportTitle: "SOC 2 Readiness Report",
@@ -141,7 +143,48 @@ function runExecutiveDeliveryTests() {
     assert.equal(canCompleteBriefing, true);
   }
 
+  {
+    const blocked = buildReportPackageSendBlockedFinding({
+      deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
+      qaStatus: ReportPackageQaStatus.PENDING,
+      requiresFounderReview: true,
+      founderReviewedAt: null
+    });
+
+    assert.deepEqual(blocked.blockers, [
+      "qa_not_approved",
+      "founder_review_pending"
+    ]);
+    assert.match(blocked.summary, /attempted to send/i);
+  }
+
+  {
+    let updateCalled = false;
+    const db = {
+      reportPackage: {
+        findFirst: async () => null,
+        update: async () => {
+          updateCalled = true;
+          throw new Error("should not update");
+        }
+      }
+    } as any;
+
+    await assert.rejects(
+      () =>
+        approveReportPackageQa({
+          packageId: "pkg_cross_tenant",
+          organizationId: "org_expected",
+          actorUserId: "usr_admin",
+          db
+        }),
+      /Executive delivery package not found/
+    );
+
+    assert.equal(updateCalled, false);
+  }
+
   console.log("executive-delivery tests passed");
 }
 
-runExecutiveDeliveryTests();
+void runExecutiveDeliveryTests();

@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import {
   AssessmentStatus,
   JobStatus,
+  OperationsQueueSeverity,
+  OperationsQueueSourceSystem,
+  OperationsQueueType,
   Prisma,
   prisma
 } from "@evolve-edge/db";
@@ -16,13 +19,19 @@ import {
 } from "./commercial-catalog";
 import { publishDomainEvents } from "./domain-events";
 import { logServerEvent, sendOperationalAlert } from "./monitoring";
+import { recordOperationalFinding } from "./operations-queues";
 import {
   buildCorrelationId,
   clampTimeoutMs,
   isProcessingClaimStale,
   normalizeExternalError
 } from "./reliability";
-import { normalizeDifyContractShape } from "./integration-contracts";
+import {
+  normalizeDifyWorkflowOutputs,
+  type DifyAssessmentPayload,
+  type DifyRunResponse,
+  type NormalizedDifyContract
+} from "./dify-adapter";
 import { getAppUrl, getOptionalEnv, requireEnv } from "./runtime-config";
 import { listOrganizationWorkflowRoutingDecisions, type NormalizedWorkflowHints } from "./workflow-routing";
 
@@ -33,91 +42,10 @@ const DEFAULT_ANALYSIS_STALE_MINUTES = 30;
 
 type DifyDbClient = Prisma.TransactionClient | typeof prisma;
 
-type DifyAssessmentPayload = {
-  contractVersion: string;
-  workflowVersion: string;
-  assessment: {
-    id: string;
-    organizationId: string;
-    name: string;
-    submittedAt: string | null;
-    intakeVersion: number;
-  };
-  sections: Array<{
-    key: string;
-    title: string;
-    status: string;
-    notes: string;
-  }>;
-  reportUrl: string;
-  commercial_context?: {
-    company_name: string | null;
-    contact_name: string | null;
-    contact_email: string | null;
-    industry: string | null;
-    frameworks: string[];
-    plan_code: string | null;
-    workflow_code: string | null;
-    report_template: string;
-    processing_depth: string;
-    top_concerns: string[];
-  };
-  routing_context?: {
-    routing_decision_id: string | null;
-    workflow_family: string;
-    route_key: string;
-    processing_tier: string;
-    report_template: string;
-    workflow_code: string;
-    processing_depth: string;
-  };
-  workflowRouting?: {
-    decisionId: string | null;
-    workflowFamily: string;
-    routeKey: string;
-    processingTier: string;
-    reportDepth: string;
-    analysisDepth: string;
-    monitoringMode: string;
-    controlScoringMode: string;
-    featureFlags: NormalizedWorkflowHints["featureFlags"];
-  };
-};
-
-type DifyValidatedResult = {
-  finalReport: string | null;
-  executiveSummary: string;
-  postureScore: number;
-  riskLevel: string;
-  topConcerns: string[];
-  findings: Array<{
-    title: string;
-    summary: string;
-    severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-    riskDomain: string;
-    impactedFrameworks: string[];
-    score?: number | null;
-  }>;
-  recommendations: Array<{
-    title: string;
-    description: string;
-    priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-    ownerRole?: string | null;
-    effort?: string | null;
-    targetTimeline?: string | null;
-  }>;
-};
-
-type DifyRunResponse = {
-  request_id?: string;
-  workflow_run_id?: string;
-  data?: {
-    id?: string;
-    outputs?: Record<string, unknown>;
-    status?: string;
-    error?: string | null;
-  };
-};
+// Dify calls are server-only and flow through this module. Request payloads are
+// assembled from app-owned assessment and routing state, and raw Dify outputs
+// must pass adapter validation before they are persisted or allowed to affect
+// report-generation state.
 
 export function getDifyWorkflowVersion() {
   return getOptionalEnv("DIFY_WORKFLOW_VERSION") ?? "v1";
@@ -327,132 +255,71 @@ function hashPayload(payload: DifyAssessmentPayload) {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
-function asStringArray(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
+type DifyValidatedResult = NormalizedDifyContract;
+
+export async function recordDifyAnalysisFailureFinding(input: {
+  organizationId: string;
+  analysisJobId: string;
+  assessmentId: string;
+  workflowVersion: string | null;
+  attemptCount: number;
+  retryable: boolean;
+  category: string;
+  statusCode: number | null;
+  message: string;
+  db?: DifyDbClient;
+}) {
+  const shouldPersist = !input.retryable || input.attemptCount >= MAX_ANALYSIS_ATTEMPTS;
+  if (!shouldPersist) {
+    return null;
   }
 
-  return value.filter((item): item is string => typeof item === "string");
-}
+  const db = input.db ?? prisma;
+  const summary = !input.retryable
+    ? "Dify returned a terminal analysis failure that requires operator review before the customer workflow is retried."
+    : "Dify analysis exhausted retry attempts and now requires operator review before the customer workflow is retried.";
 
-function readFirstString(
-  record: Record<string, unknown>,
-  keys: string[],
-  fallback?: string | null
-) {
-  for (const key of keys) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-
-  return fallback ?? null;
-}
-
-function validateDifyResponse(outputs: Record<string, unknown>): DifyValidatedResult {
-  const executiveSummary =
-    readFirstString(outputs, ["executiveSummary", "executive_summary"]) ?? "";
-  const postureScore = outputs.postureScore;
-  const riskLevel = readFirstString(outputs, ["riskLevel", "risk_level"]) ?? "";
-  const finalReport = readFirstString(outputs, ["finalReport", "final_report"]);
-  const findings = outputs.findings;
-  const topConcernsValue = outputs.topConcerns ?? outputs.top_concerns;
-  const recommendations = outputs.recommendations ?? outputs.roadmap;
-
-  if (executiveSummary.trim().length === 0) {
-    throw new Error("Dify response missing executiveSummary.");
-  }
-
-  if (
-    typeof postureScore !== "number" ||
-    Number.isNaN(postureScore) ||
-    postureScore < 0 ||
-    postureScore > 100
-  ) {
-    throw new Error("Dify response postureScore must be a number between 0 and 100.");
-  }
-
-  if (riskLevel.trim().length === 0) {
-    throw new Error("Dify response missing riskLevel.");
-  }
-
-  if (!Array.isArray(findings) || findings.length === 0) {
-    throw new Error("Dify response must include findings.");
-  }
-
-  if (!Array.isArray(recommendations) || recommendations.length === 0) {
-    throw new Error("Dify response must include recommendations.");
-  }
-
-  const normalizedFindings = findings.map((finding, index) => {
-      if (!finding || typeof finding !== "object" || Array.isArray(finding)) {
-        throw new Error(`Invalid Dify finding at index ${index}.`);
+  try {
+    return await recordOperationalFinding(
+      {
+        organizationId: input.organizationId,
+        queueType: OperationsQueueType.SUCCESS_RISK,
+        ruleCode: "success.dify_analysis_failed",
+        severity: OperationsQueueSeverity.HIGH,
+        sourceSystem: OperationsQueueSourceSystem.APP,
+        sourceRecordType: "analysisJob",
+        sourceRecordId: input.analysisJobId,
+        title: "Dify analysis needs operator review",
+        summary,
+        recommendedAction:
+          "Review the analysis job error, validate Dify credentials and workflow inputs, then requeue analysis only after the failure mode is understood.",
+        metadata: {
+          analysisJobId: input.analysisJobId,
+          assessmentId: input.assessmentId,
+          workflowVersion: input.workflowVersion,
+          attemptCount: input.attemptCount,
+          retryable: input.retryable,
+          category: input.category,
+          statusCode: input.statusCode,
+          message: input.message
+        }
+      },
+      db
+    );
+  } catch (error) {
+    logServerEvent("warn", "dify.analysis.failure_finding_failed", {
+      org_id: input.organizationId,
+      resource_id: input.analysisJobId,
+      status: "warning",
+      source: "dify.analysis",
+      metadata: {
+        assessmentId: input.assessmentId,
+        message: error instanceof Error ? error.message : "Unknown error"
       }
-
-      const record = finding as Record<string, unknown>;
-      if (
-        typeof record.title !== "string" ||
-        typeof record.summary !== "string" ||
-        typeof record.severity !== "string" ||
-        typeof record.riskDomain !== "string"
-      ) {
-        throw new Error(`Incomplete Dify finding at index ${index}.`);
-      }
-
-      return {
-        title: record.title.trim(),
-        summary: record.summary.trim(),
-        severity: record.severity as DifyValidatedResult["findings"][number]["severity"],
-        riskDomain: record.riskDomain.trim(),
-        impactedFrameworks: asStringArray(record.impactedFrameworks),
-        score:
-          typeof record.score === "number" && Number.isFinite(record.score)
-            ? record.score
-            : null
-      };
-    });
-  const normalizedRecommendations = recommendations.map((recommendation, index) => {
-      if (
-        !recommendation ||
-        typeof recommendation !== "object" ||
-        Array.isArray(recommendation)
-      ) {
-        throw new Error(`Invalid Dify recommendation at index ${index}.`);
-      }
-
-      const record = recommendation as Record<string, unknown>;
-      if (
-        typeof record.title !== "string" ||
-        typeof record.description !== "string" ||
-        typeof record.priority !== "string"
-      ) {
-        throw new Error(`Incomplete Dify recommendation at index ${index}.`);
-      }
-
-      return {
-        title: record.title.trim(),
-        description: record.description.trim(),
-        priority:
-          record.priority as DifyValidatedResult["recommendations"][number]["priority"],
-        ownerRole: typeof record.ownerRole === "string" ? record.ownerRole.trim() : null,
-        effort: typeof record.effort === "string" ? record.effort.trim() : null,
-        targetTimeline:
-          typeof record.targetTimeline === "string"
-            ? record.targetTimeline.trim()
-            : null
-      };
     });
 
-  return normalizeDifyContractShape({
-    finalReport,
-    executiveSummary: executiveSummary.trim(),
-    postureScore,
-    riskLevel: riskLevel.trim(),
-    topConcerns: asStringArray(topConcernsValue),
-    findings: normalizedFindings,
-    recommendations: normalizedRecommendations
-  });
+    return null;
+  }
 }
 
 async function callDifyWorkflow(input: {
@@ -494,13 +361,17 @@ async function callDifyWorkflow(input: {
     );
   }
 
-  return JSON.parse(text) as DifyRunResponse;
+  return {
+    correlationId,
+    response: JSON.parse(text) as DifyRunResponse
+  };
 }
 
 async function recoverStaleAnalysisJobs(limit: number) {
   const staleBefore = new Date(
     Date.now() - getDifyStaleMinutes() * 60 * 1000
   );
+  const assessmentOrgById = new Map<string, string>();
   const staleJobs = await prisma.analysisJob.findMany({
     where: {
       provider: "dify",
@@ -544,6 +415,31 @@ async function recoverStaleAnalysisJobs(limit: number) {
           }
         });
       });
+
+      const organizationId =
+        assessmentOrgById.get(job.assessmentId) ??
+        (
+          await prisma.assessment.findUnique({
+            where: { id: job.assessmentId },
+            select: { organizationId: true }
+          })
+        )?.organizationId ??
+        null;
+      if (organizationId) {
+        assessmentOrgById.set(job.assessmentId, organizationId);
+        await recordDifyAnalysisFailureFinding({
+          organizationId,
+          analysisJobId: job.id,
+          assessmentId: job.assessmentId,
+          workflowVersion: job.workflowVersion,
+          attemptCount: job.attemptCount,
+          retryable: false,
+          category: "stale_processing",
+          statusCode: null,
+          message:
+            "Dify analysis exceeded the running timeout and exhausted retries."
+        });
+      }
 
       deadLetters += 1;
       continue;
@@ -617,6 +513,8 @@ async function markJobFailed(
 
   return job;
 }
+
+type FailedAnalysisJobRecord = Awaited<ReturnType<typeof markJobFailed>>;
 
 export async function dispatchQueuedAssessmentAnalysisJobs(options?: { limit?: number }) {
   const limit = options?.limit ?? 10;
@@ -710,7 +608,7 @@ export async function dispatchQueuedAssessmentAnalysisJobs(options?: { limit?: n
     ]);
 
     try {
-      const response = await callDifyWorkflow({
+      const { response, correlationId } = await callDifyWorkflow({
         payload,
         jobId: job.id,
         requestHash
@@ -721,7 +619,7 @@ export async function dispatchQueuedAssessmentAnalysisJobs(options?: { limit?: n
         throw new Error("Dify response did not include outputs.");
       }
 
-      const validated = validateDifyResponse(outputs);
+      const validated = normalizeDifyWorkflowOutputs(outputs);
       const completedAt = new Date();
 
       await prisma.$transaction(async (tx) => {
@@ -770,31 +668,64 @@ export async function dispatchQueuedAssessmentAnalysisJobs(options?: { limit?: n
       });
 
       logServerEvent("info", "dify.analysis.completed", {
-        analysisJobId: job.id,
-        assessmentId: job.assessmentId,
-        providerRequestId:
-          response.request_id ?? response.workflow_run_id ?? response.data?.id ?? null
+        org_id: job.assessment.organizationId,
+        correlation_id: correlationId,
+        resource_id: job.id,
+        status: "succeeded",
+        source: "dify.analysis",
+        metadata: {
+          analysisJobId: job.id,
+          assessmentId: job.assessmentId,
+          providerRequestId:
+            response.request_id ?? response.workflow_run_id ?? response.data?.id ?? null
+        }
       });
       await markCustomerRunAnalysisCompleted(job.assessmentId);
 
       completed += 1;
     } catch (error) {
-      await markJobFailed(prisma, job.id, error);
-      await markCustomerRunAnalysisFailed(
-        job.assessmentId,
-        normalizeExternalError(error, "Dify analysis failed.").message
-      );
       const normalizedError = normalizeExternalError(
         error,
         "Dify analysis failed."
       );
-      logServerEvent("warn", "dify.analysis.failed", {
-        analysisJobId: job.id,
-        assessmentId: job.assessmentId,
+      const failedJob: FailedAnalysisJobRecord = await markJobFailed(
+        prisma,
+        job.id,
+        error
+      );
+      await markCustomerRunAnalysisFailed(
+        job.assessmentId,
+        normalizedError.message
+      );
+      await recordDifyAnalysisFailureFinding({
+        organizationId: failedJob.assessment.organizationId,
+        analysisJobId: failedJob.id,
+        assessmentId: failedJob.assessmentId,
+        workflowVersion: failedJob.workflowVersion,
+        attemptCount: failedJob.attemptCount,
         retryable: normalizedError.retryable,
         category: normalizedError.category,
         statusCode: normalizedError.statusCode,
         message: normalizedError.message
+      });
+      const correlationMatch =
+        error instanceof Error
+          ? error.message.match(/^\[([^\]]+)\]/)
+          : null;
+      logServerEvent("warn", "dify.analysis.failed", {
+        org_id: job.assessment.organizationId,
+        correlation_id: correlationMatch?.[1] ?? null,
+        resource_id: job.id,
+        status: "failed",
+        source: "dify.analysis",
+        metadata: {
+          analysisJobId: job.id,
+          assessmentId: job.assessmentId,
+          retryable: normalizedError.retryable,
+          category: normalizedError.category,
+          statusCode: normalizedError.statusCode,
+          message: normalizedError.message
+        }
       });
       await sendOperationalAlert({
         source: "dify.analysis",

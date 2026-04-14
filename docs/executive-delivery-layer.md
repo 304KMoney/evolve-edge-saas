@@ -25,6 +25,8 @@ report generation flow.
 - `ReportPackage`
   - one delivery package per `organizationId + assessmentId`
   - owns delivery state, QA state, founder review state, and briefing state
+  - package mutation helpers must resolve the package inside the expected `organizationId`; a global `packageId` alone is not treated as sufficient tenant proof
+  - shared tenant-scoped lookup helpers should be preferred over ad hoc global-id fetches when this mutation surface expands
 - `ReportPackageVersion`
   - immutable package snapshot for each generated report version
   - stores executive summary, roadmap summary, framework summary, and briefing
@@ -55,6 +57,9 @@ Supported QA states:
 - Sending the package still updates the underlying `Report` to `DELIVERED` for
   backward compatibility.
 - Booking and completing a briefing updates customer lifecycle progression.
+- If an operator attempts to send a package before QA/founder-review gates are
+  satisfied, the backend now records a durable operations-queue finding for
+  follow-up instead of relying on logs alone.
 
 ## Why It Matters
 

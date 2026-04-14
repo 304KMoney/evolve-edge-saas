@@ -548,6 +548,11 @@ export default async function AdminCustomerAccountPage({
                     {run.status === "ACTION_REQUIRED" ? (
                       <form action={retryCustomerRunFromCustomerAccountAction} className="space-y-3 md:w-80">
                         <input type="hidden" name="customerAccountId" value={account.id} />
+                        <input
+                          type="hidden"
+                          name="organizationId"
+                          value={account.organizationId ?? account.organization?.id ?? ""}
+                        />
                         <input type="hidden" name="runId" value={run.id} />
                         <textarea
                           name="reason"

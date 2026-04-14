@@ -7,6 +7,8 @@
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "preflight:first-customer:env": "pnpm --filter @evolve-edge/web preflight:first-customer:env",
+    "preflight:first-customer": "pnpm --filter @evolve-edge/web preflight:first-customer",
     "db:generate": "pnpm --filter @evolve-edge/db generate",
     "db:migrate:deploy": "pnpm --filter @evolve-edge/db exec prisma migrate deploy --schema prisma/schema.prisma",
     "db:push": "pnpm --filter @evolve-edge/db exec prisma db push --schema prisma/schema.prisma",

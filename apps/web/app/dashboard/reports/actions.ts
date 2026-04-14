@@ -22,6 +22,11 @@ import { syncOrganizationEngagementPrograms } from "../../../lib/engagement-prog
 import { requireOrganizationFeature } from "../../../lib/entitlement-guards";
 import { upsertExecutiveDeliveryPackageForReport } from "../../../lib/executive-delivery";
 import { syncFrameworkControlScoringFromAssessment } from "../../../lib/framework-intelligence";
+import {
+  logReportGenerationFailure,
+  logReportGenerationValidationFallback,
+  type ReportGenerationFailureStage
+} from "../../../lib/report-generation-monitoring";
 import { trackProductAnalyticsEvent } from "../../../lib/product-analytics";
 import { getAppUrl } from "../../../lib/runtime-config";
 import { buildUsageThresholdEvents } from "../../../lib/usage";
@@ -174,6 +179,15 @@ export async function generateReportAction(formData: FormData) {
   const analysisResult = getValidatedAnalysisResult(
     assessment.analysisJobs[0]?.outputPayload
   );
+  if (assessment.analysisJobs[0] && !analysisResult) {
+    logReportGenerationValidationFallback({
+      organizationId: session.organization!.id,
+      userId: session.user.id,
+      assessmentId: assessment.id,
+      analysisJobId: assessment.analysisJobs[0].id,
+      requestContext
+    });
+  }
   const postureScore = analysisResult?.postureScore ?? Math.max(
     42,
     Math.min(
@@ -182,7 +196,14 @@ export async function generateReportAction(formData: FormData) {
     )
   );
 
-  const report = await prisma.$transaction(async (tx) => {
+  let failureStage: ReportGenerationFailureStage = "persistence";
+  let routingDecisionId: string | null = null;
+  let workflowCode: string | null = null;
+  let createdReportId: string | null = null;
+
+  let report: { id: string };
+  try {
+    report = await prisma.$transaction(async (tx) => {
     let findings = assessment.findings;
     if (findings.length === 0) {
       const generatedFindings = analysisResult
@@ -307,6 +328,7 @@ export async function generateReportAction(formData: FormData) {
         assessmentId: assessment.id
       }
     });
+    failureStage = "routing";
     const routingDecision = await computeAndPersistWorkflowRoutingDecision({
       db: tx,
       organizationId: session.organization!.id,
@@ -321,12 +343,19 @@ export async function generateReportAction(formData: FormData) {
         reportVersionLabel: `v${versionCount + 1}.0`
       }
     });
+    routingDecisionId = routingDecision.id;
     const workflowRouting =
       routingDecision.workflowHints &&
       typeof routingDecision.workflowHints === "object" &&
       !Array.isArray(routingDecision.workflowHints)
         ? (routingDecision.workflowHints as Record<string, unknown>)
         : null;
+    workflowCode =
+      typeof workflowRouting?.workflow_code === "string"
+        ? workflowRouting.workflow_code
+        : typeof workflowRouting?.routeKey === "string"
+          ? workflowRouting.routeKey
+          : null;
     const workflowFeatureFlags =
       workflowRouting?.featureFlags &&
       typeof workflowRouting.featureFlags === "object" &&
@@ -340,6 +369,7 @@ export async function generateReportAction(formData: FormData) {
     const workflowRoutingJson = (workflowRouting ?? null) as Prisma.InputJsonValue | null;
     const workflowRoutingReasonCodes = routingDecision.reasonCodes as Prisma.InputJsonValue;
 
+    failureStage = "persistence";
     const createdReport = await tx.report.create({
       data: {
         organizationId: session.organization!.id,
@@ -389,6 +419,7 @@ export async function generateReportAction(formData: FormData) {
         }
       }
     });
+    createdReportId = createdReport.id;
 
     const completedAt = new Date();
 
@@ -557,6 +588,7 @@ export async function generateReportAction(formData: FormData) {
       requestContext
     });
 
+    failureStage = "downstream_sync";
     await queueEmailNotification(tx, {
       templateKey: "report-ready",
       recipientEmail: session.user.email,
@@ -614,8 +646,23 @@ export async function generateReportAction(formData: FormData) {
       db: tx
     });
 
-    return createdReport;
-  });
+      return createdReport;
+    });
+  } catch (error) {
+    logReportGenerationFailure({
+      organizationId: session.organization!.id,
+      userId: session.user.id,
+      assessmentId: assessment.id,
+      reportId: createdReportId,
+      routingDecisionId,
+      workflowCode,
+      stage: failureStage,
+      requestContext,
+      error
+    });
+
+    throw error;
+  }
 
   redirect(`/dashboard/reports?generated=${report.id}`);
 }

@@ -3,6 +3,7 @@ import {
   BillingEventStatus,
   BillingEventLogSource,
   EntitlementOverrideSource,
+  OperationsQueueType,
   Prisma,
   prisma,
   type CanonicalPlanKey
@@ -26,6 +27,13 @@ import {
 import { appendBillingEventLog } from "./subscription-domain";
 import { synchronizeStripeSubscription } from "./billing";
 import { listOrganizationWorkflowRoutingDecisions } from "./workflow-routing";
+import { listDeliveryMismatchFindings } from "./delivery-mismatch-detection";
+import {
+  getCanonicalCommercialPlanDisplayName,
+  mapCanonicalPlanKeyToCanonicalPlanCode,
+  resolveCanonicalPlanCode,
+  resolveCanonicalPlanCodeFromRevenuePlanCode
+} from "./commercial-catalog";
 
 type BillingAdminDbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -89,6 +97,25 @@ function getStringRecord(
       typeof entry === "string" ? [[key, entry]] : []
     )
   );
+}
+
+export function resolveSupportSafeBillingPlan(input: {
+  planCodeSnapshot?: string | null;
+  canonicalPlanKey?: CanonicalPlanKey | null;
+}) {
+  const canonicalPlanCode =
+    resolveCanonicalPlanCode(input.planCodeSnapshot) ??
+    resolveCanonicalPlanCodeFromRevenuePlanCode(input.planCodeSnapshot) ??
+    (input.canonicalPlanKey
+      ? mapCanonicalPlanKeyToCanonicalPlanCode(input.canonicalPlanKey)
+      : null);
+
+  return {
+    supportSafePlanCode: canonicalPlanCode,
+    supportSafePlanName: canonicalPlanCode
+      ? getCanonicalCommercialPlanDisplayName(canonicalPlanCode)
+      : null
+  };
 }
 
 function billingEventMatchesOrganization(
@@ -275,6 +302,9 @@ export type BillingManagementSnapshot = {
     idempotencyKey: string | null;
     sourceReference: string | null;
     canonicalPlanKey: string | null;
+    planCodeSnapshot: string | null;
+    supportSafePlanCode: string | null;
+    supportSafePlanName: string | null;
     payload: Prisma.JsonValue;
     occurredAt: Date;
     createdAt: Date;
@@ -304,6 +334,34 @@ export type BillingManagementSnapshot = {
     reasonCodes: Prisma.JsonValue;
     workflowHints: Prisma.JsonValue;
     createdAt: Date;
+  }>;
+  recentDeliveryMismatchFindings: Array<{
+    code: string;
+    severity: "warning" | "critical";
+    title: string;
+    summary: string;
+    deliveryStateId: string;
+    deliveryStatus: string;
+    ageMinutes: number;
+    observedAt: string;
+    billingEventId: string | null;
+    routingSnapshotId: string | null;
+    workflowDispatchId: string | null;
+    stripeEventId: string | null;
+    externalExecutionId: string | null;
+  }>;
+  recentDeliveryOpsFindings: Array<{
+    id: string;
+    queueType: string;
+    ruleCode: string;
+    title: string;
+    summary: string;
+    recommendedAction: string | null;
+    severity: string;
+    status: string;
+    sourceRecordType: string | null;
+    sourceRecordId: string | null;
+    lastDetectedAt: Date;
   }>;
   billingWebhookHealth: {
     openFailureCount: number;
@@ -440,6 +498,23 @@ export async function getOrganizationBillingManagementSnapshot(
       limit: 12,
       db
     });
+  const recentDeliveryOpsFindingsPromise = db.operationsQueueItem.findMany({
+    where: {
+      organizationId,
+      queueType: OperationsQueueType.SUCCESS_RISK,
+      OR: [
+        { sourceRecordType: "report" },
+        { sourceRecordType: "reportPackage" }
+      ]
+    },
+    orderBy: [{ lastDetectedAt: "desc" }, { createdAt: "desc" }],
+    take: 8
+  });
+  const recentDeliveryMismatchFindingsPromise = listDeliveryMismatchFindings({
+    organizationId,
+    limit: 12,
+    db
+  });
 
   const [recentBillingEventLogs, recentUsageEvents, recentBillingEvents] =
     await Promise.all([
@@ -449,6 +524,9 @@ export async function getOrganizationBillingManagementSnapshot(
     ]);
   const recentWorkflowRoutingDecisions =
     await recentWorkflowRoutingDecisionsPromise;
+  const recentDeliveryOpsFindings = await recentDeliveryOpsFindingsPromise;
+  const recentDeliveryMismatchFindings =
+    await recentDeliveryMismatchFindingsPromise;
 
   const organizationBillingEvents = recentBillingEvents.filter((event) =>
     billingEventMatchesOrganization(event, {
@@ -548,12 +626,17 @@ export async function getOrganizationBillingManagementSnapshot(
     usageOverview,
     usageQuotas,
     recentBillingEventLogs: recentBillingEventLogs.map((event) => ({
+      ...resolveSupportSafeBillingPlan({
+        planCodeSnapshot: event.planCodeSnapshot,
+        canonicalPlanKey: event.canonicalPlanKey
+      }),
       id: event.id,
       eventSource: event.eventSource,
       eventType: event.eventType,
       idempotencyKey: event.idempotencyKey,
       sourceReference: event.sourceReference,
       canonicalPlanKey: event.canonicalPlanKey,
+      planCodeSnapshot: event.planCodeSnapshot,
       payload: event.payload,
       occurredAt: event.occurredAt,
       createdAt: event.createdAt
@@ -583,6 +666,34 @@ export async function getOrganizationBillingManagementSnapshot(
       reasonCodes: decision.reasonCodes,
       workflowHints: decision.workflowHints,
       createdAt: decision.createdAt
+    })),
+    recentDeliveryMismatchFindings: recentDeliveryMismatchFindings.map((finding) => ({
+      code: finding.code,
+      severity: finding.severity,
+      title: finding.title,
+      summary: finding.summary,
+      deliveryStateId: finding.deliveryState.id,
+      deliveryStatus: finding.deliveryState.status,
+      ageMinutes: finding.ageMinutes,
+      observedAt: finding.observedAt,
+      billingEventId: finding.linkage.billingEventId,
+      routingSnapshotId: finding.linkage.routingSnapshotId,
+      workflowDispatchId: finding.linkage.workflowDispatchId,
+      stripeEventId: finding.linkage.stripeEventId,
+      externalExecutionId: finding.linkage.externalExecutionId
+    })),
+    recentDeliveryOpsFindings: recentDeliveryOpsFindings.map((finding) => ({
+      id: finding.id,
+      queueType: finding.queueType,
+      ruleCode: finding.ruleCode,
+      title: finding.title,
+      summary: finding.summary,
+      recommendedAction: finding.recommendedAction,
+      severity: finding.severity,
+      status: finding.status,
+      sourceRecordType: finding.sourceRecordType,
+      sourceRecordId: finding.sourceRecordId,
+      lastDetectedAt: finding.lastDetectedAt
     })),
     billingWebhookHealth
   };

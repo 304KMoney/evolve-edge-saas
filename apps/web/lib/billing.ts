@@ -1,9 +1,12 @@
+import "server-only";
+
 import {
   AuditActorType,
   BillingAccessState,
   BillingEventLogSource,
   BillingInterval,
   BillingProvider,
+  CanonicalPlanKey,
   Plan,
   Prisma,
   Subscription,
@@ -13,6 +16,7 @@ import {
 import { writeAuditLog } from "./audit";
 import { publishDomainEvent } from "./domain-events";
 import {
+  type CanonicalPlanCode,
   getCanonicalCommercialPlanDefinition,
   getCanonicalCommercialPlanCatalog,
   mapCanonicalPlanKeyToCanonicalPlanCode,
@@ -91,7 +95,42 @@ type StripeCheckoutSessionRecord = {
 };
 
 function getDefaultPlanCode() {
-  return process.env.DEFAULT_PLAN_CODE ?? "scale-annual";
+  const configuredPlanCode = getOptionalEnv("DEFAULT_PLAN_CODE") ?? "scale";
+  const canonicalPlanCode =
+    resolveCanonicalPlanCode(configuredPlanCode) ??
+    resolveCanonicalPlanCodeFromRevenuePlanCode(configuredPlanCode) ??
+    ("scale" satisfies CanonicalPlanCode);
+
+  return resolveRevenuePlanCodeForCanonicalPlan(canonicalPlanCode) ?? "scale-annual";
+}
+
+function normalizeBillingPlanCode(
+  value: string | null | undefined
+): string | null {
+  const normalized = value?.trim() ?? "";
+
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    resolveRevenuePlanCodeForCanonicalPlan(
+      resolveCanonicalPlanCode(normalized) ??
+        resolveCanonicalPlanCodeFromRevenuePlanCode(normalized)
+    ) ?? normalized
+  );
+}
+
+function resolveStripeFallbackPlanCode(input: {
+  stripeMetadata: ReturnType<typeof readStripeContextMetadata>;
+  fallbackPlanCode?: string | null;
+}) {
+  return (
+    normalizeBillingPlanCode(input.stripeMetadata.revenuePlanCode) ??
+    normalizeBillingPlanCode(input.stripeMetadata.planCode) ??
+    normalizeBillingPlanCode(input.fallbackPlanCode) ??
+    null
+  );
 }
 
 function addDays(date: Date, days: number) {
@@ -340,7 +379,8 @@ async function appendStripeBillingEventLog(
     billingCustomerId?: string | null;
     subscriptionId?: string | null;
     planId?: string | null;
-    canonicalPlanKey?: Prisma.JsonValue | Prisma.InputJsonValue | null;
+    canonicalPlanKey?: CanonicalPlanKey | null;
+    planCodeSnapshot?: string | null;
     eventType: string;
     idempotencyKey?: string | null;
     sourceReference?: string | null;
@@ -369,19 +409,17 @@ async function appendStripeBillingEventLog(
       billingCustomerId: input.billingCustomerId ?? null,
       subscriptionId: input.subscriptionId ?? null,
       planId: input.planId ?? null,
-      eventSource: BillingEventLogSource.STRIPE,
-      eventType: input.eventType,
-      idempotencyKey: input.idempotencyKey ?? null,
-      sourceReference: input.sourceReference ?? null,
-      canonicalPlanKey:
-        typeof input.canonicalPlanKey === "string"
-          ? (input.canonicalPlanKey as any)
-          : null,
-      payload: input.payload,
-      occurredAt: input.occurredAt ?? new Date()
-    }
-  });
-}
+        eventSource: BillingEventLogSource.STRIPE,
+        eventType: input.eventType,
+        idempotencyKey: input.idempotencyKey ?? null,
+        sourceReference: input.sourceReference ?? null,
+        canonicalPlanKey: input.canonicalPlanKey ?? null,
+        planCodeSnapshot: input.planCodeSnapshot ?? null,
+        payload: input.payload,
+        occurredAt: input.occurredAt ?? new Date()
+      }
+    });
+  }
 
 async function ensureStripeBillingCustomer(
   db: BillingDbClient,
@@ -494,7 +532,7 @@ function getStripeSecretKey() {
 }
 
 export function hasStripeBillingConfig() {
-  return Boolean(getStripeSecretKey() && process.env.STRIPE_WEBHOOK_SECRET);
+  return Boolean(getStripeSecretKey() && getOptionalEnv("STRIPE_WEBHOOK_SECRET"));
 }
 
 async function callStripe<T>(
@@ -830,7 +868,7 @@ export async function createStripeCheckoutSession(input: {
     existingCustomerId: currentSubscription?.stripeCustomerId ?? null
   });
 
-  const session = await callStripe<{ url: string }>("checkout/sessions", {
+  const session = await callStripe<{ id: string; url: string }>("checkout/sessions", {
     formBody: new URLSearchParams({
       mode: "subscription",
       customer: stripeCustomerId,
@@ -853,6 +891,7 @@ export async function createStripeCheckoutSession(input: {
   });
 
   return {
+    checkoutSessionId: session.id,
     checkoutUrl: session.url,
     stripeCustomerId
   };
@@ -1141,6 +1180,7 @@ export async function upsertSubscriptionFromStripe(input: {
     subscriptionId: subscription.id,
     planId: plan.id,
     canonicalPlanKey: plan.canonicalKey,
+    planCodeSnapshot: plan.code,
     eventType: existingTrialPlaceholder
       ? "stripe.subscription_snapshot.updated"
       : "stripe.subscription_snapshot.created",
@@ -1293,11 +1333,10 @@ export async function synchronizeStripeSubscription(input: {
     stripeCustomerId,
     stripeSubscriptionId: stripeSubscription.id,
     stripePriceId: stripeSubscription.items?.data?.[0]?.price?.id ?? null,
-    fallbackPlanCode:
-      subscriptionMetadata.revenuePlanCode ??
-      stripeSubscription.metadata?.planCode ??
-      input.fallbackPlanCode ??
-      null,
+    fallbackPlanCode: resolveStripeFallbackPlanCode({
+      stripeMetadata: subscriptionMetadata,
+      fallbackPlanCode: input.fallbackPlanCode
+    }),
     status: derivedStatus,
     currentPeriodStart: fromUnixTimestamp(stripeSubscription.current_period_start),
     currentPeriodEnd: fromUnixTimestamp(stripeSubscription.current_period_end),
@@ -1353,11 +1392,10 @@ export async function synchronizeStripeCheckoutSession(input: {
   return synchronizeStripeSubscription({
     organizationId: input.organizationId,
     stripeSubscriptionId,
-    fallbackPlanCode:
-      checkoutMetadata.revenuePlanCode ??
-      checkoutSession.metadata?.planCode ??
-      input.fallbackPlanCode ??
-      null,
+    fallbackPlanCode: resolveStripeFallbackPlanCode({
+      stripeMetadata: checkoutMetadata,
+      fallbackPlanCode: input.fallbackPlanCode
+    }),
     db: input.db,
     auditActorType: input.auditActorType,
     auditActorLabel: input.auditActorLabel,

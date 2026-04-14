@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { prisma } from "@evolve-edge/db";
 import {
   applyAnalysisFailureToSteps,
   applyCrmSyncResultToSteps,
@@ -6,10 +7,11 @@ import {
   applyQueuedForAnalysisToSteps,
   applyReportGeneratedToSteps,
   createInitialCustomerRunSteps,
+  retryCustomerRun,
   summarizeCustomerRun
 } from "../lib/customer-runs";
 
-function runCustomerRunTests() {
+async function runCustomerRunTests() {
   {
     const steps = applyQueuedForAnalysisToSteps(createInitialCustomerRunSteps());
     const summary = summarizeCustomerRun(steps);
@@ -77,7 +79,32 @@ function runCustomerRunTests() {
     assert.ok(summary.completedAt instanceof Date);
   }
 
+  {
+    const originalFindFirst = (prisma.customerRun as any).findFirst;
+    let findFirstCalls = 0;
+
+    (prisma.customerRun as any).findFirst = async () => {
+      findFirstCalls += 1;
+      return null;
+    };
+
+    try {
+      await assert.rejects(
+        () =>
+          retryCustomerRun("run_cross_tenant", {
+            organizationId: "org_expected",
+            actorEmail: "admin@evolveedge.ai"
+          }),
+        /Customer run not found/
+      );
+    } finally {
+      (prisma.customerRun as any).findFirst = originalFindFirst;
+    }
+
+    assert.equal(findFirstCalls, 1);
+  }
+
   console.log("customer-runs tests passed");
 }
 
-runCustomerRunTests();
+void runCustomerRunTests();

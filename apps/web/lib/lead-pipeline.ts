@@ -75,6 +75,46 @@ function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
+function sanitizeLeadPayloadForCrm(value: Prisma.InputJsonValue | null | undefined) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {} as Record<string, Prisma.InputJsonValue>;
+  }
+
+  const record = value as Record<string, Prisma.InputJsonValue>;
+  const sanitized: Record<string, Prisma.InputJsonValue> = {};
+
+  const industry =
+    typeof record.industry === "string" ? trimOrNull(record.industry, 120) : null;
+  if (industry) {
+    sanitized.industry = industry;
+  }
+
+  const country =
+    typeof record.country === "string" ? trimOrNull(record.country, 120) : null;
+  if (country) {
+    sanitized.country = country;
+  }
+
+  const firstAssessmentName =
+    typeof record.firstAssessmentName === "string"
+      ? trimOrNull(record.firstAssessmentName, 200)
+      : null;
+  if (firstAssessmentName) {
+    sanitized.firstAssessmentName = firstAssessmentName;
+  }
+
+  const frameworkCodes = Array.isArray(record.frameworkCodes)
+    ? record.frameworkCodes
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .slice(0, 10)
+    : [];
+  if (frameworkCodes.length > 0) {
+    sanitized.frameworkCodes = frameworkCodes;
+  }
+
+  return sanitized;
+}
+
 function getLeadDedupeWindowDays() {
   const rawValue = Number(getOptionalEnv("LEAD_DEDUPE_WINDOW_DAYS") ?? "");
   return Number.isFinite(rawValue) && rawValue > 0
@@ -154,6 +194,7 @@ export async function captureLeadSubmission(
     requestedPlanCode
   });
   const attribution = sanitizeAttribution(input.attribution);
+  const crmSafePayload = sanitizeLeadPayloadForCrm(input.payload);
   const dedupeWindowStart = new Date(
     Date.now() - getLeadDedupeWindowDays() * 24 * 60 * 60 * 1000
   );
@@ -252,11 +293,19 @@ export async function captureLeadSubmission(
       payload: {
         leadId: lead.id,
         normalizedEmail,
+        firstName: trimOrNull(input.firstName, 120),
+        lastName: trimOrNull(input.lastName, 120),
+        companyName: trimOrNull(input.companyName, 200),
+        jobTitle: trimOrNull(input.jobTitle, 160),
+        phone: trimOrNull(input.phone, 60),
+        teamSize: trimOrNull(input.teamSize, 80),
         source: input.source,
         intent,
+        sourcePath,
         requestedPlanCode,
-        companyName: trimOrNull(input.companyName, 200),
-        attribution
+        pricingContext: trimOrNull(input.pricingContext, 160),
+        attribution,
+        ...crmSafePayload
       } satisfies Prisma.InputJsonValue
     });
 

@@ -10,6 +10,7 @@ import {
   prisma
 } from "@evolve-edge/db";
 import { dispatchQueuedAssessmentAnalysisJobs, getDifyWorkflowVersion } from "./dify";
+import { requireRecordInOrganization } from "./scoped-access";
 import { dispatchPendingWebhookDeliveries } from "./webhook-dispatcher";
 
 type CustomerRunDbClient = Prisma.TransactionClient | typeof prisma;
@@ -554,28 +555,34 @@ export async function getOrganizationCustomerRuns(
 export async function retryCustomerRun(
   runId: string,
   input: {
+    organizationId: string;
     actorEmail: string;
     reason?: string | null;
   }
 ) {
-  const run = await prisma.customerRun.findUnique({
-    where: { id: runId },
-    include: {
-      assessment: {
+  const run = await requireRecordInOrganization({
+    recordId: runId,
+    organizationId: input.organizationId,
+    entityLabel: "Customer run",
+    load: ({ recordId, organizationId }) =>
+      prisma.customerRun.findFirst({
+        where: {
+          id: recordId,
+          organizationId
+        },
         include: {
-          analysisJobs: {
-            orderBy: { createdAt: "desc" },
-            take: 1
-          }
+          assessment: {
+            include: {
+              analysisJobs: {
+                orderBy: { createdAt: "desc" },
+                take: 1
+              }
+            }
+          },
+          report: true
         }
-      },
-      report: true
-    }
+      })
   });
-
-  if (!run) {
-    throw new Error("Customer run not found.");
-  }
 
   const steps = parseStepsJson(run.stepsJson);
   const failedStep =

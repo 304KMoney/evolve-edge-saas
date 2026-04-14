@@ -1,9 +1,10 @@
-import { Prisma, AuditActorType, prisma } from "@evolve-edge/db";
+import { Prisma, AuditActorType, DataClassification, prisma } from "@evolve-edge/db";
 import { headers } from "next/headers";
 
 type AuditDbClient = Prisma.TransactionClient | typeof prisma;
 
 type AuditRequestContext = {
+  requestId: string | null;
   ipAddress: string | null;
   userAgent: string | null;
   referer: string | null;
@@ -19,6 +20,9 @@ type AuditLogInput = {
   action: string;
   entityType: string;
   entityId: string;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  dataClassification?: DataClassification | null;
   metadata?: Prisma.InputJsonValue;
   requestContext?: Prisma.InputJsonValue | null;
 };
@@ -26,6 +30,16 @@ type AuditLogInput = {
 function trimOrNull(value: string | null | undefined) {
   const normalized = value?.trim();
   return normalized ? normalized.slice(0, 512) : null;
+}
+
+function readRequestIdFromHeaders(headersLike: {
+  get(name: string): string | null;
+}) {
+  return (
+    trimOrNull(headersLike.get("x-request-id")) ??
+    trimOrNull(headersLike.get("x-correlation-id")) ??
+    trimOrNull(headersLike.get("x-vercel-id"))
+  );
 }
 
 export async function getServerAuditRequestContext(): Promise<Prisma.InputJsonValue> {
@@ -38,6 +52,7 @@ export async function getServerAuditRequestContext(): Promise<Prisma.InputJsonVa
       requestHeaders.get("x-pathname");
 
     const context: AuditRequestContext = {
+      requestId: readRequestIdFromHeaders(requestHeaders),
       ipAddress: trimOrNull(
         forwardedFor ? forwardedFor.split(",")[0] ?? null : null
       ),
@@ -50,6 +65,7 @@ export async function getServerAuditRequestContext(): Promise<Prisma.InputJsonVa
     return context;
   } catch {
     return {
+      requestId: null,
       ipAddress: null,
       userAgent: null,
       referer: null,
@@ -66,6 +82,7 @@ export function buildAuditRequestContextFromRequest(
   const forwardedFor = request.headers.get("x-forwarded-for");
 
   return {
+    requestId: readRequestIdFromHeaders(request.headers),
     ipAddress: trimOrNull(
       forwardedFor ? forwardedFor.split(",")[0] ?? null : null
     ),
@@ -86,6 +103,9 @@ export async function writeAuditLog(db: AuditDbClient, input: AuditLogInput) {
       action: input.action,
       entityType: input.entityType,
       entityId: input.entityId,
+      resourceType: input.resourceType ?? input.entityType,
+      resourceId: input.resourceId ?? input.entityId,
+      dataClassification: input.dataClassification ?? null,
       metadata: input.metadata ?? Prisma.JsonNull,
       requestContext: input.requestContext ?? Prisma.JsonNull
     }

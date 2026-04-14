@@ -39,21 +39,70 @@ The high-level customer path is:
 - org membership determines tenant access
 - Stripe sync updates local subscription copies
 - entitlements and usage determine feature access in the app
+- Stripe payment events are persisted as `BillingEvent`
+- paid requests get linked to routing, execution, and delivery records in Neon
+- service-layer mutations should resolve tenant-owned records inside the expected
+  `organizationId` boundary when a global record id is supplied
+- the first shared scoped-access helper adoption now protects executive delivery
+  package mutations from cross-tenant id misuse
+
+### 2a. Routing Source Of Truth
+
+Evolve Edge currently has two backend-owned routing layers, and they do not serve
+the same trigger path:
+
+- `apps/web/lib/commercial-routing.ts`
+  - source of truth for checkout and billing-originated paid-request routing
+  - computes durable `RoutingSnapshot` records
+  - inputs:
+    - canonical commercial plan resolution
+    - org entitlements
+    - workspace access
+    - active-assessment capacity
+    - billing/checkout source metadata
+    - environment label
+- `apps/web/lib/workflow-routing.ts`
+  - source of truth for in-app workflow-family routing used by dashboard
+    assessment and report actions
+  - computes `WorkflowRoutingDecision` records
+  - inputs:
+    - canonical plan compatibility state
+    - org entitlements
+    - usage-metering quota posture
+    - workflow family
+    - environment label
+
+Important rule:
+
+- `commercial-routing.ts` decides whether a paid request is admitted into
+  orchestration and what canonical routing snapshot downstream systems should use
+- `workflow-routing.ts` decides how in-app assessment/report workflows should be
+  handled for a given org state
+
+These layers intentionally share commercial inputs, but they are not
+interchangeable.
 
 ### 3. Assessment To Report
 
 - assessment sections store intake
 - analysis jobs record Dify execution metadata and outputs
+- `apps/web/lib/dify-adapter.ts` validates and normalizes Dify input/output contracts
 - report generation creates findings, recommendations, report records, events,
   notifications, and executive delivery packages
 
 ### 4. Delivery And Ongoing Value
 
 - report packages track QA, founder review, send state, and briefing state
+- delivery-state tracking records `paid -> routed -> processing -> awaiting_review -> report_generated -> delivered|failed`
 - monitoring sync turns point-in-time findings into ongoing posture and
   remediation state
 - engagement programs turn one-off work into a long-lived customer service
   history
+
+For the detailed implemented operator flow, see `docs/billing-reconciliation-and-delivery-operations.md`.
+
+For the shortest first-customer-safe deployment and validation checklist, see
+`docs/first-customer-launch-checks.md`.
 
 ## Service Ownership
 
@@ -102,3 +151,4 @@ When adding a new product capability:
 3. add tenant scoping first
 4. add audit/event behavior if the transition is important
 5. keep external systems downstream of app-owned truth
+6. prefer small shared scoped-access primitives over ad hoc id checks

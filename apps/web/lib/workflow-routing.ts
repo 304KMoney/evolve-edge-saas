@@ -8,6 +8,11 @@ import {
   WorkflowRoutingFamily,
   prisma
 } from "@evolve-edge/db";
+import {
+  mapCanonicalPlanKeyToCanonicalPlanCode,
+  resolveCanonicalPlanCodeFromRevenuePlanCode,
+  type CanonicalPlanCode
+} from "./commercial-catalog";
 import { type EntitlementSnapshot, getOrganizationEntitlements } from "./entitlements";
 import { getIntegrationEnvironmentLabel } from "./integration-contracts";
 import { getOrganizationSubscriptionSnapshot } from "./subscription-domain";
@@ -18,6 +23,14 @@ import {
   type UsageMetricKey,
   type UsageMetricSnapshot
 } from "./usage-metering";
+
+// Workflow routing is the in-app workflow-family routing layer. It uses the current
+// commercial state plus usage posture to choose assessment-analysis and
+// report-pipeline execution hints for dashboard actions.
+//
+// This is distinct from `commercial-routing.ts`, which computes checkout/billing
+// routing snapshots for paid request orchestration. Do not treat the two modules as
+// interchangeable even though they share entitlement and plan inputs.
 
 type WorkflowRoutingDbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -135,35 +148,70 @@ type PersistWorkflowRoutingInput = {
   db?: WorkflowRoutingDbClient;
 };
 
+type WorkflowCommercialTier =
+  | "starter"
+  | "scale_standard"
+  | "scale"
+  | "enterprise";
+
 function toDispositionLabel(value: WorkflowRoutingDisposition) {
   return value.toLowerCase() as NormalizedWorkflowHints["routeDisposition"];
 }
 
-function getPlanRank(canonicalPlanKey: CanonicalPlanKey | null | undefined) {
-  switch (canonicalPlanKey) {
-    case CanonicalPlanKey.ENTERPRISE:
+function resolveCanonicalPlanCodeForWorkflowState(
+  state: Pick<WorkflowCommercialState, "canonicalPlanKey" | "planCode">
+): CanonicalPlanCode {
+  return (
+    resolveCanonicalPlanCodeFromRevenuePlanCode(state.planCode) ??
+    mapCanonicalPlanKeyToCanonicalPlanCode(state.canonicalPlanKey)
+  );
+}
+
+function resolveWorkflowCommercialTier(
+  state: Pick<WorkflowCommercialState, "canonicalPlanKey" | "planCode">
+): WorkflowCommercialTier {
+  const canonicalPlanCode = resolveCanonicalPlanCodeForWorkflowState(state);
+
+  if (canonicalPlanCode === "enterprise") {
+    return "enterprise";
+  }
+
+  if (canonicalPlanCode === "scale") {
+    // Legacy growth-era revenue plans still normalize into the canonical scale
+    // commercial model, but this workflow layer preserves a narrower
+    // `scale_standard` compatibility tier so older in-app report/analysis routes
+    // do not silently jump to enhanced handling.
+    return state.planCode.startsWith("scale") || state.canonicalPlanKey === CanonicalPlanKey.SCALE
+      ? "scale"
+      : "scale_standard";
+  }
+
+  return "starter";
+}
+
+function getPlanRank(tier: WorkflowCommercialTier) {
+  switch (tier) {
+    case "enterprise":
       return 4;
-    case CanonicalPlanKey.SCALE:
+    case "scale":
       return 3;
-    case CanonicalPlanKey.GROWTH:
+    case "scale_standard":
       return 2;
-    case CanonicalPlanKey.STARTER:
+    case "starter":
     default:
       return 1;
   }
 }
 
-function getProcessingTier(
-  canonicalPlanKey: CanonicalPlanKey | null | undefined
-): WorkflowProcessingTier {
-  switch (canonicalPlanKey) {
-    case CanonicalPlanKey.ENTERPRISE:
+function getProcessingTier(tier: WorkflowCommercialTier): WorkflowProcessingTier {
+  switch (tier) {
+    case "enterprise":
       return "custom";
-    case CanonicalPlanKey.SCALE:
+    case "scale":
       return "enhanced";
-    case CanonicalPlanKey.GROWTH:
+    case "scale_standard":
       return "standard";
-    case CanonicalPlanKey.STARTER:
+    case "starter":
     default:
       return "starter";
   }
@@ -215,12 +263,16 @@ function createBaseDecision(
   workflowFamily: WorkflowRoutingFamilyKey,
   state: WorkflowCommercialState
 ) {
-  const processingTier = getProcessingTier(state.canonicalPlanKey);
+  const commercialTier = resolveWorkflowCommercialTier(state);
+  const canonicalPlanCode = resolveCanonicalPlanCodeForWorkflowState(state);
+  const processingTier = getProcessingTier(commercialTier);
   const entitlementSummary = createEntitlementSummary(state);
   const quotaState = createQuotaState(state, workflowFamily);
   const overrideKeys = state.appliedOverrides.map((override) => override.key);
 
   return {
+    canonicalPlanCode,
+    commercialTier,
     processingTier,
     entitlementSummary,
     quotaState,
@@ -233,7 +285,7 @@ function resolveAssessmentAnalysisRoute(
   state: WorkflowCommercialState
 ): ComputedWorkflowRoutingDecision {
   const base = createBaseDecision("assessment_analysis", state);
-  const reasonCodes = [`plan.${(state.canonicalPlanKey ?? CanonicalPlanKey.STARTER).toLowerCase()}`];
+  const reasonCodes = [`plan.${base.canonicalPlanCode}`];
   const matchedRules = ["routing.assessment_analysis.plan_tier"];
   let disposition: WorkflowRoutingDisposition = WorkflowRoutingDisposition.STANDARD;
   let routeKey = "analysis.starter_concise";
@@ -246,13 +298,13 @@ function resolveAssessmentAnalysisRoute(
     reasonCodes.push("entitlement.assessments_create.missing");
     matchedRules.push("routing.assessment_analysis.blocked_by_entitlement");
   } else {
-    switch (state.canonicalPlanKey) {
-      case CanonicalPlanKey.GROWTH:
+    switch (base.commercialTier) {
+      case "scale_standard":
         routeKey = "analysis.scale_standard";
         reportDepth = "standard";
         analysisDepth = "standard";
         break;
-      case CanonicalPlanKey.SCALE:
+      case "scale":
         routeKey = "analysis.scale_enhanced";
         reportDepth = "enhanced";
         analysisDepth = "enhanced";
@@ -260,7 +312,7 @@ function resolveAssessmentAnalysisRoute(
         reasonCodes.push("entitlement.executive_reviews.enabled");
         matchedRules.push("routing.assessment_analysis.enhanced");
         break;
-      case CanonicalPlanKey.ENTERPRISE:
+      case "enterprise":
         routeKey = "analysis.enterprise_custom";
         reportDepth = "custom";
         analysisDepth = "custom";
@@ -268,7 +320,7 @@ function resolveAssessmentAnalysisRoute(
         reasonCodes.push("entitlement.enterprise_overrides.available");
         matchedRules.push("routing.assessment_analysis.enterprise");
         break;
-      case CanonicalPlanKey.STARTER:
+      case "starter":
       default:
         break;
     }
@@ -296,7 +348,7 @@ function resolveAssessmentAnalysisRoute(
     matchedRules.push("routing.assessment_analysis.trial_mode");
   }
 
-  const controlScoringEnabled = getPlanRank(state.canonicalPlanKey) >= 3;
+  const controlScoringEnabled = getPlanRank(base.commercialTier) >= 3;
   const workflowHints: NormalizedWorkflowHints = {
     workflowFamily: "assessment_analysis",
     routeKey,
@@ -347,7 +399,7 @@ function resolveReportPipelineRoute(
   state: WorkflowCommercialState
 ): ComputedWorkflowRoutingDecision {
   const base = createBaseDecision("report_pipeline", state);
-  const reasonCodes = [`plan.${(state.canonicalPlanKey ?? CanonicalPlanKey.STARTER).toLowerCase()}`];
+  const reasonCodes = [`plan.${base.canonicalPlanCode}`];
   const matchedRules = ["routing.report_pipeline.plan_tier"];
   let disposition: WorkflowRoutingDisposition = WorkflowRoutingDisposition.STANDARD;
   let routeKey = "report.starter_snapshot";
@@ -362,15 +414,15 @@ function resolveReportPipelineRoute(
     reasonCodes.push("entitlement.reports_generate.missing");
     matchedRules.push("routing.report_pipeline.blocked_by_entitlement");
   } else {
-    switch (state.canonicalPlanKey) {
-      case CanonicalPlanKey.GROWTH:
+    switch (base.commercialTier) {
+      case "scale_standard":
         routeKey = "report.scale_standard";
         reportDepth = "standard";
         analysisDepth = "standard";
         monitoringMode = base.entitlementSummary.monitoringManage ? "standard" : "disabled";
         controlScoringMode = "manual";
         break;
-      case CanonicalPlanKey.SCALE:
+      case "scale":
         routeKey = "report.scale_enhanced";
         reportDepth = "enhanced";
         analysisDepth = "enhanced";
@@ -380,7 +432,7 @@ function resolveReportPipelineRoute(
         reasonCodes.push("entitlement.priority_support.enabled");
         matchedRules.push("routing.report_pipeline.enhanced");
         break;
-      case CanonicalPlanKey.ENTERPRISE:
+      case "enterprise":
         routeKey = "report.enterprise_custom";
         reportDepth = "custom";
         analysisDepth = "custom";
@@ -390,7 +442,7 @@ function resolveReportPipelineRoute(
         reasonCodes.push("entitlement.enterprise_overrides.available");
         matchedRules.push("routing.report_pipeline.enterprise");
         break;
-      case CanonicalPlanKey.STARTER:
+      case "starter":
       default:
         break;
     }

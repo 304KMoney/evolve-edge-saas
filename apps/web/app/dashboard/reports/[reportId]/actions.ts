@@ -18,6 +18,7 @@ import {
   syncCustomerLifecycleFromReportPackage,
   upsertExecutiveDeliveryPackageForReport
 } from "../../../../lib/executive-delivery";
+import { appendOperatorWorkflowEventRecord } from "../../../../lib/operator-workflow-event-records";
 import { trackProductAnalyticsEvent } from "../../../../lib/product-analytics";
 
 async function getReportAndPackage(reportId: string, organizationId: string) {
@@ -72,6 +73,7 @@ export async function approveReportPackageQaAction(formData: FormData) {
   const requestContext = await getServerAuditRequestContext();
   const updated = await approveReportPackageQa({
     packageId: result.deliveryPackage.id,
+    organizationId: session.organization!.id,
     actorUserId: session.user.id,
     notes
   });
@@ -110,6 +112,7 @@ export async function requestReportPackageChangesAction(formData: FormData) {
   const requestContext = await getServerAuditRequestContext();
   const updated = await requestReportPackageChanges({
     packageId: result.deliveryPackage.id,
+    organizationId: session.organization!.id,
     actorUserId: session.user.id,
     notes
   });
@@ -148,6 +151,7 @@ export async function completeFounderReviewAction(formData: FormData) {
   const requestContext = await getServerAuditRequestContext();
   const updated = await completeFounderReview({
     packageId: result.deliveryPackage.id,
+    organizationId: session.organization!.id,
     actorUserId: session.user.id,
     notes
   });
@@ -194,6 +198,7 @@ export async function markReportDeliveredAction(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     await markReportPackageSent({
       packageId: deliveryPackage.id,
+      organizationId: session.organization!.id,
       actorUserId: session.user.id,
       notes,
       db: tx
@@ -250,6 +255,23 @@ export async function markReportDeliveredAction(formData: FormData) {
       actorLabel: session.user.email,
       reason: "Executive delivery package was sent to the customer."
     });
+
+    await appendOperatorWorkflowEventRecord({
+      db: tx,
+      eventKey: `operator.report_delivered:${report.id}`,
+      organizationId: session.organization!.id,
+      customerAccountId: report.customerAccountId ?? null,
+      reportId: report.id,
+      eventCode: "report_delivered",
+      severity: "info",
+      message: "The report delivery package was marked as sent and customer delivery is now recorded.",
+      metadata: {
+        assessmentId: report.assessmentId,
+        reportPackageId: deliveryPackage.id,
+        deliveredAt: deliveredAt.toISOString(),
+        deliveredByUserId: session.user.id
+      }
+    });
   });
 
   redirect(`/dashboard/reports/${report.id}?delivered=1`);
@@ -274,6 +296,7 @@ export async function bookReportBriefingAction(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const updated = await markReportPackageBriefingBooked({
       packageId: result.deliveryPackage.id,
+      organizationId: session.organization!.id,
       actorUserId: session.user.id,
       notes,
       db: tx
@@ -337,6 +360,7 @@ export async function completeReportBriefingAction(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const updated = await markReportPackageBriefingCompleted({
       packageId: result.deliveryPackage.id,
+      organizationId: session.organization!.id,
       actorUserId: session.user.id,
       notes,
       db: tx

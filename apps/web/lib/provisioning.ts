@@ -23,6 +23,9 @@ export type ProvisionOrgInput = {
   primaryContactEmail: string;
   planCode?: string | null;
   crmAccountId?: string | null;
+  // Deal ids are accepted as CRM/operator reference metadata only. They must
+  // not become the source of truth for provisioning eligibility, billing,
+  // entitlements, routing, or delivery decisions.
   crmDealId?: string | null;
   workspaceMetadata?: Prisma.InputJsonValue;
   stripeCustomerId?: string | null;

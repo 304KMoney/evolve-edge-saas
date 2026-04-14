@@ -64,6 +64,25 @@ This service:
   - failed analysis jobs
   - failed HubSpot CRM sync deliveries
 
+### Report-Generation Join Keys
+
+For the assessment-to-report path, operators should follow these durable join
+keys in order:
+
+- `assessmentId`
+  - starting point for intake state, section completeness, and the customer run
+- latest `AnalysisJob.id`
+  - join for Dify execution state, retries, and validated analysis output
+- `workflowRoutingDecisionId`
+  - join for the in-app report-pipeline routing decision used during report generation
+- `reportId`
+  - join for the generated report, export access, executive delivery package, and
+    later delivery-state references
+
+The report-generation path does not rely on one universal trace id. The
+important rule is to pivot to the next durable record once that record becomes
+the source of truth for the next stage.
+
 ### Flow Integration
 
 Updated:
@@ -141,6 +160,8 @@ If HubSpot delivery fails for report lifecycle events:
 - Existing authoritative tables remain the source of truth for their own domains.
 - `CustomerRun` is an app-owned operational summary and recovery anchor.
 - Recovery is intentionally narrow and safe. It does not add general mutation-heavy admin tooling.
+- recovery now resolves the run inside the expected `organizationId` boundary at
+  the service layer instead of trusting a global `runId` alone
 
 ## Environment Variables
 
@@ -195,6 +216,30 @@ Set-Location apps/web
 - `CustomerRun` currently focuses on the assessment/report workflow, not the full pre-product lead/payment/provisioning path.
 - Email delivery is still tracked separately through `EmailNotification` rather than being folded into the run as a first-class recoverable step.
 - The automated test file was added, but on this sandbox the `tsx` runtime is blocked by a Windows `spawn EPERM` restriction, so local execution may require a normal terminal or CI runner.
+- Report generation now emits a dedicated structured boundary signal for
+  validation fallback and terminal generation failure, but operators still need
+  to correlate that boundary signal with customer-run state and downstream
+  delivery records during recovery.
+- Dify execution failures now become durable operator findings when they are
+  terminal or retries are exhausted, but auto-retryable failures remain log-
+  first until they cross that operator-actionable threshold.
+- Stripe missing-context webhook failures now create durable operator findings
+  only when the webhook can still be tied to an `organizationId`. Tenant-
+  unscoped webhook failures remain intentionally fail-closed and log/alert-only.
+
+## Current Failure Visibility
+
+The current first-customer visibility posture is:
+
+- report generation emits structured boundary classifications for validation
+  fallback, routing failure, persistence failure, and downstream sync failure
+- Dify terminal and retry-exhausted execution failures create durable
+  operations-queue findings for operators
+- Stripe missing-context webhook failures create durable operations-queue
+  findings when tenant context can be resolved safely
+
+This is materially safer than a log-only posture, but it is not yet one
+universal durable incident model across every integration boundary.
 
 ## Future Expansion Notes
 

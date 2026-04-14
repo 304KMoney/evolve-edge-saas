@@ -1,8 +1,10 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   AuditActorType,
-  BillingEventStatus,
+  DeliveryStateStatus,
   BillingEventLogSource,
+  OperationsQueueSeverity,
+  OperationsQueueSourceSystem,
+  OperationsQueueType,
   Prisma,
   SubscriptionStatus,
   prisma
@@ -14,67 +16,67 @@ import {
   upsertSubscriptionFromStripe
 } from "../../../../lib/billing";
 import { buildAuditRequestContextFromRequest } from "../../../../lib/audit";
+import { createStripeAccessIssuance } from "../../../../lib/stripe-access-issuance";
+import { upsertPaymentReconciliationRecord } from "../../../../lib/payment-reconciliation-records";
+import { upsertCustomerAccessGrantRecord } from "../../../../lib/customer-access-grant-records";
 import {
   computeAndPersistRoutingSnapshot,
+  normalizeCommercialPlanCode,
   resolveCommercialRoutingContextFromCheckout
 } from "../../../../lib/commercial-routing";
+import { resolveRevenuePlanCodeForCanonicalPlan } from "../../../../lib/commercial-catalog";
+import {
+  createDeliveryStateFromPaidRequest,
+  transitionDeliveryState
+} from "../../../../lib/delivery-state";
 import { publishDomainEvent } from "../../../../lib/domain-events";
 import { queueEmailNotification } from "../../../../lib/email";
 import { readStripeContextMetadata } from "../../../../lib/integration-contracts";
 import { logServerEvent, sendOperationalAlert } from "../../../../lib/monitoring";
+import { appendOperatorWorkflowEventRecord } from "../../../../lib/operator-workflow-event-records";
+import { recordOperationalFinding } from "../../../../lib/operations-queues";
+import { recordStripeMissingContextFinding } from "../../../../lib/stripe-missing-context";
 import { getAppUrl, requireEnv } from "../../../../lib/runtime-config";
-import { appendBillingEventLog } from "../../../../lib/subscription-domain";
+import {
+  getConfiguredStripeRuntimeMode,
+  isStripeWebhookLivemodeMismatch
+} from "../../../../lib/stripe-runtime";
+import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
+import { expectObject, ValidationError } from "../../../../lib/security-validation";
+import { verifyStripeWebhookSignature } from "../../../../lib/security-webhooks";
+import {
+  classifyDuplicateStripeWebhookEvent,
+  classifyStripeWebhookProcessingFailure,
+  classifyStripeWebhookVerificationFailure,
+  classifyUnsupportedStripeWebhookEvent
+} from "../../../../lib/stripe-webhook-errors";
+import {
+  claimStripeWebhookEventProcessing,
+  markStripeWebhookEventFailed,
+  markStripeWebhookEventProcessed
+} from "../../../../lib/stripe-webhook-idempotency";
+import {
+  appendBillingEventLog,
+  normalizeBillingAmountCents,
+  normalizeBillingCurrency
+} from "../../../../lib/subscription-domain";
+import {
+  normalizeStripePaymentEvent,
+  type NormalizedStripePaymentEvent
+} from "../../../../lib/stripe-webhook-normalization";
 import { queueAuditRequestedDispatch } from "../../../../lib/workflow-dispatch";
 
-const STRIPE_SIGNATURE_TOLERANCE_SECONDS = 300;
+export const runtime = "nodejs";
 
 type StripeEvent = {
   id: string;
   type: string;
   created?: number;
+  livemode?: boolean;
   data: {
     object: Record<string, any>;
   };
 };
-
-function verifyStripeSignature(payload: string, signatureHeader: string) {
-  const webhookSecret = requireEnv("STRIPE_WEBHOOK_SECRET");
-
-  const parts = signatureHeader.split(",");
-  const timestamp = parts.find((part) => part.startsWith("t="))?.slice(2);
-  const signatures = parts
-    .filter((part) => part.startsWith("v1="))
-    .map((part) => part.slice(3));
-
-  if (!timestamp || signatures.length === 0) {
-    throw new Error("Invalid Stripe signature header.");
-  }
-
-  const parsedTimestamp = Number(timestamp);
-  const currentTimestamp = Math.floor(Date.now() / 1000);
-
-  if (
-    !Number.isFinite(parsedTimestamp) ||
-    Math.abs(currentTimestamp - parsedTimestamp) > STRIPE_SIGNATURE_TOLERANCE_SECONDS
-  ) {
-    throw new Error("Stripe webhook signature timestamp is outside the allowed tolerance.");
-  }
-
-  const signedPayload = `${timestamp}.${payload}`;
-  const expectedSignature = createHmac("sha256", webhookSecret)
-    .update(signedPayload)
-    .digest("hex");
-
-  const expected = Buffer.from(expectedSignature);
-  const isValid = signatures.some((signature) => {
-    const provided = Buffer.from(signature);
-    return expected.length === provided.length && timingSafeEqual(expected, provided);
-  });
-
-  if (!isValid) {
-    throw new Error("Invalid Stripe webhook signature.");
-  }
-}
 
 function getStripeObjectMetadata(
   object: Record<string, any> | undefined
@@ -185,78 +187,6 @@ async function findSubscriptionByStripeReferences(object: Record<string, any>) {
   return null;
 }
 
-async function claimBillingEvent(event: StripeEvent) {
-  const billingEvent = await prisma.billingEvent.upsert({
-    where: { stripeEventId: event.id },
-    update: {
-      type: event.type,
-      payload: event
-    },
-    create: {
-      stripeEventId: event.id,
-      type: event.type,
-      payload: event
-    }
-  });
-
-  if (billingEvent.status === BillingEventStatus.PROCESSED && billingEvent.processedAt) {
-    return {
-      billingEvent,
-      claimed: false,
-      reason: "processed" as const
-    };
-  }
-
-  const staleBefore = new Date(Date.now() - 10 * 60 * 1000);
-  const claimResult = await prisma.billingEvent.updateMany({
-    where: {
-      id: billingEvent.id,
-      OR: [
-        { status: BillingEventStatus.PENDING },
-        { status: BillingEventStatus.FAILED },
-        {
-          status: BillingEventStatus.PROCESSING,
-          processingStartedAt: { lt: staleBefore }
-        }
-      ]
-    },
-    data: {
-      status: BillingEventStatus.PROCESSING,
-      processingStartedAt: new Date(),
-      failedAt: null,
-      lastError: null,
-      payload: event
-    }
-  });
-
-  if (claimResult.count === 0) {
-    return {
-      billingEvent,
-      claimed: false,
-      reason: "in-flight" as const
-    };
-  }
-
-  return {
-    billingEvent,
-    claimed: true,
-    reason: "claimed" as const
-  };
-}
-
-async function markBillingEventProcessed(eventId: string, event: StripeEvent) {
-  await prisma.billingEvent.update({
-    where: { stripeEventId: eventId },
-    data: {
-      status: BillingEventStatus.PROCESSED,
-      processedAt: new Date(),
-      failedAt: null,
-      lastError: null,
-      payload: event
-    }
-  });
-}
-
 function isRetryableStripeWebhookProcessingError(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
 
@@ -286,23 +216,29 @@ function isRetryableStripeWebhookProcessingError(error: unknown) {
   return true;
 }
 
-async function markBillingEventFailed(eventId: string, event: StripeEvent, error: unknown) {
+async function handleFailedBillingEvent(
+  eventId: string,
+  event: StripeEvent,
+  error: unknown
+) {
   const message = error instanceof Error ? error.message : "Unknown error";
+  const failedResult = await markStripeWebhookEventFailed(eventId, event, error);
+  const billingEvent = failedResult.billingEvent;
 
-  await prisma.billingEvent.update({
-    where: { stripeEventId: eventId },
-    data: {
-      status: BillingEventStatus.FAILED,
-      failedAt: new Date(),
-      lastError: message,
-      payload: event
-    }
-  });
+  if (!billingEvent) {
+    return {
+      transitioned: false as const,
+      billingEvent: null
+    };
+  }
 
   const organizationId = await findOrganizationIdForStripeObject(event.data.object);
 
   if (!organizationId) {
-    return;
+    return {
+      transitioned: true as const,
+      billingEvent
+    };
   }
 
   await appendBillingEventLog({
@@ -318,11 +254,57 @@ async function markBillingEventFailed(eventId: string, event: StripeEvent, error
       message
     }
   });
+
+  await recordOperationalFinding({
+    organizationId,
+    queueType: OperationsQueueType.BILLING_ANOMALY,
+    ruleCode: "billing.webhook_processing_failed",
+    severity: OperationsQueueSeverity.HIGH,
+    sourceSystem: OperationsQueueSourceSystem.STRIPE,
+    sourceRecordType: "billingEvent",
+    sourceRecordId: billingEvent.id,
+    title: "Stripe webhook processing failed",
+    summary:
+      "A verified Stripe billing event could not be normalized into backend state and needs operator review.",
+    recommendedAction:
+      "Inspect the stored billing event payload, correct the underlying state or mapping issue, and replay the event safely.",
+    metadata: {
+      stripeEventId: event.id,
+      stripeEventType: event.type,
+      retryable: isRetryableStripeWebhookProcessingError(error),
+      message
+    }
+  });
+
+  await appendOperatorWorkflowEventRecord({
+    eventKey: `operator.webhook_failure:${event.id}`,
+    organizationId,
+    eventCode: "delivery_failed",
+    severity: isRetryableStripeWebhookProcessingError(error) ? "warning" : "critical",
+    message:
+      event.type === "checkout.session.completed" ||
+      event.type === "checkout.session.async_payment_succeeded"
+        ? "Stripe payment processing failed before reconciliation or access-grant issuance could complete."
+        : "Stripe webhook processing failed before the app could safely advance customer workflow state.",
+    metadata: {
+      stripeEventId: event.id,
+      stripeEventType: event.type,
+      retryable: isRetryableStripeWebhookProcessingError(error),
+      message
+    }
+  });
+
+  return {
+    transitioned: failedResult.transitioned,
+    billingEvent
+  };
 }
 
 async function handleCheckoutCompleted(
+  normalizedEvent: NormalizedStripePaymentEvent,
   event: StripeEvent,
-  requestContext: Prisma.InputJsonValue
+  requestContext: Prisma.InputJsonValue,
+  billingEventId: string
 ) {
   const object = event.data.object;
   const metadata = getStripeObjectMetadata(object);
@@ -334,12 +316,80 @@ async function handleCheckoutCompleted(
     stripeObject: object,
     sourceEventId: event.id
   });
+  const normalizedPlanCode = normalizeCommercialPlanCode(
+    commercialContext.planMapping.planCode
+  );
+  const revenuePlanCode =
+    commercialContext.planMapping.revenuePlanCode ??
+    resolveRevenuePlanCodeForCanonicalPlan(normalizedPlanCode);
+  const { paymentReconciliation, accessGrant } = createStripeAccessIssuance({
+    normalizedEvent,
+    selectedPlan: commercialContext.planMapping.planCode,
+    customerEmail: commercialContext.user.email,
+    customerId: commercialContext.user.id,
+    organizationId: commercialContext.organization.id,
+    reconciliationStatus: "binding_reconciled",
+    grantStatus: "issued"
+  });
+
+  const persistedReconciliation = await upsertPaymentReconciliationRecord({
+    stripeEventId: normalizedEvent.stripeEventId,
+    stripeEventType: normalizedEvent.stripeEventType,
+    checkoutSessionId: normalizedEvent.checkoutSessionId,
+    stripePaymentReference:
+      normalizedEvent.stripeSubscriptionId ?? normalizedEvent.stripePaymentIntentId,
+    customerEmail: commercialContext.user.email,
+    selectedPlan: commercialContext.planMapping.planCode,
+    customerId: commercialContext.user.id,
+    organizationId: commercialContext.organization.id,
+    correlationId: normalizedEvent.correlationId,
+    reconciliationStatus: paymentReconciliation.reconciliationStatus,
+    billingEventId,
+    metadata: paymentReconciliation,
+    reconciledAt: new Date()
+  });
+
+  await upsertCustomerAccessGrantRecord({
+    customerId: commercialContext.user.id,
+    customerEmail: commercialContext.user.email,
+    organizationId: commercialContext.organization.id,
+    reportId: null,
+    selectedPlan: commercialContext.planMapping.planCode,
+    grantStatus: accessGrant.grantStatus,
+    issuedAt: accessGrant.issuedAt,
+    expiresAt: accessGrant.expiresAt,
+    paymentReconciliationId: persistedReconciliation.id,
+    metadata: accessGrant
+  });
+
+  const paidDeliveryState = await createDeliveryStateFromPaidRequest({
+    organizationId: commercialContext.organization.id,
+    userId: commercialContext.user.id,
+    billingEventId,
+    sourceSystem: "stripe",
+    sourceEventType: event.type,
+    sourceEventId: event.id,
+    sourceRecordType: "checkoutSession",
+    sourceRecordId: String(object.id),
+    idempotencyKey: `delivery-state:stripe-checkout:${event.id}`,
+    planCode: commercialContext.planMapping.planCode as unknown as Prisma.InputJsonValue,
+    workflowCode:
+      (commercialContext.planMapping.planCode === "STARTER"
+        ? "AUDIT_STARTER"
+        : commercialContext.planMapping.planCode === "ENTERPRISE"
+          ? "AUDIT_ENTERPRISE"
+          : "AUDIT_SCALE") as Prisma.InputJsonValue,
+    statusReasonJson: {
+      source: "checkout.session.completed",
+      matchedBy: commercialContext.planMapping.matchedBy,
+      matchedValue: commercialContext.planMapping.matchedValue
+    }
+  });
 
   await synchronizeStripeCheckoutSession({
     organizationId: commercialContext.organization.id,
     checkoutSessionId: String(object.id),
-    fallbackPlanCode:
-      commercialContext.planMapping.revenuePlanCode ?? metadata.planCode ?? null,
+    fallbackPlanCode: revenuePlanCode,
     auditActorType: AuditActorType.WEBHOOK,
     auditActorLabel: "stripe",
     auditRequestContext: requestContext
@@ -348,6 +398,7 @@ async function handleCheckoutCompleted(
   const routingSnapshot = await computeAndPersistRoutingSnapshot({
     organizationId: commercialContext.organization.id,
     userId: commercialContext.user.id,
+    billingEventId,
     sourceSystem: "stripe",
     sourceEventType: event.type,
     sourceEventId: event.id,
@@ -357,8 +408,98 @@ async function handleCheckoutCompleted(
     idempotencyKey: `routing-snapshot:stripe-checkout:${event.id}`
   });
 
+  await transitionDeliveryState({
+    deliveryStateId: paidDeliveryState.id,
+    organizationId: commercialContext.organization.id,
+    actorUserId: commercialContext.user.id,
+    actorType: AuditActorType.WEBHOOK,
+    actorLabel: "stripe",
+    toStatus: DeliveryStateStatus.ROUTED,
+    reasonCode: "delivery.routed",
+    linkages: {
+      routingSnapshotId: routingSnapshot.id,
+      entitlementsJson: routingSnapshot.entitlementsJson as Prisma.InputJsonValue,
+      routingHintsJson: routingSnapshot.normalizedHintsJson as Prisma.InputJsonValue,
+      statusReasonJson: routingSnapshot.routingReasonJson as Prisma.InputJsonValue
+    }
+  });
+
   await queueAuditRequestedDispatch({
     routingSnapshotId: routingSnapshot.id
+  });
+
+  logServerEvent("info", "stripe.webhook.payment_reconciled", {
+    event_id: event.id,
+    org_id: commercialContext.organization.id,
+    user_id: commercialContext.user.id,
+    status: "reconciled",
+    source: "stripe",
+    requestContext,
+    metadata: paymentReconciliation
+  });
+  logServerEvent("info", "stripe.webhook.access_grant_issued", {
+    event_id: event.id,
+    org_id: commercialContext.organization.id,
+    user_id: commercialContext.user.id,
+    status: "issued",
+    source: "stripe",
+    requestContext,
+    metadata: accessGrant
+  });
+
+  await appendBillingEventLog({
+    organizationId: commercialContext.organization.id,
+    recordedByUserId: commercialContext.user.id,
+    eventSource: BillingEventLogSource.STRIPE,
+    eventType: "stripe.checkout.session.completed",
+    idempotencyKey: `stripe.checkout.session.completed:${event.id}`,
+    sourceReference: typeof object.id === "string" ? object.id : event.id,
+    canonicalPlanKey: commercialContext.planMapping.canonicalPlanKey,
+    planCodeSnapshot: revenuePlanCode,
+    stripeEventId: event.id,
+    stripeCheckoutSessionId: typeof object.id === "string" ? object.id : null,
+    stripePaymentIntentId:
+      typeof object.payment_intent === "string" ? object.payment_intent : null,
+    amountCents: normalizeBillingAmountCents(object.amount_total),
+    currency: normalizeBillingCurrency(object.currency),
+    payload: {
+      stripeEventId: event.id,
+      stripeCheckoutSessionId: typeof object.id === "string" ? object.id : null,
+      stripeCustomerId: typeof object.customer === "string" ? object.customer : null,
+        stripeSubscriptionId:
+          typeof object.subscription === "string" ? object.subscription : null,
+        stripePaymentIntentId:
+          typeof object.payment_intent === "string" ? object.payment_intent : null,
+        reconciliation: paymentReconciliation,
+        accessGrant,
+        matchedBy: commercialContext.planMapping.matchedBy,
+        matchedValue: commercialContext.planMapping.matchedValue,
+        revenuePlanCode
+      }
+    });
+
+  await appendOperatorWorkflowEventRecord({
+    eventKey: `operator.reconciliation_complete:${persistedReconciliation.id}`,
+    organizationId: commercialContext.organization.id,
+    reportId: null,
+    paymentReconciliationId: persistedReconciliation.id,
+    eventCode: "reconciliation_complete",
+    severity: "info",
+    message:
+      "Stripe checkout reconciliation completed and the workspace was bound to a durable payment record.",
+    metadata: paymentReconciliation
+  });
+
+  await appendOperatorWorkflowEventRecord({
+    eventKey: `operator.access_grant_issued:${persistedReconciliation.id}`,
+    organizationId: commercialContext.organization.id,
+    reportId: null,
+    paymentReconciliationId: persistedReconciliation.id,
+    eventCode: "access_grant_issued",
+    severity: "info",
+    message:
+      "Customer report access grant was issued from the reconciled Stripe payment event.",
+    metadata: accessGrant
   });
 }
 
@@ -368,12 +509,33 @@ async function handleCustomerSubscriptionEvent(event: StripeEvent, requestContex
   const organizationId = metadata.organizationId ?? (await findOrganizationIdForStripeObject(object));
 
   if (!organizationId || !object.customer || !object.id) {
-    logServerEvent("warn", "stripe.webhook.subscription_missing_context", {
-      eventId: event.id,
-      type: event.type,
+    await recordStripeMissingContextFinding({
       organizationId,
-      stripeSubscriptionId: object.id ?? null,
-      stripeCustomerId: object.customer ?? null
+      stripeEventId: event.id,
+      stripeEventType: event.type,
+      sourceRecordType: "subscription",
+      sourceRecordId: typeof object.id === "string" ? object.id : null,
+      missing: [
+        ...(!organizationId ? ["organizationId"] : []),
+        ...(!object.customer ? ["stripeCustomerId"] : []),
+        ...(!object.id ? ["stripeSubscriptionId"] : [])
+      ],
+      metadata: {
+        stripeSubscriptionId: object.id ?? null,
+        stripeCustomerId: object.customer ?? null
+      }
+    });
+    logServerEvent("warn", "stripe.webhook.subscription_missing_context", {
+      event_id: event.id,
+      org_id: organizationId,
+      status: "missing_context",
+      source: "stripe",
+      metadata: {
+        type: event.type,
+        stripeSubscriptionId: object.id ?? null,
+        stripeCustomerId: object.customer ?? null
+      },
+      requestContext
     });
     return;
   }
@@ -398,11 +560,31 @@ async function handleInvoicePaid(event: StripeEvent, requestContext: Prisma.Inpu
     null;
 
   if (!organizationId || !stripeSubscriptionId) {
-    logServerEvent("warn", "stripe.webhook.invoice_paid_missing_context", {
-      eventId: event.id,
+    await recordStripeMissingContextFinding({
       organizationId,
-      invoiceId: object.id ?? null,
-      stripeSubscriptionId: object.subscription ?? null
+      stripeEventId: event.id,
+      stripeEventType: event.type,
+      sourceRecordType: "invoice",
+      sourceRecordId: typeof object.id === "string" ? object.id : null,
+      missing: [
+        ...(!organizationId ? ["organizationId"] : []),
+        ...(!stripeSubscriptionId ? ["stripeSubscriptionId"] : [])
+      ],
+      metadata: {
+        invoiceId: object.id ?? null,
+        stripeSubscriptionId: object.subscription ?? null
+      }
+    });
+    logServerEvent("warn", "stripe.webhook.invoice_paid_missing_context", {
+      event_id: event.id,
+      org_id: organizationId,
+      status: "missing_context",
+      source: "stripe",
+      metadata: {
+        invoiceId: object.id ?? null,
+        stripeSubscriptionId: object.subscription ?? null
+      },
+      requestContext
     });
     return;
   }
@@ -442,10 +624,18 @@ async function handleInvoicePaid(event: StripeEvent, requestContext: Prisma.Inpu
     subscriptionId: syncedSubscription.id,
     planId: syncedSubscription.planId,
     canonicalPlanKey: syncedSubscription.canonicalPlanKeySnapshot,
+    planCodeSnapshot: syncedSubscription.planCodeSnapshot,
     eventSource: "STRIPE",
     eventType: "stripe.invoice.paid",
     idempotencyKey: `stripe.invoice.paid:${event.id}`,
     sourceReference: typeof object.id === "string" ? object.id : stripeSubscriptionId,
+    stripeEventId: event.id,
+    stripePaymentIntentId:
+      typeof object.payment_intent === "string" ? object.payment_intent : null,
+    amountCents: normalizeBillingAmountCents(
+      object.amount_paid ?? object.amount_due ?? object.total
+    ),
+    currency: normalizeBillingCurrency(object.currency),
     payload: {
       stripeEventId: event.id,
       invoiceId: typeof object.id === "string" ? object.id : null,
@@ -467,11 +657,33 @@ async function handleInvoicePaymentFailed(event: StripeEvent, requestContext: Pr
     null;
 
   if (!organizationId || !stripeCustomerId || !stripeSubscriptionId) {
-    logServerEvent("warn", "stripe.webhook.invoice_failed_missing_context", {
-      eventId: event.id,
+    await recordStripeMissingContextFinding({
       organizationId,
-      invoiceId: object.id ?? null,
-      stripeSubscriptionId: object.subscription ?? null
+      stripeEventId: event.id,
+      stripeEventType: event.type,
+      sourceRecordType: "invoice",
+      sourceRecordId: typeof object.id === "string" ? object.id : null,
+      missing: [
+        ...(!organizationId ? ["organizationId"] : []),
+        ...(!stripeCustomerId ? ["stripeCustomerId"] : []),
+        ...(!stripeSubscriptionId ? ["stripeSubscriptionId"] : [])
+      ],
+      metadata: {
+        invoiceId: object.id ?? null,
+        stripeSubscriptionId: object.subscription ?? null,
+        stripeCustomerId
+      }
+    });
+    logServerEvent("warn", "stripe.webhook.invoice_failed_missing_context", {
+      event_id: event.id,
+      org_id: organizationId,
+      status: "missing_context",
+      source: "stripe",
+      metadata: {
+        invoiceId: object.id ?? null,
+        stripeSubscriptionId: object.subscription ?? null
+      },
+      requestContext
     });
     return;
   }
@@ -558,10 +770,18 @@ async function handleInvoicePaymentFailed(event: StripeEvent, requestContext: Pr
       subscriptionId: syncedSubscription.id,
       planId: syncedSubscription.planId,
       canonicalPlanKey: syncedSubscription.canonicalPlanKeySnapshot,
+      planCodeSnapshot: syncedSubscription.planCodeSnapshot,
       eventSource: "STRIPE",
       eventType: "stripe.invoice.payment_failed",
       idempotencyKey: `stripe.invoice.payment_failed:${event.id}`,
       sourceReference: typeof object.id === "string" ? object.id : stripeSubscriptionId,
+      stripeEventId: event.id,
+      stripePaymentIntentId:
+        typeof object.payment_intent === "string" ? object.payment_intent : null,
+      amountCents: normalizeBillingAmountCents(
+        object.amount_due ?? object.amount_remaining ?? object.total
+      ),
+      currency: normalizeBillingCurrency(object.currency),
       payload: {
         stripeEventId: event.id,
         invoiceId: typeof object.id === "string" ? object.id : null,
@@ -588,11 +808,33 @@ async function handleInvoicePaymentActionRequired(
     null;
 
   if (!organizationId || !stripeCustomerId || !stripeSubscriptionId) {
-    logServerEvent("warn", "stripe.webhook.invoice_action_required_missing_context", {
-      eventId: event.id,
+    await recordStripeMissingContextFinding({
       organizationId,
-      invoiceId: object.id ?? null,
-      stripeSubscriptionId: object.subscription ?? null
+      stripeEventId: event.id,
+      stripeEventType: event.type,
+      sourceRecordType: "invoice",
+      sourceRecordId: typeof object.id === "string" ? object.id : null,
+      missing: [
+        ...(!organizationId ? ["organizationId"] : []),
+        ...(!stripeCustomerId ? ["stripeCustomerId"] : []),
+        ...(!stripeSubscriptionId ? ["stripeSubscriptionId"] : [])
+      ],
+      metadata: {
+        invoiceId: object.id ?? null,
+        stripeSubscriptionId: object.subscription ?? null,
+        stripeCustomerId
+      }
+    });
+    logServerEvent("warn", "stripe.webhook.invoice_action_required_missing_context", {
+      event_id: event.id,
+      org_id: organizationId,
+      status: "missing_context",
+      source: "stripe",
+      metadata: {
+        invoiceId: object.id ?? null,
+        stripeSubscriptionId: object.subscription ?? null
+      },
+      requestContext
     });
     return;
   }
@@ -627,10 +869,18 @@ async function handleInvoicePaymentActionRequired(
       subscriptionId: syncedSubscription.id,
       planId: syncedSubscription.planId,
       canonicalPlanKey: syncedSubscription.canonicalPlanKeySnapshot,
+      planCodeSnapshot: syncedSubscription.planCodeSnapshot,
       eventSource: "STRIPE",
       eventType: "stripe.invoice.payment_action_required",
       idempotencyKey: `stripe.invoice.payment_action_required:${event.id}`,
       sourceReference: typeof object.id === "string" ? object.id : stripeSubscriptionId,
+      stripeEventId: event.id,
+      stripePaymentIntentId:
+        typeof object.payment_intent === "string" ? object.payment_intent : null,
+      amountCents: normalizeBillingAmountCents(
+        object.amount_due ?? object.amount_remaining ?? object.total
+      ),
+      currency: normalizeBillingCurrency(object.currency),
       payload: {
         stripeEventId: event.id,
         invoiceId: typeof object.id === "string" ? object.id : null,
@@ -647,10 +897,28 @@ async function handleTrialWillEnd(event: StripeEvent) {
   const organizationId = await findOrganizationIdForStripeObject(object);
 
   if (!organizationId || !object.id) {
-    logServerEvent("warn", "stripe.webhook.trial_will_end_missing_context", {
-      eventId: event.id,
+    await recordStripeMissingContextFinding({
       organizationId,
-      stripeSubscriptionId: object.id ?? null
+      stripeEventId: event.id,
+      stripeEventType: event.type,
+      sourceRecordType: "subscription",
+      sourceRecordId: typeof object.id === "string" ? object.id : null,
+      missing: [
+        ...(!organizationId ? ["organizationId"] : []),
+        ...(!object.id ? ["stripeSubscriptionId"] : [])
+      ],
+      metadata: {
+        stripeSubscriptionId: object.id ?? null
+      }
+    });
+    logServerEvent("warn", "stripe.webhook.trial_will_end_missing_context", {
+      event_id: event.id,
+      org_id: organizationId,
+      status: "missing_context",
+      source: "stripe",
+      metadata: {
+        stripeSubscriptionId: object.id ?? null
+      }
     });
     return;
   }
@@ -673,6 +941,7 @@ async function handleTrialWillEnd(event: StripeEvent) {
 }
 
 async function handleCheckoutAsyncPaymentFailed(
+  normalizedEvent: NormalizedStripePaymentEvent,
   event: StripeEvent,
   requestContext: Prisma.InputJsonValue
 ) {
@@ -685,18 +954,78 @@ async function handleCheckoutAsyncPaymentFailed(
     (typeof object.customer === "string" ? object.customer : null) ??
     existingSubscription?.stripeCustomerId ??
     null;
+  const { paymentReconciliation } = createStripeAccessIssuance({
+    normalizedEvent,
+    selectedPlan: normalizedEvent.selectedPlan ?? normalizedEvent.revenuePlanCode,
+    organizationId,
+    reconciliationStatus: "reconciliation_failed",
+    grantStatus: "binding_pending"
+  });
 
   if (!organizationId || !stripeCustomerId || !stripeSubscriptionId) {
-    logServerEvent("warn", "stripe.webhook.checkout_async_failed_missing_context", {
-      eventId: event.id,
+    await recordStripeMissingContextFinding({
       organizationId,
-      stripeSubscriptionId,
-      stripeCustomerId
+      stripeEventId: event.id,
+      stripeEventType: event.type,
+      sourceRecordType: "checkoutSession",
+      sourceRecordId: typeof object.id === "string" ? object.id : null,
+      missing: [
+        ...(!organizationId ? ["organizationId"] : []),
+        ...(!stripeCustomerId ? ["stripeCustomerId"] : []),
+        ...(!stripeSubscriptionId ? ["stripeSubscriptionId"] : [])
+      ],
+      metadata: {
+        stripeSubscriptionId,
+        stripeCustomerId,
+        reconciliation: paymentReconciliation
+      }
+    });
+    logServerEvent("warn", "stripe.webhook.checkout_async_failed_missing_context", {
+      event_id: event.id,
+      org_id: organizationId,
+      status: "missing_context",
+      source: "stripe",
+      metadata: {
+        stripeSubscriptionId,
+        stripeCustomerId,
+        reconciliation: paymentReconciliation
+      },
+      requestContext
     });
     return;
   }
 
   await prisma.$transaction(async (tx) => {
+    const persistedReconciliation = await upsertPaymentReconciliationRecord({
+      db: tx,
+      stripeEventId: normalizedEvent.stripeEventId,
+      stripeEventType: normalizedEvent.stripeEventType,
+      checkoutSessionId: normalizedEvent.checkoutSessionId,
+      stripePaymentReference:
+        normalizedEvent.stripeSubscriptionId ?? normalizedEvent.stripePaymentIntentId,
+      customerEmail: normalizedEvent.customerEmail,
+      selectedPlan: normalizedEvent.selectedPlan ?? normalizedEvent.revenuePlanCode,
+      organizationId,
+      correlationId: normalizedEvent.correlationId,
+      reconciliationStatus: paymentReconciliation.reconciliationStatus,
+      metadata: paymentReconciliation,
+      failedAt: new Date(),
+      lastError:
+        "Stripe checkout payment did not complete. The customer can retry from billing."
+    });
+
+    await appendOperatorWorkflowEventRecord({
+      db: tx,
+      eventKey: `operator.reconciliation_failed:${persistedReconciliation.id}`,
+      organizationId,
+      paymentReconciliationId: persistedReconciliation.id,
+      eventCode: "delivery_failed",
+      severity: "warning",
+      message:
+        "Stripe checkout reconciliation failed because payment did not complete successfully.",
+      metadata: paymentReconciliation
+    });
+
     const syncedSubscription = await upsertSubscriptionFromStripe({
       db: tx,
       organizationId,
@@ -725,14 +1054,23 @@ async function handleCheckoutAsyncPaymentFailed(
       subscriptionId: syncedSubscription.id,
       planId: syncedSubscription.planId,
       canonicalPlanKey: syncedSubscription.canonicalPlanKeySnapshot,
+      planCodeSnapshot: syncedSubscription.planCodeSnapshot,
       eventSource: "STRIPE",
       eventType: "stripe.checkout.async_payment_failed",
       idempotencyKey: `stripe.checkout.async_payment_failed:${event.id}`,
       sourceReference: stripeSubscriptionId,
+      stripeEventId: event.id,
+      stripeCheckoutSessionId: typeof object.id === "string" ? object.id : null,
+      stripePaymentIntentId:
+        typeof object.payment_intent === "string" ? object.payment_intent : null,
+      amountCents: normalizeBillingAmountCents(object.amount_total),
+      currency: normalizeBillingCurrency(object.currency),
       payload: {
         stripeEventId: event.id,
+        checkoutSessionId: typeof object.id === "string" ? object.id : null,
         stripeSubscriptionId,
         stripeCustomerId,
+        reconciliation: paymentReconciliation,
         latestInvoiceStatus: syncedSubscription.latestInvoiceStatus,
         status: syncedSubscription.status
       }
@@ -740,61 +1078,143 @@ async function handleCheckoutAsyncPaymentFailed(
   });
 }
 
-async function processStripeEvent(event: StripeEvent, requestContext: Prisma.InputJsonValue) {
-  switch (event.type) {
-    case "checkout.session.completed":
-    case "checkout.session.async_payment_succeeded":
-      await handleCheckoutCompleted(event, requestContext);
+async function processStripeEvent(
+  normalizedEvent: NormalizedStripePaymentEvent,
+  event: StripeEvent,
+  requestContext: Prisma.InputJsonValue,
+  billingEventId: string
+) {
+  switch (normalizedEvent.kind) {
+    case "checkout_completed":
+    case "checkout_async_payment_succeeded":
+      await handleCheckoutCompleted(
+        normalizedEvent,
+        event,
+        requestContext,
+        billingEventId
+      );
       return;
-    case "checkout.session.async_payment_failed":
-      await handleCheckoutAsyncPaymentFailed(event, requestContext);
-      return;
-    case "customer.subscription.created":
-    case "customer.subscription.updated":
-    case "customer.subscription.deleted":
-      await handleCustomerSubscriptionEvent(event, requestContext);
-      return;
-    case "invoice.paid":
-      await handleInvoicePaid(event, requestContext);
-      return;
-    case "invoice.payment_failed":
-      await handleInvoicePaymentFailed(event, requestContext);
-      return;
-    case "invoice.payment_action_required":
-      await handleInvoicePaymentActionRequired(event, requestContext);
-      return;
-    case "customer.subscription.trial_will_end":
-      await handleTrialWillEnd(event);
+    case "checkout_async_payment_failed":
+      await handleCheckoutAsyncPaymentFailed(normalizedEvent, event, requestContext);
       return;
     default:
-      logServerEvent("info", "stripe.webhook.ignored", {
-        eventId: event.id,
-        type: event.type
-      });
+      return;
   }
 }
 
 
 export async function POST(request: Request) {
+  const rateLimited = applyRouteRateLimit(request, {
+    key: "stripe-webhook",
+    category: "webhook"
+  });
+  if (rateLimited) {
+    return rateLimited;
+  }
+
   const payload = await request.text();
   const signature = request.headers.get("stripe-signature");
+  const requestContext = buildAuditRequestContextFromRequest(request);
 
   if (!signature) {
+    logServerEvent("warn", "stripe.webhook.missing_signature", {
+      status: "invalid",
+      source: "stripe",
+      requestContext
+    });
     return new NextResponse("Missing stripe-signature header", { status: 400 });
   }
 
   try {
-    verifyStripeSignature(payload, signature);
-    const event = JSON.parse(payload) as StripeEvent;
-    const requestContext = buildAuditRequestContextFromRequest(request);
+    // Verify the Stripe signature against the raw request body before any
+    // parsing or reconciliation logic runs. Future billing/report binding
+    // updates should only happen below this verified boundary.
+    const verifiedPayload = verifyStripeWebhookSignature({
+      payload,
+      signatureHeader: signature,
+      webhookSecret: requireEnv("STRIPE_WEBHOOK_SECRET")
+    });
+    const event = expectObject(verifiedPayload, "stripe event") as StripeEvent;
 
     if (!event?.id || !event?.type || !event?.data?.object) {
       throw new Error("Stripe webhook payload is missing required event fields.");
     }
 
-    const claimedEvent = await claimBillingEvent(event);
+    const configuredStripeMode = getConfiguredStripeRuntimeMode();
+    if (
+      isStripeWebhookLivemodeMismatch({
+        configuredMode: configuredStripeMode,
+        eventLivemode: event.livemode
+      })
+    ) {
+      logServerEvent("error", "stripe.webhook.mode_mismatch", {
+        event_id: event.id,
+        status: "failed",
+        source: "stripe",
+        requestContext,
+        metadata: {
+          type: event.type,
+          configuredStripeMode,
+          eventLivemode: event.livemode
+        }
+      });
+      return NextResponse.json(
+        {
+          error:
+            "Stripe webhook livemode does not match the configured Stripe secret key mode."
+        },
+        { status: 400 }
+      );
+    }
+
+    const normalizedPaymentEvent = normalizeStripePaymentEvent(event);
+
+    if (!normalizedPaymentEvent) {
+      const classification = classifyUnsupportedStripeWebhookEvent();
+      logServerEvent("info", "stripe.webhook.ignored", {
+        event_id: event.id,
+        status: "ignored",
+        source: "stripe",
+        requestContext,
+        metadata: {
+          type: event.type,
+          classification
+        }
+      });
+      return NextResponse.json({ received: true, ignored: true });
+    }
+
+    logServerEvent("info", "stripe.webhook.received", {
+      event_id: event.id,
+      status: "received",
+      source: "stripe",
+      requestContext,
+      metadata: {
+        type: event.type,
+        normalizedKind: normalizedPaymentEvent.kind,
+        checkoutSessionId: normalizedPaymentEvent.checkoutSessionId
+      }
+    });
+
+    const claimedEvent = await claimStripeWebhookEventProcessing({
+      id: event.id,
+      type: event.type,
+      payload: event
+    });
 
     if (!claimedEvent.claimed) {
+      const classification = classifyDuplicateStripeWebhookEvent();
+      logServerEvent("info", "stripe.webhook.deduplicated", {
+        event_id: event.id,
+        status: claimedEvent.reason === "processed" ? "deduplicated" : "in_flight",
+        source: "stripe",
+        requestContext,
+        metadata: {
+          type: event.type,
+          reason: claimedEvent.reason,
+          classification
+        }
+      });
       return NextResponse.json({
         received: true,
         deduplicated: claimedEvent.reason === "processed",
@@ -803,28 +1223,95 @@ export async function POST(request: Request) {
     }
 
     try {
-      await processStripeEvent(event, requestContext);
-      await markBillingEventProcessed(event.id, event);
+      await processStripeEvent(
+        normalizedPaymentEvent,
+        event,
+        requestContext,
+        claimedEvent.billingEvent.id
+      );
+      const processedResult = await markStripeWebhookEventProcessed(event.id, event);
+
+      if (!processedResult.transitioned) {
+        logServerEvent("warn", "stripe.webhook.processed_transition_skipped", {
+          event_id: event.id,
+          status: "ignored",
+          source: "stripe",
+          requestContext,
+          metadata: {
+            type: event.type,
+            billingEventStatus: processedResult.billingEvent?.status ?? null
+          }
+        });
+
+        return NextResponse.json({ received: true, transitioned: false });
+      }
 
       logServerEvent("info", "stripe.webhook.processed", {
-        eventId: event.id,
-        type: event.type
+        event_id: event.id,
+        status: "processed",
+        source: "stripe",
+        requestContext,
+        metadata: {
+          type: event.type
+        }
       });
 
       return NextResponse.json({ received: true });
     } catch (processingError) {
-      await markBillingEventFailed(event.id, event, processingError);
+      const failedResult = await handleFailedBillingEvent(
+        event.id,
+        event,
+        processingError
+      );
+
+      if (!failedResult.transitioned) {
+        logServerEvent("warn", "stripe.webhook.failed_transition_skipped", {
+          event_id: event.id,
+          status: "ignored",
+          source: "stripe",
+          requestContext,
+          metadata: {
+            type: event.type,
+            billingEventStatus: failedResult.billingEvent?.status ?? null
+          }
+        });
+
+        return NextResponse.json({ received: true, transitioned: false });
+      }
+
       throw processingError;
     }
   } catch (error) {
+    if (error instanceof ValidationError) {
+      const classification = classifyStripeWebhookVerificationFailure();
+      logServerEvent("warn", "stripe.webhook.invalid_payload", {
+        status: "invalid",
+        source: "stripe",
+        requestContext,
+        metadata: {
+          message: error.message,
+          classification
+        }
+      });
+      return new NextResponse(error.message, { status: 400 });
+    }
+
+    const classification = classifyStripeWebhookProcessingFailure(error);
     logServerEvent("error", "stripe.webhook.failed", {
-      message: error instanceof Error ? error.message : "Unknown error"
+      status: "failed",
+      source: "stripe",
+      requestContext,
+      metadata: {
+        message: error instanceof Error ? error.message : "Unknown error",
+        classification
+      }
     });
     await sendOperationalAlert({
       source: "stripe.webhook",
       title: "Stripe webhook processing failed",
       metadata: {
-        message: error instanceof Error ? error.message : "Unknown error"
+        message: error instanceof Error ? error.message : "Unknown error",
+        classification
       }
     });
     return new NextResponse("Webhook processing failed", { status: 400 });

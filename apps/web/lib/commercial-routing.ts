@@ -14,6 +14,13 @@ import {
 import { buildAuditRequestContextFromRequest } from "./audit";
 import { writeAuditLog } from "./audit";
 import {
+  CANONICAL_PLAN_CODES,
+  getCanonicalCommercialPlanCatalog,
+  getCanonicalProcessingDepthForPlan,
+  getCanonicalReportTemplateForPlan,
+  type CanonicalPlanCode,
+  type CanonicalWorkflowCode as CanonicalWorkflowCodeValue,
+  type CanonicalProcessingDepth,
   getCanonicalWorkflowCodeForPlan,
   mapCanonicalPlanKeyToCanonicalPlanCode,
   resolveCanonicalPlanCode,
@@ -21,32 +28,35 @@ import {
 } from "./commercial-catalog";
 import { getOrganizationEntitlements } from "./entitlements";
 import { getIntegrationEnvironmentLabel, readStripeContextMetadata } from "./integration-contracts";
+import { logServerEvent } from "./monitoring";
 import { buildCorrelationId } from "./reliability";
 import {
-  getCanonicalPlanKeyFromPlanCode,
-  getRevenuePlanCatalog,
-  getStripePriceIdForPlan,
-  type RevenuePlanDefinition
+  getCanonicalPlanKeyFromPlanCode
 } from "./revenue-catalog";
 import { getOptionalEnv } from "./runtime-config";
 import { ensureOrganizationBillingCustomer } from "./subscription-domain";
+
+// Commercial routing is the checkout and billing-facing routing layer. It resolves
+// a canonical commercial plan plus current entitlements into a durable
+// `RoutingSnapshot` that downstream execution systems consume.
+//
+// This lives alongside `workflow-routing.ts`, which still computes workflow-family
+// specific routing decisions for in-app assessment and report actions. Keep those
+// responsibilities separate unless a future migration explicitly consolidates them.
 
 type CommercialRoutingDbClient = Prisma.TransactionClient | typeof prisma;
 
 type StripeLikeObject = Record<string, any>;
 
-export type NormalizedCommercialPlanCode = "starter" | "scale" | "enterprise";
-export type NormalizedWorkflowCode =
-  | "audit_starter"
-  | "audit_scale"
-  | "audit_enterprise"
-  | "briefing_only"
-  | "intake_review";
+export type NormalizedCommercialPlanCode = CanonicalPlanCode;
+export type NormalizedWorkflowCode = CanonicalWorkflowCodeValue;
 
 export type NormalizedRoutingHints = {
   workflow_family: "audit";
   workflow_code: NormalizedWorkflowCode;
-  processing_tier: "starter" | "scale" | "enterprise" | "manual_review";
+  processing_tier: CanonicalProcessingDepth;
+  processing_depth: CanonicalProcessingDepth;
+  report_template: string;
   route_category: "standard" | "trial" | "fallback" | "blocked";
   entitlement_summary: {
     workspace_access: boolean;
@@ -87,6 +97,22 @@ export type CommercialRoutingDecision = {
   status: RoutingSnapshotStatus;
   commercialStateJson: Prisma.JsonObject;
 };
+
+async function ensureRoutingSnapshotBillingEventLink(input: {
+  db: CommercialRoutingDbClient;
+  routingSnapshotId: string;
+  billingEventId?: string | null;
+}) {
+  if (!input.billingEventId) {
+    return;
+  }
+
+  await input.db.$executeRaw`
+    UPDATE "RoutingSnapshot"
+    SET "billingEventId" = COALESCE("billingEventId", ${input.billingEventId})
+    WHERE "id" = ${input.routingSnapshotId}
+  `;
+}
 
 type StripeCommercialMapping = {
   planCode: CommercialPlanCode;
@@ -139,6 +165,20 @@ function normalizeCommercialPlanFromCanonicalKey(
   }
 }
 
+function mapCanonicalPlanCodeToCanonicalPlanKey(
+  planCode: CanonicalPlanCode
+): CanonicalPlanKey {
+  switch (planCode) {
+    case "starter":
+      return CanonicalPlanKey.STARTER;
+    case "enterprise":
+      return CanonicalPlanKey.ENTERPRISE;
+    case "scale":
+    default:
+      return CanonicalPlanKey.SCALE;
+  }
+}
+
 function normalizeWorkflowCode(workflowCode: CanonicalWorkflowCode): NormalizedWorkflowCode {
   switch (workflowCode) {
     case CanonicalWorkflowCode.AUDIT_STARTER:
@@ -186,31 +226,20 @@ function normalizePlanCode(planCode: CommercialPlanCode): NormalizedCommercialPl
 }
 
 function buildCommercialPlanMappings() {
-  const revenuePlans = getRevenuePlanCatalog();
-  const entries = revenuePlans.map((plan) => {
-    const commercialPlanCode = normalizeCommercialPlanFromCanonicalKey(plan.canonicalKey);
+  const entries = getCanonicalCommercialPlanCatalog().map((plan) => {
+    const commercialPlanCode = asCommercialPlanCode(plan.code) ?? CommercialPlanCode.SCALE;
     return {
       commercialPlanCode,
-      revenuePlanCode: plan.code,
-      canonicalPlanKey: plan.canonicalKey,
-      stripePriceId: getStripePriceIdForPlan(plan),
-      stripeProductId: getOptionalEnv(getStripeProductEnvVarForPlan(plan)) ?? null
+      revenuePlanCode: plan.publicRevenuePlanCode,
+      canonicalPlanKey: mapCanonicalPlanCodeToCanonicalPlanKey(plan.code),
+      stripePriceId: plan.stripePriceEnvVar ? getOptionalEnv(plan.stripePriceEnvVar) : null,
+      stripeProductId: plan.stripeProductEnvVar
+        ? getOptionalEnv(plan.stripeProductEnvVar)
+        : null
     };
   });
 
   return entries;
-}
-
-function getStripeProductEnvVarForPlan(plan: RevenuePlanDefinition) {
-  switch (normalizeCommercialPlanFromCanonicalKey(plan.canonicalKey)) {
-    case CommercialPlanCode.STARTER:
-      return "STRIPE_PRODUCT_STARTER";
-    case CommercialPlanCode.ENTERPRISE:
-      return "STRIPE_PRODUCT_ENTERPRISE";
-    case CommercialPlanCode.SCALE:
-    default:
-      return "STRIPE_PRODUCT_SCALE";
-  }
 }
 
 function getStripeObjectPriceId(object: StripeLikeObject) {
@@ -485,6 +514,10 @@ export function deriveCommercialWorkflowDecision(input: {
   let processingTier: NormalizedRoutingHints["processing_tier"] = "manual_review";
   let status: RoutingSnapshotStatus = RoutingSnapshotStatus.PENDING;
 
+  // This checkout/billing-facing layer only gates on coarse commercial access and
+  // workspace capacity. Deeper execution throttling based on usage-metering
+  // snapshots remains in `workflow-routing.ts`, where in-app assessment/report
+  // actions choose workflow-family specific handling.
   if (!input.entitlements.canAccessWorkspace) {
     reasonCodes.push("workspace.access.missing");
     matchedRules.push("routing.blocked.workspace_access");
@@ -545,6 +578,12 @@ export function deriveCommercialWorkflowDecision(input: {
     workflow_family: "audit",
     workflow_code: normalizeWorkflowCode(workflowCode),
     processing_tier: processingTier,
+    processing_depth: getCanonicalProcessingDepthForPlan(
+      normalizePlanCode(input.planCode)
+    ),
+    report_template: getCanonicalReportTemplateForPlan(
+      normalizePlanCode(input.planCode)
+    ),
     route_category: routeCategory,
     entitlement_summary: {
       workspace_access: input.entitlements.featureAccess["workspace.access"],
@@ -583,6 +622,7 @@ export function deriveCommercialWorkflowDecision(input: {
 export async function computeAndPersistRoutingSnapshot(input: {
   organizationId: string;
   userId?: string | null;
+  billingEventId?: string | null;
   sourceSystem: string;
   sourceEventType: string;
   sourceEventId: string;
@@ -598,6 +638,29 @@ export async function computeAndPersistRoutingSnapshot(input: {
   });
 
   if (existing) {
+    const existingBillingEventId =
+      (existing as { billingEventId?: string | null }).billingEventId ?? null;
+    if (input.billingEventId && !existingBillingEventId) {
+      await ensureRoutingSnapshotBillingEventLink({
+        db,
+        routingSnapshotId: existing.id,
+        billingEventId: input.billingEventId
+      });
+    }
+
+    logServerEvent("debug", "routing.snapshot.reused", {
+      routing_snapshot_id: existing.id,
+      org_id: input.organizationId,
+      user_id: input.userId ?? null,
+      workflow_code: existing.workflowCode,
+      status: existing.status,
+      source: input.sourceSystem,
+      event_id: input.sourceEventId,
+      metadata: {
+        sourceEventType: input.sourceEventType,
+        idempotencyKey: input.idempotencyKey
+      }
+    });
     return existing;
   }
 
@@ -633,6 +696,12 @@ export async function computeAndPersistRoutingSnapshot(input: {
     }
   });
 
+  await ensureRoutingSnapshotBillingEventLink({
+    db,
+    routingSnapshotId: snapshot.id,
+    billingEventId: input.billingEventId
+  });
+
   await writeAuditLog(db, {
     organizationId: input.organizationId,
     userId: input.userId ?? null,
@@ -647,6 +716,24 @@ export async function computeAndPersistRoutingSnapshot(input: {
       planCode: normalizePlanCode(input.planCode),
       workflowCode: normalizeWorkflowCode(decision.workflowCode),
       reasonCodes: decision.reason.codes
+    }
+  });
+
+  logServerEvent("info", "routing.snapshot.created", {
+    routing_snapshot_id: snapshot.id,
+    org_id: input.organizationId,
+    user_id: input.userId ?? null,
+    workflow_code: decision.workflowCode,
+    status: decision.status,
+    source: input.sourceSystem,
+    event_id: input.sourceEventId,
+    metadata: {
+      sourceEventType: input.sourceEventType,
+      sourceRecordType: input.sourceRecordType ?? null,
+      sourceRecordId: input.sourceRecordId ?? null,
+      planCode: normalizePlanCode(input.planCode),
+      reasonCodes: decision.reason.codes,
+      matchedRules: decision.reason.matched_rules
     }
   });
 
@@ -732,7 +819,7 @@ export function getCommercialRoutingSetupGuide() {
   }));
 
   return {
-    supportedCommercialPlans: ["starter", "scale", "enterprise"],
+    supportedCommercialPlans: [...CANONICAL_PLAN_CODES],
     growthRoutingCompatibility: "growth_internal_plan_maps_to_scale_commercial_route",
     mappings
   };

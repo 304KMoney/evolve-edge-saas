@@ -1,14 +1,24 @@
+import "server-only";
+
 import {
   AuditActorType,
+  DeliveryStateStatus,
+  OperationsQueueSeverity,
+  OperationsQueueSourceSystem,
+  OperationsQueueType,
   Prisma,
   prisma
 } from "@evolve-edge/db";
 import { publishDomainEvent } from "./domain-events";
 import { RoutingSnapshotStatus, WorkflowDispatchStatus } from "@evolve-edge/db";
 import { writeAuditLog } from "./audit";
+import { transitionDeliveryState } from "./delivery-state";
 import { buildAuditRequestedPayload, buildN8nSignedHeaders, getN8nWorkflowDestinationByName } from "./n8n";
 import { logServerEvent, sendOperationalAlert } from "./monitoring";
+import { appendOperatorWorkflowEventRecord } from "./operator-workflow-event-records";
+import { recordOperationalFinding } from "./operations-queues";
 import { buildCorrelationId, clampTimeoutMs, normalizeExternalError } from "./reliability";
+import { isAuthorizedBearerRequest } from "./security-auth";
 import { getOptionalEnv, requireEnv } from "./runtime-config";
 
 type WorkflowDispatchDbClient = Prisma.TransactionClient | typeof prisma;
@@ -30,7 +40,20 @@ function getRetryDelayMinutes(attemptCount: number) {
 }
 
 export function requireWorkflowCallbackSecret() {
-  return requireEnv("N8N_CALLBACK_SECRET");
+  return (
+    getOptionalEnv("N8N_CALLBACK_SHARED_SECRET") ??
+    requireEnv("N8N_CALLBACK_SECRET")
+  );
+}
+
+export function requireWorkflowWritebackSecret() {
+  // TODO: If we later need finer-grained separation, this helper is the
+  // server-only seam for rotating inbound writeback auth independently.
+  return getOptionalEnv("N8N_WRITEBACK_SECRET") ?? requireWorkflowCallbackSecret();
+}
+
+export function isAuthorizedWorkflowWritebackRequest(request: Request) {
+  return isAuthorizedBearerRequest(request, requireWorkflowWritebackSecret());
 }
 
 export async function queueAuditRequestedDispatch(input: {
@@ -49,6 +72,13 @@ export async function queueAuditRequestedDispatch(input: {
   });
 
   if (existing) {
+    logServerEvent("debug", "workflow.dispatch.already_queued", {
+      dispatch_id: existing.id,
+      routing_snapshot_id: existing.routingSnapshotId,
+      workflow_code: "audit_requested",
+      status: existing.status,
+      source: "backend"
+    });
     return existing;
   }
 
@@ -59,6 +89,15 @@ export async function queueAuditRequestedDispatch(input: {
       user: true
     }
   });
+  const billingEventLog = snapshot.sourceRecordId
+    ? await db.billingEventLog.findFirst({
+        where: {
+          organizationId: snapshot.organizationId,
+          stripeCheckoutSessionId: snapshot.sourceRecordId
+        },
+        orderBy: { createdAt: "desc" }
+      })
+    : null;
   const correlationId = buildCorrelationId("audit");
 
   const created = await db.workflowDispatch.create({
@@ -74,6 +113,9 @@ export async function queueAuditRequestedDispatch(input: {
 
   const requestPayload = buildAuditRequestedPayload({
     routingSnapshot: snapshot,
+    organization: snapshot.organization,
+    user: snapshot.user,
+    billingEventLog,
     dispatchId: created.id,
     correlationId
   });
@@ -90,6 +132,41 @@ export async function queueAuditRequestedDispatch(input: {
     data: { status: RoutingSnapshotStatus.DISPATCH_QUEUED }
   });
 
+  await transitionDeliveryState({
+    db,
+    sourceSystem: snapshot.sourceSystem,
+    sourceEventId: snapshot.sourceEventId,
+    organizationId: snapshot.organizationId,
+    actorUserId: snapshot.userId ?? null,
+    actorType: AuditActorType.SYSTEM,
+    actorLabel: "workflow-dispatch",
+    toStatus: DeliveryStateStatus.ROUTED,
+    reasonCode: "delivery.routed",
+    linkages: {
+      userId: snapshot.userId ?? null,
+      routingSnapshotId: snapshot.id,
+      workflowDispatchId: dispatch.id,
+      entitlementsJson: snapshot.entitlementsJson as Prisma.InputJsonValue,
+      routingHintsJson: snapshot.normalizedHintsJson as Prisma.InputJsonValue,
+      statusReasonJson: snapshot.routingReasonJson as Prisma.InputJsonValue
+    }
+  });
+
+  logServerEvent("info", "workflow.dispatch.queued", {
+    dispatch_id: dispatch.id,
+    routing_snapshot_id: snapshot.id,
+    org_id: snapshot.organizationId,
+    user_id: snapshot.userId ?? null,
+    workflow_code: snapshot.workflowCode,
+    status: RoutingSnapshotStatus.DISPATCH_QUEUED,
+    source: "backend",
+    correlation_id: correlationId,
+    metadata: {
+      eventType: dispatch.eventType,
+      destination: dispatch.destination
+    }
+  });
+
   return dispatch;
 }
 
@@ -100,7 +177,10 @@ async function markDispatchFailure(
 ) {
   const message = error instanceof Error ? error.message : "Unknown dispatch error";
   const dispatch = await db.workflowDispatch.findUniqueOrThrow({
-    where: { id: dispatchId }
+    where: { id: dispatchId },
+    include: {
+      routingSnapshot: true
+    }
   });
   const shouldRetry =
     dispatch.attemptCount < MAX_DISPATCH_ATTEMPTS &&
@@ -122,6 +202,31 @@ async function markDispatchFailure(
       where: { id: dispatch.routingSnapshotId },
       data: { status: RoutingSnapshotStatus.FAILED }
     });
+
+    await recordOperationalFinding(
+      {
+        organizationId: dispatch.routingSnapshot.organizationId,
+        queueType: OperationsQueueType.SUCCESS_RISK,
+        ruleCode: "success.workflow_dispatch_failed",
+        severity: OperationsQueueSeverity.HIGH,
+        sourceSystem: OperationsQueueSourceSystem.APP,
+        sourceRecordType: "workflowDispatch",
+        sourceRecordId: dispatch.id,
+        title: "Workflow dispatch failed before orchestration started",
+        summary:
+          "The app could not deliver a normalized workflow request to n8n after exhausting retry attempts.",
+        recommendedAction:
+          "Review the configured destination, dispatch logs, and retry state before replaying the workflow handoff.",
+        metadata: {
+          routingSnapshotId: dispatch.routingSnapshotId,
+          eventType: dispatch.eventType,
+          destination: dispatch.destination,
+          attemptCount: dispatch.attemptCount + 1,
+          message
+        }
+      },
+      db
+    );
   }
 
   return updated;
@@ -229,23 +334,38 @@ async function dispatchWorkflow(dispatchId: string, db: WorkflowDispatchDbClient
     });
 
     logServerEvent("info", "workflow.dispatch.delivered", {
-      dispatchId: refreshed.id,
-      routingSnapshotId: refreshed.routingSnapshotId,
-      destination: destination.name,
-      correlationId: refreshed.correlationId
+      dispatch_id: refreshed.id,
+      routing_snapshot_id: refreshed.routingSnapshotId,
+      org_id: refreshed.routingSnapshot.organizationId,
+      user_id: refreshed.routingSnapshot.userId ?? null,
+      workflow_code: refreshed.routingSnapshot.workflowCode,
+      status: WorkflowDispatchStatus.DISPATCHED,
+      source: "n8n.dispatch",
+      correlation_id: refreshed.correlationId,
+      metadata: {
+        destination: destination.name,
+        responseStatus: response.status
+      }
     });
 
     return { delivered: true as const, skipped: false as const, dispatch: updated };
   } catch (error) {
-    await markDispatchFailure(db, refreshed.id, error);
+    const failedDispatch = await markDispatchFailure(db, refreshed.id, error);
     const normalizedError = normalizeExternalError(error, "Workflow dispatch failed.");
     logServerEvent("warn", "workflow.dispatch.failed", {
-      dispatchId: refreshed.id,
-      routingSnapshotId: refreshed.routingSnapshotId,
-      destination: destination.name,
-      correlationId: refreshed.correlationId,
+      dispatch_id: refreshed.id,
+      routing_snapshot_id: refreshed.routingSnapshotId,
+      org_id: refreshed.routingSnapshot.organizationId,
+      user_id: refreshed.routingSnapshot.userId ?? null,
+      workflow_code: refreshed.routingSnapshot.workflowCode,
+      status: failedDispatch.status,
+      source: "n8n.dispatch",
+      correlation_id: refreshed.correlationId,
       retryable: normalizedError.retryable,
-      message: normalizedError.message
+      metadata: {
+        destination: destination.name,
+        message: normalizedError.message
+      }
     });
     await sendOperationalAlert({
       source: "workflow.dispatch",
@@ -368,6 +488,120 @@ export async function recordWorkflowStatusCallback(input: {
     requestContext: input.requestContext ?? null
   });
 
+  logServerEvent("info", "workflow.callback.status_recorded", {
+    dispatch_id: dispatch.id,
+    routing_snapshot_id: dispatch.routingSnapshotId,
+    org_id: dispatch.routingSnapshot.organizationId,
+    user_id: dispatch.routingSnapshot.userId ?? null,
+    workflow_code: dispatch.routingSnapshot.workflowCode,
+    status: input.status,
+    source: "n8n.callback",
+    correlation_id: dispatch.correlationId,
+    requestContext: input.requestContext ?? undefined,
+    metadata: {
+      externalExecutionId: input.externalExecutionId ?? null,
+      message: input.message ?? null
+    }
+  });
+
+  if (input.status === "acknowledged" || input.status === "running") {
+    await appendOperatorWorkflowEventRecord({
+      db,
+      eventKey: `operator.report_processing:${dispatch.id}:${input.status}`,
+      organizationId: dispatch.routingSnapshot.organizationId,
+      eventCode: "report_processing",
+      severity: "info",
+      message:
+        input.status === "running"
+          ? "Report workflow execution is actively processing."
+          : "Report workflow execution was acknowledged by orchestration.",
+      metadata: {
+        dispatchId: dispatch.id,
+        routingSnapshotId: dispatch.routingSnapshotId,
+        externalExecutionId: input.externalExecutionId ?? null,
+        callbackStatus: input.status
+      }
+    });
+
+    await transitionDeliveryState({
+      db,
+      organizationId: dispatch.routingSnapshot.organizationId,
+      actorUserId: dispatch.routingSnapshot.userId ?? null,
+      actorType: AuditActorType.INTERNAL_API,
+      actorLabel: "n8n-callback",
+      toStatus: DeliveryStateStatus.PROCESSING,
+      reasonCode: "delivery.processing",
+      linkages: {
+        workflowDispatchId: dispatch.id,
+        routingSnapshotId: dispatch.routingSnapshotId,
+        latestExecutionResultJson: input.metadata ?? null
+      },
+      metadata: input.metadata ?? undefined
+    });
+  }
+
+  if (input.status === "failed") {
+    await appendOperatorWorkflowEventRecord({
+      db,
+      eventKey: `operator.delivery_failed:${dispatch.id}`,
+      organizationId: dispatch.routingSnapshot.organizationId,
+      eventCode: "delivery_failed",
+      severity: "critical",
+      message:
+        input.message ?? "Report workflow execution failed before a customer-ready report was produced.",
+      metadata: {
+        dispatchId: dispatch.id,
+        routingSnapshotId: dispatch.routingSnapshotId,
+        externalExecutionId: input.externalExecutionId ?? null,
+        callbackStatus: input.status,
+        payload: input.metadata ?? null
+      }
+    });
+
+    await recordOperationalFinding(
+      {
+        organizationId: dispatch.routingSnapshot.organizationId,
+        queueType: OperationsQueueType.SUCCESS_RISK,
+        ruleCode: "success.workflow_execution_failed",
+        severity: OperationsQueueSeverity.HIGH,
+        sourceSystem: OperationsQueueSourceSystem.APP,
+        sourceRecordType: "workflowDispatch",
+        sourceRecordId: dispatch.id,
+        title: "Workflow execution failed after orchestration started",
+        summary:
+          "The workflow was accepted for orchestration, but execution failed before a customer-ready result was produced.",
+        recommendedAction:
+          "Inspect the execution metadata, recover the failed step safely, and replay only after verifying downstream side effects.",
+        metadata: {
+          dispatchId: dispatch.id,
+          routingSnapshotId: dispatch.routingSnapshotId,
+          externalExecutionId: input.externalExecutionId ?? null,
+          callbackStatus: input.status,
+          message: input.message ?? "Workflow execution failed."
+        }
+      },
+      db
+    );
+
+    await transitionDeliveryState({
+      db,
+      organizationId: dispatch.routingSnapshot.organizationId,
+      actorUserId: dispatch.routingSnapshot.userId ?? null,
+      actorType: AuditActorType.INTERNAL_API,
+      actorLabel: "n8n-callback",
+      toStatus: DeliveryStateStatus.FAILED,
+      reasonCode: "delivery.processing_failed",
+      note: input.message ?? null,
+      linkages: {
+        workflowDispatchId: dispatch.id,
+        routingSnapshotId: dispatch.routingSnapshotId,
+        latestExecutionResultJson: input.metadata ?? null,
+        lastError: input.message ?? "Workflow execution failed."
+      },
+      metadata: input.metadata ?? undefined
+    });
+  }
+
   return updatedDispatch;
 }
 
@@ -447,6 +681,58 @@ export async function recordWorkflowReportReady(input: {
       externalExecutionId: input.externalExecutionId ?? null
     },
     requestContext: input.requestContext ?? null
+  });
+
+  logServerEvent("info", "workflow.callback.report_ready", {
+    dispatch_id: dispatch.id,
+    routing_snapshot_id: dispatch.routingSnapshotId,
+    org_id: dispatch.routingSnapshot.organizationId,
+    user_id: dispatch.routingSnapshot.userId ?? null,
+    workflow_code: dispatch.routingSnapshot.workflowCode,
+    status: WorkflowDispatchStatus.SUCCEEDED,
+    source: "n8n.callback",
+    correlation_id: dispatch.correlationId,
+    requestContext: input.requestContext ?? undefined,
+    resource_id: input.reportReference ?? null,
+    metadata: {
+      externalExecutionId: input.externalExecutionId ?? null,
+      reportUrl: input.reportUrl ?? null,
+      riskLevel: input.riskLevel ?? null
+    }
+  });
+
+  await transitionDeliveryState({
+    db,
+    organizationId: dispatch.routingSnapshot.organizationId,
+    actorUserId: dispatch.routingSnapshot.userId ?? null,
+    actorType: AuditActorType.INTERNAL_API,
+    actorLabel: "n8n-callback",
+    toStatus: DeliveryStateStatus.REPORT_GENERATED,
+    reasonCode: "delivery.report_generated",
+    linkages: {
+      workflowDispatchId: dispatch.id,
+      routingSnapshotId: dispatch.routingSnapshotId,
+      externalResultReference: input.reportReference ?? null,
+      latestExecutionResultJson: reportPayload
+    },
+    metadata: reportPayload
+  });
+
+  await appendOperatorWorkflowEventRecord({
+    db,
+    eventKey: `operator.report_ready:${dispatch.id}`,
+    organizationId: dispatch.routingSnapshot.organizationId,
+    eventCode: "report_ready",
+    severity: "info",
+    message: "A workflow callback marked the report output as ready for operator review and delivery.",
+    metadata: {
+      dispatchId: dispatch.id,
+      routingSnapshotId: dispatch.routingSnapshotId,
+      reportReference: input.reportReference ?? null,
+      reportUrl: input.reportUrl ?? null,
+      externalExecutionId: input.externalExecutionId ?? null,
+      riskLevel: input.riskLevel ?? null
+    }
   });
 
   return updatedDispatch;

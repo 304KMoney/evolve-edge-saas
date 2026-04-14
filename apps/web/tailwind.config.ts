@@ -5,17 +5,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0f172a",
-        mist: "#f8fafc",
-        steel: "#475569",
-        line: "#dbe4ee",
-        accent: "#0f766e",
-        accentSoft: "#ccfbf1",
+        ink: "#0b1530",
+        mist: "#f3f9ff",
+        steel: "#64748b",
+        line: "#d8e4f2",
+        accent: "#1cc7d8",
+        accentSoft: "#dffcff",
         warning: "#b45309",
-        danger: "#b91c1c"
+        danger: "#b91c1c",
+        brandIndigo: "#2a2d7c",
+        brandNavy: "#081120"
       },
       boxShadow: {
-        panel: "0 12px 32px rgba(15, 23, 42, 0.08)"
+        panel: "0 28px 90px rgba(4, 14, 30, 0.2)"
       }
     }
   },
@@ -23,4 +25,3 @@ const config: Config = {
 };
 
 export default config;
-

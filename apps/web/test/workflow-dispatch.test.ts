@@ -21,6 +21,8 @@ function runWorkflowDispatchTests() {
       workflowCode: CanonicalWorkflowCode.AUDIT_SCALE,
       status: RoutingSnapshotStatus.DISPATCH_QUEUED,
       normalizedHintsJson: {
+        report_template: "scale_operating_report_from_snapshot",
+        processing_depth: "scale",
         entitlement_summary: {
           workspace_access: true
         },
@@ -44,7 +46,10 @@ function runWorkflowDispatchTests() {
   assert.equal(payload.dispatch_id, "wd_123");
   assert.equal(payload.routing.plan_code, "scale");
   assert.equal(payload.routing.workflow_code, "audit_scale");
-  assert.equal(payload.routing.report_template, "scale_operating_report");
+  assert.equal(
+    payload.routing.report_template,
+    "scale_operating_report_from_snapshot"
+  );
   assert.equal(payload.routing.processing_depth, "scale");
   assert.deepEqual(payload.routing.reason, {
     codes: ["plan.scale"]

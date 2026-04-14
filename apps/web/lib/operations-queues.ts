@@ -21,6 +21,7 @@ import {
   prisma
 } from "@evolve-edge/db";
 import { recordCustomerAccountTimelineEvent } from "./account-timeline";
+import { requireRecordInOrganization } from "./scoped-access";
 import { getOrganizationUsageSnapshot } from "./usage";
 
 type OperationsQueueDbClient = Prisma.TransactionClient | typeof prisma;
@@ -152,6 +153,22 @@ type QueueCandidateRecord = QueueRuleCandidate & {
   dedupeKey: string;
   organizationId: string;
   customerAccountId: string | null;
+};
+
+export type RecordedOperationalFindingInput = {
+  organizationId: string;
+  customerAccountId?: string | null;
+  queueType: OperationsQueueType;
+  ruleCode: string;
+  severity: OperationsQueueSeverity;
+  sourceSystem: OperationsQueueSourceSystem;
+  title: string;
+  summary: string;
+  recommendedAction?: string;
+  reasonLabel?: string;
+  sourceRecordType?: string | null;
+  sourceRecordId?: string | null;
+  metadata?: Prisma.InputJsonValue;
 };
 
 function formatLabel(value: string) {
@@ -795,6 +812,158 @@ function buildQueueCandidateRecord(
   };
 }
 
+export async function recordOperationalFinding(
+  input: RecordedOperationalFindingInput,
+  db: OperationsQueueDbClient = prisma
+) {
+  const customerAccountId =
+    input.customerAccountId ??
+    (await db.customerAccount.findFirst({
+      where: { organizationId: input.organizationId },
+      select: { id: true }
+    }))?.id ??
+    null;
+  const dedupeKey = buildOperationsQueueDedupeKey({
+    queueType: input.queueType,
+    ruleCode: input.ruleCode,
+    organizationId: input.organizationId,
+    customerAccountId,
+    sourceRecordType: input.sourceRecordType,
+    sourceRecordId: input.sourceRecordId
+  });
+  const now = new Date();
+  const existing = await db.operationsQueueItem.findUnique({
+    where: { dedupeKey }
+  });
+
+  if (!existing) {
+    const created = await db.operationsQueueItem.create({
+      data: {
+        organizationId: input.organizationId,
+        customerAccountId,
+        queueType: input.queueType,
+        ruleCode: input.ruleCode,
+        dedupeKey,
+        sourceSystem: input.sourceSystem,
+        sourceRecordType: input.sourceRecordType ?? null,
+        sourceRecordId: input.sourceRecordId ?? null,
+        severity: input.severity,
+        title: input.title,
+        summary: input.summary,
+        recommendedAction: input.recommendedAction ?? null,
+        reasonLabel: input.reasonLabel ?? null,
+        metadata: input.metadata ?? Prisma.JsonNull,
+        firstDetectedAt: now,
+        lastDetectedAt: now,
+        lastEvaluatedAt: now,
+        statusUpdatedAt: now
+      }
+    });
+
+    await recordQueueHistoryEntry(db, {
+      queueItemId: created.id,
+      organizationId: created.organizationId,
+      actorType: AuditActorType.SYSTEM,
+      actorLabel: "system",
+      entryType: OperationsQueueHistoryEntryType.SYSTEM_DETECTED,
+      toStatus: created.status,
+      note: input.summary,
+      metadata: {
+        ruleCode: input.ruleCode,
+        queueType: input.queueType
+      }
+    });
+
+    await recordQueueTimelineEvent(db, {
+      queueItemId: created.id,
+      queueType: created.queueType,
+      customerAccountId: created.customerAccountId,
+      organizationId: created.organizationId,
+      actorType: AuditActorType.SYSTEM,
+      actorLabel: "system",
+      title: created.title,
+      body: created.summary,
+      severity: created.severity,
+      sourceRecordType: created.sourceRecordType,
+      sourceRecordId: created.sourceRecordId,
+      sourceSystem:
+        input.sourceSystem === OperationsQueueSourceSystem.STRIPE
+          ? CustomerAccountTimelineSourceSystem.STRIPE
+          : CustomerAccountTimelineSourceSystem.APP,
+      eventCode: "ops.queue_detected"
+    });
+
+    return created;
+  }
+
+  const nextStatus =
+    existing.status === OperationsQueueStatus.RESOLVED ||
+    existing.status === OperationsQueueStatus.DISMISSED
+      ? OperationsQueueStatus.NEW
+      : existing.status;
+
+  const updated = await db.operationsQueueItem.update({
+    where: { id: existing.id },
+    data: {
+      customerAccountId,
+      sourceSystem: input.sourceSystem,
+      sourceRecordType: input.sourceRecordType ?? null,
+      sourceRecordId: input.sourceRecordId ?? null,
+      severity: input.severity,
+      title: input.title,
+      summary: input.summary,
+      recommendedAction: input.recommendedAction ?? null,
+      reasonLabel: input.reasonLabel ?? null,
+      metadata: input.metadata ?? Prisma.JsonNull,
+      lastDetectedAt: now,
+      lastEvaluatedAt: now,
+      status: nextStatus,
+      statusUpdatedAt:
+        nextStatus !== existing.status ? now : existing.statusUpdatedAt,
+      resolvedAt: nextStatus === OperationsQueueStatus.NEW ? null : existing.resolvedAt,
+      dismissedAt:
+        nextStatus === OperationsQueueStatus.NEW ? null : existing.dismissedAt
+    }
+  });
+
+  if (nextStatus !== existing.status) {
+    await recordQueueHistoryEntry(db, {
+      queueItemId: updated.id,
+      organizationId: updated.organizationId,
+      actorType: AuditActorType.SYSTEM,
+      actorLabel: "system",
+      entryType: OperationsQueueHistoryEntryType.SYSTEM_REOPENED,
+      fromStatus: existing.status,
+      toStatus: updated.status,
+      note: input.summary,
+      metadata: {
+        ruleCode: updated.ruleCode
+      }
+    });
+
+    await recordQueueTimelineEvent(db, {
+      queueItemId: updated.id,
+      queueType: updated.queueType,
+      customerAccountId: updated.customerAccountId,
+      organizationId: updated.organizationId,
+      actorType: AuditActorType.SYSTEM,
+      actorLabel: "system",
+      title: `${updated.title} reopened`,
+      body: updated.summary,
+      severity: updated.severity,
+      sourceRecordType: updated.sourceRecordType,
+      sourceRecordId: updated.sourceRecordId,
+      sourceSystem:
+        input.sourceSystem === OperationsQueueSourceSystem.STRIPE
+          ? CustomerAccountTimelineSourceSystem.STRIPE
+          : CustomerAccountTimelineSourceSystem.APP,
+      eventCode: "ops.queue_reopened"
+    });
+  }
+
+  return updated;
+}
+
 export async function synchronizeOperationsQueues(
   input: {
     organizationId?: string | null;
@@ -1124,6 +1293,9 @@ export async function getOperationsQueueDetail(
   queueItemId: string,
   db: OperationsQueueDbClient = prisma
 ) {
+  // Queue detail is a platform-admin read surface, so a globally unique queue item
+  // id is acceptable here. Tenant-scoped mutation paths must still prove
+  // organization ownership at the service boundary.
   return db.operationsQueueItem.findUnique({
     where: { id: queueItemId },
     include: {
@@ -1190,6 +1362,7 @@ export async function getOperationsQueueAssignableUsers(
 
 export async function updateOperationsQueueStatus(input: {
   queueItemId: string;
+  organizationId: string;
   status: OperationsQueueStatus;
   actorUserId: string;
   actorEmail: string;
@@ -1197,13 +1370,18 @@ export async function updateOperationsQueueStatus(input: {
   db?: OperationsQueueDbClient;
 }) {
   const db = input.db ?? prisma;
-  const existing = await db.operationsQueueItem.findUnique({
-    where: { id: input.queueItemId }
+  const existing = await requireRecordInOrganization({
+    recordId: input.queueItemId,
+    organizationId: input.organizationId,
+    entityLabel: "Queue item",
+    load: ({ recordId, organizationId }) =>
+      db.operationsQueueItem.findFirst({
+        where: {
+          id: recordId,
+          organizationId
+        }
+      })
   });
-
-  if (!existing) {
-    throw new Error("Queue item not found.");
-  }
 
   const trimmedNote = input.note?.trim() || null;
   if (input.status === OperationsQueueStatus.DISMISSED && !trimmedNote) {
@@ -1263,6 +1441,7 @@ export async function updateOperationsQueueStatus(input: {
 
 export async function assignOperationsQueueItem(input: {
   queueItemId: string;
+  organizationId: string;
   assignedUserId?: string | null;
   actorUserId: string;
   actorEmail: string;
@@ -1270,13 +1449,18 @@ export async function assignOperationsQueueItem(input: {
   db?: OperationsQueueDbClient;
 }) {
   const db = input.db ?? prisma;
-  const existing = await db.operationsQueueItem.findUnique({
-    where: { id: input.queueItemId }
+  const existing = await requireRecordInOrganization({
+    recordId: input.queueItemId,
+    organizationId: input.organizationId,
+    entityLabel: "Queue item",
+    load: ({ recordId, organizationId }) =>
+      db.operationsQueueItem.findFirst({
+        where: {
+          id: recordId,
+          organizationId
+        }
+      })
   });
-
-  if (!existing) {
-    throw new Error("Queue item not found.");
-  }
 
   const assignedUserId = input.assignedUserId?.trim() || null;
   const now = new Date();
@@ -1316,19 +1500,25 @@ export async function assignOperationsQueueItem(input: {
 
 export async function addOperationsQueueNote(input: {
   queueItemId: string;
+  organizationId: string;
   note: string;
   actorUserId: string;
   actorEmail: string;
   db?: OperationsQueueDbClient;
 }) {
   const db = input.db ?? prisma;
-  const existing = await db.operationsQueueItem.findUnique({
-    where: { id: input.queueItemId }
+  const existing = await requireRecordInOrganization({
+    recordId: input.queueItemId,
+    organizationId: input.organizationId,
+    entityLabel: "Queue item",
+    load: ({ recordId, organizationId }) =>
+      db.operationsQueueItem.findFirst({
+        where: {
+          id: recordId,
+          organizationId
+        }
+      })
   });
-
-  if (!existing) {
-    throw new Error("Queue item not found.");
-  }
 
   const trimmedNote = input.note.trim();
   if (!trimmedNote) {

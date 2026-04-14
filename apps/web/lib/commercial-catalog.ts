@@ -1,55 +1,43 @@
 import { CanonicalPlanKey } from "@evolve-edge/db";
 import type { RevenuePlanCode } from "./revenue-catalog";
+import {
+  CANONICAL_DIFY_FIELD_KEYS,
+  CANONICAL_INTEGRATION_EVENT_TYPES,
+  CANONICAL_PLAN_CODES,
+  CANONICAL_REPORT_TEMPLATES,
+  CANONICAL_STRIPE_PRICE_ENV_MAP,
+  CANONICAL_STRIPE_PRODUCT_ENV_MAP,
+  CANONICAL_WORKFLOW_CODES,
+  getCanonicalHostingerRule,
+  getCanonicalPlanDisplayName,
+  getCanonicalPublicPriceLabel,
+  getCanonicalPublicPriceUsd,
+  type CanonicalBillingMotion,
+  type CanonicalHostingerCtaTarget,
+  type CanonicalPlanCode,
+  type CanonicalPlanDisplayName,
+  type CanonicalProcessingDepth,
+  type CanonicalReportTemplate,
+  type CanonicalWorkflowCode
+} from "./canonical-domain";
+export {
+  CANONICAL_DIFY_FIELD_KEYS,
+  CANONICAL_INTEGRATION_EVENT_TYPES,
+  CANONICAL_PLAN_CODES,
+  CANONICAL_REPORT_TEMPLATES,
+  CANONICAL_WORKFLOW_CODES,
+  type CanonicalBillingMotion,
+  type CanonicalHostingerCtaTarget,
+  type CanonicalPlanCode,
+  type CanonicalPlanDisplayName,
+  type CanonicalProcessingDepth,
+  type CanonicalReportTemplate,
+  type CanonicalWorkflowCode
+} from "./canonical-domain";
 
-export const CANONICAL_PLAN_CODES = [
-  "starter",
-  "scale",
-  "enterprise"
-] as const;
-
-export type CanonicalPlanCode = (typeof CANONICAL_PLAN_CODES)[number];
-
-export const CANONICAL_WORKFLOW_CODES = [
-  "audit_starter",
-  "audit_scale",
-  "audit_enterprise",
-  "briefing_only",
-  "intake_review"
-] as const;
-
-export type CanonicalWorkflowCodeValue = (typeof CANONICAL_WORKFLOW_CODES)[number];
-
-export const CANONICAL_REPORT_TEMPLATES = [
-  "starter_snapshot",
-  "scale_operating_report",
-  "enterprise_operating_report",
-  "briefing_pack",
-  "intake_review_summary"
-] as const;
-
-export type CanonicalReportTemplate = (typeof CANONICAL_REPORT_TEMPLATES)[number];
-
-export const CANONICAL_INTEGRATION_EVENT_TYPES = [
-  "audit.requested",
-  "workflow.status.updated",
-  "workflow.report.ready"
-] as const;
-
+export type CanonicalWorkflowCodeValue = CanonicalWorkflowCode;
 export type CanonicalIntegrationEventType =
   (typeof CANONICAL_INTEGRATION_EVENT_TYPES)[number];
-
-export const DIFY_CANONICAL_FIELD_KEYS = [
-  "company_name",
-  "contact_name",
-  "contact_email",
-  "industry",
-  "top_concerns",
-  "frameworks",
-  "plan_code",
-  "workflow_code",
-  "report_template",
-  "processing_depth"
-] as const;
 
 export const HUBSPOT_COMPANY_PROPERTY_MAP = {
   orgId: "evolve_edge_org_id",
@@ -96,28 +84,28 @@ export const HUBSPOT_CONTACT_PROPERTY_MAP = {
 
 export type CanonicalCommercialPlan = {
   code: CanonicalPlanCode;
-  displayName: "Starter" | "Scale" | "Enterprise";
+  displayName: CanonicalPlanDisplayName;
   publicPriceUsd: number | null;
   publicPriceLabel: string;
-  billingMotion: "stripe_checkout" | "contact_sales";
+  billingMotion: CanonicalBillingMotion;
   ctaLabel: string;
   publicDescription: string;
   workflowCode: CanonicalWorkflowCodeValue;
   reportTemplate: CanonicalReportTemplate;
-  processingDepth: "starter" | "scale" | "enterprise" | "manual_review";
+  processingDepth: CanonicalProcessingDepth;
   publicRevenuePlanCode: RevenuePlanCode | null;
   stripePriceEnvVar: string | null;
   stripeProductEnvVar: string | null;
   contactSalesOnly: boolean;
-  hostingerCtaTarget: "stripe_checkout" | "contact_sales";
+  hostingerCtaTarget: CanonicalHostingerCtaTarget;
 };
 
 export const CANONICAL_COMMERCIAL_PLAN_CATALOG: readonly CanonicalCommercialPlan[] = [
   {
     code: "starter",
-    displayName: "Starter",
-    publicPriceUsd: 2500,
-    publicPriceLabel: "$2,500 one-time",
+    displayName: getCanonicalPlanDisplayName("starter"),
+    publicPriceUsd: getCanonicalPublicPriceUsd("starter"),
+    publicPriceLabel: getCanonicalPublicPriceLabel("starter"),
     billingMotion: "stripe_checkout",
     ctaLabel: "Start with Starter",
     publicDescription:
@@ -126,16 +114,16 @@ export const CANONICAL_COMMERCIAL_PLAN_CATALOG: readonly CanonicalCommercialPlan
     reportTemplate: "starter_snapshot",
     processingDepth: "starter",
     publicRevenuePlanCode: "starter-annual",
-    stripePriceEnvVar: "STRIPE_PRICE_STARTER_ANNUAL",
-    stripeProductEnvVar: "STRIPE_PRODUCT_STARTER",
-    contactSalesOnly: false,
-    hostingerCtaTarget: "stripe_checkout"
+    stripePriceEnvVar: CANONICAL_STRIPE_PRICE_ENV_MAP.starter,
+    stripeProductEnvVar: CANONICAL_STRIPE_PRODUCT_ENV_MAP.starter,
+    contactSalesOnly: getCanonicalHostingerRule("starter").salesLedOnly,
+    hostingerCtaTarget: getCanonicalHostingerRule("starter").ctaTarget
   },
   {
     code: "scale",
-    displayName: "Scale",
-    publicPriceUsd: 7500,
-    publicPriceLabel: "$7,500 one-time",
+    displayName: getCanonicalPlanDisplayName("scale"),
+    publicPriceUsd: getCanonicalPublicPriceUsd("scale"),
+    publicPriceLabel: getCanonicalPublicPriceLabel("scale"),
     billingMotion: "stripe_checkout",
     ctaLabel: "Start with Scale",
     publicDescription:
@@ -144,16 +132,16 @@ export const CANONICAL_COMMERCIAL_PLAN_CATALOG: readonly CanonicalCommercialPlan
     reportTemplate: "scale_operating_report",
     processingDepth: "scale",
     publicRevenuePlanCode: "scale-annual",
-    stripePriceEnvVar: "STRIPE_PRICE_SCALE_ANNUAL",
-    stripeProductEnvVar: "STRIPE_PRODUCT_SCALE",
-    contactSalesOnly: false,
-    hostingerCtaTarget: "stripe_checkout"
+    stripePriceEnvVar: CANONICAL_STRIPE_PRICE_ENV_MAP.scale,
+    stripeProductEnvVar: CANONICAL_STRIPE_PRODUCT_ENV_MAP.scale,
+    contactSalesOnly: getCanonicalHostingerRule("scale").salesLedOnly,
+    hostingerCtaTarget: getCanonicalHostingerRule("scale").ctaTarget
   },
   {
     code: "enterprise",
-    displayName: "Enterprise",
-    publicPriceUsd: null,
-    publicPriceLabel: "Custom",
+    displayName: getCanonicalPlanDisplayName("enterprise"),
+    publicPriceUsd: getCanonicalPublicPriceUsd("enterprise"),
+    publicPriceLabel: getCanonicalPublicPriceLabel("enterprise"),
     billingMotion: "contact_sales",
     ctaLabel: "Contact sales",
     publicDescription:
@@ -162,10 +150,10 @@ export const CANONICAL_COMMERCIAL_PLAN_CATALOG: readonly CanonicalCommercialPlan
     reportTemplate: "enterprise_operating_report",
     processingDepth: "enterprise",
     publicRevenuePlanCode: "enterprise-annual",
-    stripePriceEnvVar: "STRIPE_PRICE_ENTERPRISE_ANNUAL",
-    stripeProductEnvVar: "STRIPE_PRODUCT_ENTERPRISE",
-    contactSalesOnly: true,
-    hostingerCtaTarget: "contact_sales"
+    stripePriceEnvVar: CANONICAL_STRIPE_PRICE_ENV_MAP.enterprise,
+    stripeProductEnvVar: CANONICAL_STRIPE_PRODUCT_ENV_MAP.enterprise,
+    contactSalesOnly: getCanonicalHostingerRule("enterprise").salesLedOnly,
+    hostingerCtaTarget: getCanonicalHostingerRule("enterprise").ctaTarget
   }
 ] as const;
 
@@ -181,6 +169,21 @@ export function resolveCanonicalPlanCode(
       return "starter";
     case "scale":
     case "growth":
+      return "scale";
+    case "enterprise":
+      return "enterprise";
+    default:
+      return null;
+  }
+}
+
+export function resolvePublicCanonicalPlanCode(
+  value: string | null | undefined
+): CanonicalPlanCode | null {
+  switch ((value ?? "").trim().toLowerCase()) {
+    case "starter":
+      return "starter";
+    case "scale":
       return "scale";
     case "enterprise":
       return "enterprise";

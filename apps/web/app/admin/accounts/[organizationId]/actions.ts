@@ -29,6 +29,7 @@ export async function retryCustomerRunAction(formData: FormData) {
     requireOperatorConfirmation(formData.get("confirmation"), "RETRY");
 
     const result = await retryCustomerRun(runId, {
+      organizationId,
       actorEmail: session.user.email,
       reason
     });

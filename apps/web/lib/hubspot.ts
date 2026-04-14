@@ -12,6 +12,7 @@ import {
 } from "./reliability";
 import { shouldBlockDemoExternalSideEffects } from "./demo-mode";
 import { stripEmptyStringProperties } from "./integration-contracts";
+import { logServerEvent } from "./monitoring";
 import { getOptionalEnv } from "./runtime-config";
 
 type HubSpotDestination = {
@@ -30,6 +31,10 @@ type HubSpotUpsertResponse = {
 };
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+// HubSpot is currently a projection surface for contacts and companies only.
+// CRM deal identifiers may be stored on app records for operator reference,
+// but this service does not read HubSpot deal state back into product truth or
+// let HubSpot define plans, routing, delivery, or audit lifecycle decisions.
 const HUBSPOT_SYNC_EVENT_TYPES = new Set([
   "lead.captured",
   "lead.converted",
@@ -41,6 +46,14 @@ const HUBSPOT_SYNC_EVENT_TYPES = new Set([
   "subscription.created",
   "subscription.updated"
 ]);
+
+export function assertHubSpotProjectionEvent(eventType: string) {
+  if (!shouldSyncHubSpotEvent(eventType)) {
+    throw new Error(
+      `HubSpot projection is not enabled for event type "${eventType}".`
+    );
+  }
+}
 
 function coerceTimeoutMs(value: string | null) {
   const parsed = Number(value ?? "");
@@ -165,6 +178,20 @@ function readPayloadRecord(payload: Prisma.JsonValue) {
   }
 
   return payload as Record<string, Prisma.JsonValue>;
+}
+
+function readPayloadString(
+  payload: Record<string, Prisma.JsonValue>,
+  ...keys: string[]
+) {
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return "";
 }
 
 async function hubspotRequest<T>(
@@ -370,11 +397,7 @@ async function upsertPrimaryContactForEvent(
   const userId = event.userId;
   const payload = readPayloadRecord(event.payload);
   const payloadEmail =
-    typeof payload.normalizedEmail === "string"
-      ? payload.normalizedEmail
-      : typeof payload.email === "string"
-        ? payload.email
-        : null;
+    readPayloadString(payload, "normalizedEmail", "email", "customer_email") || null;
   const user = userId
     ? await prisma.user.findUnique({
         where: { id: userId }
@@ -394,16 +417,16 @@ async function upsertPrimaryContactForEvent(
     [HUBSPOT_CONTACT_PROPERTY_MAP.email]: email,
     [HUBSPOT_CONTACT_PROPERTY_MAP.firstName]:
       user?.firstName ??
-      (typeof payload.firstName === "string" ? payload.firstName : ""),
+      readPayloadString(payload, "firstName"),
     [HUBSPOT_CONTACT_PROPERTY_MAP.lastName]:
       user?.lastName ??
-      (typeof payload.lastName === "string" ? payload.lastName : ""),
+      readPayloadString(payload, "lastName"),
     [HUBSPOT_CONTACT_PROPERTY_MAP.jobTitle]:
-      typeof payload.jobTitle === "string" ? payload.jobTitle : "",
+      readPayloadString(payload, "jobTitle"),
     [HUBSPOT_CONTACT_PROPERTY_MAP.phone]:
-      typeof payload.phone === "string" ? payload.phone : "",
+      readPayloadString(payload, "phone"),
     [HUBSPOT_CONTACT_PROPERTY_MAP.company]:
-      typeof payload.companyName === "string" ? payload.companyName : "",
+      readPayloadString(payload, "companyName", "company_name", "company"),
     [HUBSPOT_CONTACT_PROPERTY_MAP.leadStatus]:
       event.type === "lead.converted" ? "OPEN" : "NEW",
     [HUBSPOT_CONTACT_PROPERTY_MAP.userId]: user?.id ?? "",
@@ -411,25 +434,25 @@ async function upsertPrimaryContactForEvent(
     [HUBSPOT_CONTACT_PROPERTY_MAP.lastEventAt]: event.occurredAt.toISOString(),
     [HUBSPOT_CONTACT_PROPERTY_MAP.lifecycleStage]: getLifecycleStage(event.type),
     [HUBSPOT_CONTACT_PROPERTY_MAP.leadSource]:
-      typeof payload.source === "string" ? payload.source : "",
+      readPayloadString(payload, "lead_source_detail", "source"),
     [HUBSPOT_CONTACT_PROPERTY_MAP.leadIntent]:
-      typeof payload.intent === "string" ? payload.intent : "",
+      readPayloadString(payload, "intent"),
     [HUBSPOT_CONTACT_PROPERTY_MAP.requestedPlanCode]:
       resolveCanonicalPlanCode(
-        typeof payload.requestedPlanCode === "string" ? payload.requestedPlanCode : ""
+        readPayloadString(payload, "requestedPlanCode", "purchased_plan_code")
       ) ??
       resolveCanonicalPlanCodeFromRevenuePlanCode(
-        typeof payload.requestedPlanCode === "string" ? payload.requestedPlanCode : ""
+        readPayloadString(payload, "requestedPlanCode", "purchased_plan_code")
       ) ??
-      (typeof payload.requestedPlanCode === "string" ? payload.requestedPlanCode : ""),
+      readPayloadString(payload, "requestedPlanCode", "purchased_plan_code"),
     [HUBSPOT_CONTACT_PROPERTY_MAP.sourcePath]:
-      typeof payload.sourcePath === "string" ? payload.sourcePath : "",
+      readPayloadString(payload, "sourcePath"),
     [HUBSPOT_CONTACT_PROPERTY_MAP.companyName]:
-      typeof payload.companyName === "string" ? payload.companyName : "",
+      readPayloadString(payload, "companyName", "company_name", "company"),
     [HUBSPOT_CONTACT_PROPERTY_MAP.teamSize]:
-      typeof payload.teamSize === "string" ? payload.teamSize : "",
-    [HUBSPOT_CONTACT_PROPERTY_MAP.utmSource]:
-      payload.attribution &&
+      readPayloadString(payload, "teamSize", "company_size"),
+      [HUBSPOT_CONTACT_PROPERTY_MAP.utmSource]:
+        payload.attribution &&
       typeof payload.attribution === "object" &&
       !Array.isArray(payload.attribution) &&
       typeof (payload.attribution as Record<string, Prisma.JsonValue>).utmSource === "string"
@@ -505,6 +528,15 @@ export async function syncDomainEventToHubSpot(input: {
   timeoutMs?: number;
 }) {
   const timeoutMs = clampTimeoutMs(input.timeoutMs ?? DEFAULT_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
+  assertHubSpotProjectionEvent(input.event.type);
+  const payload = readPayloadRecord(input.event.payload);
+  const customerEmail = readPayloadString(
+    payload,
+    "normalizedEmail",
+    "email",
+    "customer_email"
+  );
+  const requestId = readPayloadString(payload, "request_id", "dispatchId", "dispatch_id");
 
   try {
     const companyId = await upsertCompanyForEvent(input.event, timeoutMs);
@@ -514,15 +546,41 @@ export async function syncDomainEventToHubSpot(input: {
       timeoutMs
     );
 
+    logServerEvent("info", "hubspot.sync.completed", {
+      customer_email: customerEmail || null,
+      hubspot_contact_id: contactId,
+      hubspot_deal_id: null,
+      request_id: requestId || null,
+      status: "synced",
+      source: "hubspot.sync",
+      metadata: {
+        eventType: input.event.type,
+        companyId
+      }
+    });
+
     return {
       companyId,
-      contactId
+      contactId,
+      customerEmail: customerEmail || null
     };
   } catch (error) {
     const normalized = normalizeExternalError(
       error,
       "HubSpot synchronization failed."
     );
+    logServerEvent("error", "hubspot.sync.failed", {
+      customer_email: customerEmail || null,
+      hubspot_contact_id: null,
+      hubspot_deal_id: null,
+      request_id: requestId || null,
+      status: "failed",
+      source: "hubspot.sync",
+      metadata: {
+        eventType: input.event.type,
+        message: normalized.message
+      }
+    });
     throw new Error(normalized.message);
   }
 }

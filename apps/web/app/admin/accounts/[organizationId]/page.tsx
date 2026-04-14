@@ -628,16 +628,19 @@ export default async function AdminAccountDetailPage({
             <div className="mt-4 space-y-3">
               {billingAdminSnapshot.recentBillingEventLogs.length > 0 ? (
                 billingAdminSnapshot.recentBillingEventLogs.map((event) => (
-                  <div key={event.id} className="rounded-2xl bg-mist p-4">
-                    <p className="font-medium text-ink">{event.eventType}</p>
-                    <p className="mt-1 text-sm text-steel">
-                      {event.eventSource} | {formatDate(event.occurredAt)}
-                    </p>
-                    <p className="mt-2 text-sm text-steel">
-                      {event.sourceReference ?? event.idempotencyKey ?? "No source reference"}
-                    </p>
-                    <p className="mt-2 break-all text-xs text-steel">
-                      {formatJsonPreview(event.payload)}
+                    <div key={event.id} className="rounded-2xl bg-mist p-4">
+                      <p className="font-medium text-ink">{event.eventType}</p>
+                      <p className="mt-1 text-sm text-steel">
+                        {event.eventSource} | {formatDate(event.occurredAt)}
+                      </p>
+                      <p className="mt-2 text-sm text-steel">
+                        Plan: {event.supportSafePlanName ?? event.supportSafePlanCode ?? "Not captured"}
+                      </p>
+                      <p className="mt-2 text-sm text-steel">
+                        {event.sourceReference ?? event.idempotencyKey ?? "No source reference"}
+                      </p>
+                      <p className="mt-2 break-all text-xs text-steel">
+                        {formatJsonPreview(event.payload)}
                     </p>
                   </div>
                 ))
@@ -675,6 +678,77 @@ export default async function AdminAccountDetailPage({
                 </div>
               )}
             </div>
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-2xl border border-line p-5">
+          <h2 className="text-lg font-semibold text-ink">Delivery reconciliation findings</h2>
+          <p className="mt-2 text-sm text-steel">
+            Backend-detected mismatches between payment, routing, execution, and delivery records for this workspace.
+          </p>
+          <div className="mt-5 space-y-3">
+            {billingAdminSnapshot.recentDeliveryMismatchFindings.length > 0 ? (
+              billingAdminSnapshot.recentDeliveryMismatchFindings.map((finding) => (
+                <div key={`${finding.code}:${finding.deliveryStateId}`} className="rounded-2xl bg-mist p-4">
+                  <p className="font-medium text-ink">
+                    {finding.title} · {formatStatus(finding.severity)}
+                  </p>
+                  <p className="mt-1 text-sm text-steel">
+                    {formatStatus(finding.deliveryStatus)} · Age {finding.ageMinutes} minutes · Observed{" "}
+                    {formatDate(new Date(finding.observedAt))}
+                  </p>
+                  <p className="mt-2 text-sm text-steel">{finding.summary}</p>
+                  <p className="mt-2 text-xs text-steel">
+                    Delivery {finding.deliveryStateId} · Billing {finding.billingEventId ?? "n/a"} ·
+                    Routing {finding.routingSnapshotId ?? "n/a"} · Dispatch {finding.workflowDispatchId ?? "n/a"}
+                  </p>
+                  {finding.stripeEventId || finding.externalExecutionId ? (
+                    <p className="mt-2 text-xs text-steel">
+                      Stripe {finding.stripeEventId ?? "n/a"} · External execution{" "}
+                      {finding.externalExecutionId ?? "n/a"}
+                    </p>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl bg-mist p-4 text-sm text-steel">
+                No active reconciliation mismatches have been detected for this workspace.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-2xl border border-line p-5">
+          <h2 className="text-lg font-semibold text-ink">Report and delivery ops findings</h2>
+          <p className="mt-2 text-sm text-steel">
+            Durable operator findings for report export misuse, blocked package sends, and other delivery-path risks tied to this workspace.
+          </p>
+          <div className="mt-5 space-y-3">
+            {billingAdminSnapshot.recentDeliveryOpsFindings.length > 0 ? (
+              billingAdminSnapshot.recentDeliveryOpsFindings.map((finding) => (
+                <div key={finding.id} className="rounded-2xl bg-mist p-4">
+                  <p className="font-medium text-ink">
+                    {finding.title} · {formatStatus(finding.severity)} · {formatStatus(finding.status)}
+                  </p>
+                  <p className="mt-1 text-sm text-steel">
+                    {finding.ruleCode} · {formatDate(finding.lastDetectedAt)}
+                  </p>
+                  <p className="mt-2 text-sm text-steel">{finding.summary}</p>
+                  <p className="mt-2 text-xs text-steel">
+                    {finding.sourceRecordType ?? "record"} {finding.sourceRecordId ?? "n/a"}
+                  </p>
+                  {finding.recommendedAction ? (
+                    <p className="mt-2 text-xs text-steel">
+                      Action: {finding.recommendedAction}
+                    </p>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl bg-mist p-4 text-sm text-steel">
+                No report/export or delivery-path ops findings are currently open for this workspace.
+              </div>
+            )}
           </div>
         </section>
 
@@ -732,6 +806,10 @@ export default async function AdminAccountDetailPage({
                       <p className="mt-1 text-sm text-steel">
                         Report: {run.report?.title ?? "Not generated yet"} · Initiated by{" "}
                         {run.initiatedBy?.email ?? "system"}
+                      </p>
+                      <p className="mt-2 text-xs text-steel">
+                        Run {run.id} · Assessment {run.assessmentId ?? "n/a"} · Report{" "}
+                        {run.reportId ?? "n/a"}
                       </p>
                       {run.lastError ? (
                         <p className="mt-2 text-sm text-danger">{run.lastError}</p>

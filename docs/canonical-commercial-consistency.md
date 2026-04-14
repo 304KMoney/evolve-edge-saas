@@ -41,7 +41,42 @@ Compatibility rules:
 - `enterprise` -> `enterprise-annual`
 - legacy `growth-*` revenue plans normalize to canonical commercial plan `scale`
 
+Boundary rule:
+
+- customer-facing and support-facing app surfaces should accept or display only
+  `starter`, `scale`, or `enterprise`
+- legacy `growth` identifiers remain backend compatibility inputs only and
+  should be normalized before they reach checkout, support summaries, or
+  customer-visible UX
+
 This keeps existing data and subscription logic stable while exposing one commercial model everywhere outward-facing.
+
+## Billing identifier layers
+
+Evolve Edge now uses three distinct billing identifier layers. Keeping them separate is important for both operator trust and implementation correctness.
+
+- Stripe identifiers
+  - examples: `stripeEventId`, `stripeCheckoutSessionId`, `stripePaymentIntentId`, `stripeCustomerId`, `stripeSubscriptionId`
+  - purpose: external provider references only
+- Canonical commercial plan codes
+  - values: `starter`, `scale`, `enterprise`
+  - purpose: customer-facing and support-safe plan naming
+- Internal revenue-plan codes
+  - examples: `starter-annual`, `scale-annual`, `enterprise-annual`
+  - purpose: persisted billing compatibility and subscription resolution
+
+Important rule:
+
+- `BillingEventLog.planCodeSnapshot` should store the internal revenue-plan code layer
+- `BillingEventLog.canonicalPlanKey` should store the canonical plan enum layer
+- support and customer-facing read models should normalize those stored values back to canonical commercial names before display
+
+This means a checkout for `scale` may persist:
+
+- canonical commercial plan: `scale`
+- internal billing plan snapshot: `scale-annual`
+
+That is expected and intentional.
 
 ## Canonical workflow codes
 

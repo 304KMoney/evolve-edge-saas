@@ -1,12 +1,20 @@
 import { createHmac } from "node:crypto";
-import { Prisma, type DomainEvent, type RoutingSnapshot, type WebhookDelivery } from "@evolve-edge/db";
+import {
+  Prisma,
+  type BillingEventLog,
+  type DomainEvent,
+  type Organization,
+  type RoutingSnapshot,
+  type User,
+  type WebhookDelivery
+} from "@evolve-edge/db";
 import {
   getCanonicalProcessingDepthForPlan,
   getCanonicalReportTemplateForPlan,
   resolveCanonicalPlanCode
 } from "./commercial-catalog";
 import { getIntegrationEnvironmentLabel } from "./integration-contracts";
-import { getOptionalEnv, getOptionalJsonEnv } from "./runtime-config";
+import { getAppUrl, getOptionalEnv, getOptionalJsonEnv } from "./runtime-config";
 import { extractNormalizedWorkflowHints } from "./workflow-routing";
 
 export type N8nWorkflowName =
@@ -50,6 +58,10 @@ export type N8nEnvelope = {
     orgId: string | null;
     userId: string | null;
     occurredAt: string;
+    // Generic n8n envelopes intentionally forward the allowlisted domain-event
+    // payload as published. Keep those event payloads operationally useful, but
+    // avoid secrets, raw evidence blobs, or broader customer state than the
+    // downstream workflow actually needs.
     payload: unknown;
   };
   routing?: {
@@ -83,6 +95,35 @@ export type AuditRequestedN8nPayload = {
     source_record_id: string | null;
     environment: string;
   };
+  callbacks: {
+    status_url: string;
+    report_ready_url: string;
+    failure_url: string;
+    report_writeback_url: string;
+    auth_scheme: "bearer";
+  };
+  callback_urls: {
+    status_update_url: string;
+    report_ready_url: string;
+    failure_url: string;
+  };
+  request_id: string;
+  app_customer_id: string | null;
+  app_org_id: string;
+  customer_email: string | null;
+  customer_name: string | null;
+  company_name: string | null;
+  purchased_tier: string;
+  purchased_plan_code: string;
+  stripe_session_id: string | null;
+  amount_paid: number | null;
+  currency: string | null;
+  top_concerns: string[];
+  uses_ai_tools: boolean | null;
+  company_size: string | null;
+  industry: string | null;
+  additional_notes: string | null;
+  website: string | null;
   routing: {
     plan_code: string;
     workflow_code: string;
@@ -95,6 +136,38 @@ export type AuditRequestedN8nPayload = {
     reason: Prisma.JsonValue;
   };
 };
+
+// Evolve Edge currently sends two intentionally different n8n payload families:
+// 1. `AuditRequestedN8nPayload` for the dedicated paid-request orchestration flow
+//    owned by `workflow-dispatch.ts`
+// 2. `N8nEnvelope` for selected domain-event deliveries owned by
+//    `webhook-dispatcher.ts`
+//
+// They are not interchangeable. The audit-request contract is a normalized
+// execution handoff built from a `RoutingSnapshot`, while the generic envelope
+// preserves the underlying domain event plus any extracted workflow-routing hints.
+
+function buildWorkflowCallbackUrls() {
+  const appUrl = getAppUrl();
+
+  return {
+    status_url: `${appUrl}/api/internal/workflows/status`,
+    report_ready_url: `${appUrl}/api/internal/workflows/report-ready`,
+    failure_url: `${appUrl}/api/internal/workflows/failed`,
+    report_writeback_url: `${appUrl}/api/internal/workflows/report-writeback`,
+    auth_scheme: "bearer" as const
+  };
+}
+
+function buildCompactWorkflowCallbackUrls() {
+  const callbacks = buildWorkflowCallbackUrls();
+
+  return {
+    status_update_url: callbacks.status_url,
+    report_ready_url: callbacks.report_ready_url,
+    failure_url: callbacks.failure_url
+  };
+}
 
 export type N8nDestination = {
   name: string;
@@ -140,6 +213,14 @@ function getDefaultN8nTimeoutMs() {
   return coerceTimeoutMs(getOptionalEnv("N8N_WEBHOOK_TIMEOUT_MS"));
 }
 
+export function isLegacyN8nWebhookFallbackActive() {
+  const configured =
+    getOptionalJsonEnv<N8nWorkflowConfig[]>("N8N_WORKFLOW_DESTINATIONS");
+
+  return (!Array.isArray(configured) || configured.length === 0) &&
+    Boolean(getOptionalEnv("N8N_WEBHOOK_URL"));
+}
+
 export function getN8nWorkflowDestinations(): N8nDestination[] {
   const configured =
     getOptionalJsonEnv<N8nWorkflowConfig[]>("N8N_WORKFLOW_DESTINATIONS");
@@ -161,7 +242,17 @@ export function getN8nWorkflowDestinations(): N8nDestination[] {
     return [];
   }
 
+  // Compatibility-only fallback for older environments. First-customer launch
+  // should cut over to explicit per-workflow destinations in
+  // N8N_WORKFLOW_DESTINATIONS instead of relying on one shared webhook URL.
   return [
+    {
+      name: "auditRequested",
+      url: legacyUrl,
+      secret: getDefaultN8nSecret(),
+      provider: "n8n",
+      timeoutMs: getDefaultN8nTimeoutMs()
+    },
     {
       name: "customerOnboarding",
       url: legacyUrl,
@@ -275,6 +366,35 @@ export function buildN8nEnvelope(input: {
   };
 }
 
+function normalizeOptionalString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function normalizeOptionalStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((item) => item.trim());
+}
+
+function readJsonObject(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function buildCustomerName(user?: Pick<User, "firstName" | "lastName"> | null) {
+  const fullName = [user?.firstName?.trim(), user?.lastName?.trim()]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .trim();
+
+  return fullName.length > 0 ? fullName : null;
+}
+
 export function buildN8nSignedHeaders(body: string, secret?: string | null) {
   if (!secret) {
     return {} as Record<string, string>;
@@ -309,6 +429,9 @@ export function buildAuditRequestedPayload(input: {
     | "normalizedHintsJson"
     | "routingReasonJson"
   >;
+  organization?: Pick<Organization, "name" | "industry" | "sizeBand" | "aiUsageSummary"> | null;
+  user?: Pick<User, "email" | "firstName" | "lastName"> | null;
+  billingEventLog?: Pick<BillingEventLog, "amountCents" | "currency"> | null;
   dispatchId?: string | null;
   correlationId?: string | null;
 }): AuditRequestedN8nPayload {
@@ -324,6 +447,46 @@ export function buildAuditRequestedPayload(input: {
     !Array.isArray(input.routingSnapshot.routingReasonJson)
       ? input.routingSnapshot.routingReasonJson
       : {};
+  const normalizedHintRecord =
+    typeof normalizedHints === "object" && !Array.isArray(normalizedHints)
+      ? (normalizedHints as Record<string, unknown>)
+      : {};
+  const rawPlanCode = String(input.routingSnapshot.planCode).toLowerCase();
+  const canonicalPlanCode = resolveCanonicalPlanCode(rawPlanCode) ?? "starter";
+  const normalizedPlanCode = resolveCanonicalPlanCode(rawPlanCode) ?? rawPlanCode;
+  const reportTemplate =
+    typeof normalizedHintRecord.report_template === "string" &&
+    normalizedHintRecord.report_template.trim().length > 0
+      ? normalizedHintRecord.report_template
+      : getCanonicalReportTemplateForPlan(canonicalPlanCode);
+  const processingDepth =
+    typeof normalizedHintRecord.processing_depth === "string" &&
+    normalizedHintRecord.processing_depth.trim().length > 0
+      ? normalizedHintRecord.processing_depth
+      : getCanonicalProcessingDepthForPlan(canonicalPlanCode);
+  const callbacks = buildWorkflowCallbackUrls();
+  const callbackUrls = buildCompactWorkflowCallbackUrls();
+  const routingReasonRecord = readJsonObject(routingReason);
+  const hintedTopConcerns = normalizeOptionalStringArray(normalizedHintRecord.top_concerns);
+  const topConcerns =
+    hintedTopConcerns.length > 0
+      ? hintedTopConcerns
+      : normalizeOptionalStringArray(
+          routingReasonRecord.top_concerns ?? routingReasonRecord.reasonCodes
+        );
+  const amountPaid =
+    typeof input.billingEventLog?.amountCents === "number"
+      ? input.billingEventLog.amountCents
+      : null;
+  const customerName = buildCustomerName(input.user);
+  const customerEmail = normalizeOptionalString(input.user?.email);
+  const companyName = normalizeOptionalString(input.organization?.name);
+  const usesAiTools =
+    typeof normalizedHintRecord.uses_ai_tools === "boolean"
+      ? normalizedHintRecord.uses_ai_tools
+      : input.organization?.aiUsageSummary
+        ? true
+        : null;
 
   return {
     source: "evolve-edge",
@@ -333,6 +496,23 @@ export function buildAuditRequestedPayload(input: {
     routing_snapshot_id: input.routingSnapshot.id,
     dispatch_id: input.dispatchId ?? "",
     correlation_id: input.correlationId ?? "",
+    request_id: input.dispatchId ?? "",
+    app_customer_id: input.routingSnapshot.userId ?? null,
+    app_org_id: input.routingSnapshot.organizationId,
+    customer_email: customerEmail,
+    customer_name: customerName,
+    company_name: companyName,
+    purchased_tier: normalizedPlanCode,
+    purchased_plan_code: normalizedPlanCode,
+    stripe_session_id: input.routingSnapshot.sourceRecordId ?? null,
+    amount_paid: amountPaid,
+    currency: normalizeOptionalString(input.billingEventLog?.currency) ?? null,
+    top_concerns: topConcerns,
+    uses_ai_tools: usesAiTools,
+    company_size: normalizeOptionalString(input.organization?.sizeBand) ?? null,
+    industry: normalizeOptionalString(input.organization?.industry) ?? null,
+    additional_notes: normalizeOptionalString(input.organization?.aiUsageSummary) ?? null,
+    website: null,
     execution_context: {
       organization_id: input.routingSnapshot.organizationId,
       user_id: input.routingSnapshot.userId ?? null,
@@ -343,28 +523,17 @@ export function buildAuditRequestedPayload(input: {
       source_record_id: input.routingSnapshot.sourceRecordId ?? null,
       environment: getIntegrationEnvironmentLabel()
     },
+    callbacks,
+    callback_urls: callbackUrls,
     routing: {
       plan_code: String(input.routingSnapshot.planCode).toLowerCase(),
       workflow_code: String(input.routingSnapshot.workflowCode).toLowerCase(),
-      report_template: getCanonicalReportTemplateForPlan(
-        resolveCanonicalPlanCode(String(input.routingSnapshot.planCode).toLowerCase())
-      ),
-      processing_depth: getCanonicalProcessingDepthForPlan(
-        resolveCanonicalPlanCode(String(input.routingSnapshot.planCode).toLowerCase())
-      ),
+      report_template: reportTemplate,
+      processing_depth: processingDepth,
       status: String(input.routingSnapshot.status).toLowerCase(),
-      entitlement_summary:
-        typeof normalizedHints === "object" && !Array.isArray(normalizedHints)
-          ? (normalizedHints as Record<string, unknown>).entitlement_summary ?? {}
-          : {},
-      quota_state:
-        typeof normalizedHints === "object" && !Array.isArray(normalizedHints)
-          ? (normalizedHints as Record<string, unknown>).quota_state ?? {}
-          : {},
-      feature_flags:
-        typeof normalizedHints === "object" && !Array.isArray(normalizedHints)
-          ? (normalizedHints as Record<string, unknown>).feature_flags ?? {}
-          : {},
+      entitlement_summary: normalizedHintRecord.entitlement_summary ?? {},
+      quota_state: normalizedHintRecord.quota_state ?? {},
+      feature_flags: normalizedHintRecord.feature_flags ?? {},
       reason: routingReason
     }
   };

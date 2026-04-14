@@ -199,6 +199,7 @@ export default async function AdminOperationsQueueDetailPage({
             <h2 className="text-lg font-semibold text-ink">Workflow controls</h2>
             <form action={updateOperationsQueueStatusAction} className="mt-4 space-y-3">
               <input type="hidden" name="queueItemId" value={queueItem.id} />
+              <input type="hidden" name="organizationId" value={queueItem.organizationId} />
               <select
                 name="status"
                 defaultValue={queueItem.status}
@@ -226,6 +227,7 @@ export default async function AdminOperationsQueueDetailPage({
 
             <form action={assignOperationsQueueItemAction} className="mt-6 space-y-3">
               <input type="hidden" name="queueItemId" value={queueItem.id} />
+              <input type="hidden" name="organizationId" value={queueItem.organizationId} />
               <select
                 name="assignedUserId"
                 defaultValue={queueItem.assignedUserId ?? ""}
@@ -254,6 +256,7 @@ export default async function AdminOperationsQueueDetailPage({
 
             <form action={addOperationsQueueNoteAction} className="mt-6 space-y-3">
               <input type="hidden" name="queueItemId" value={queueItem.id} />
+              <input type="hidden" name="organizationId" value={queueItem.organizationId} />
               <textarea
                 name="note"
                 rows={4}

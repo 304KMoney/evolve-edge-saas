@@ -634,6 +634,10 @@ export default async function AdminPage({
                         <p className="mt-1 text-sm text-steel">
                           {run.assessment?.name ?? "Workflow run"} · {run.lastError ?? "Action required"}
                         </p>
+                        <p className="mt-2 text-xs text-steel">
+                          Run {run.id} · Assessment {run.assessment?.id ?? "n/a"} · Report{" "}
+                          {run.report?.id ?? "n/a"}
+                        </p>
                         <p className="mt-2 text-sm text-steel">
                           <Link
                             href={`/admin/accounts/${run.organization.id}` as Route}
@@ -804,6 +808,153 @@ export default async function AdminPage({
                 No customer accounts have been created yet.
               </div>
             )}
+          </div>
+        </section>
+
+        <section className="mt-10">
+          <h2 className="text-lg font-semibold text-ink">Global ops findings</h2>
+          <p className="mt-2 text-sm text-steel">
+            Cross-org visibility into reconciliation mismatches and report or delivery risks that already have backend-owned findings.
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-line p-4">
+              <p className="text-sm text-steel">Recent reconciliation mismatches</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {scaleSnapshot.globalOpsDashboard.counts.recentMismatchFindings}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-line p-4">
+              <p className="text-sm text-steel">Recent delivery ops findings</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {scaleSnapshot.globalOpsDashboard.counts.recentDeliveryOpsFindings}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-6 lg:grid-cols-2">
+            <div>
+              <h3 className="text-base font-semibold text-ink">
+                Reconciliation mismatches
+              </h3>
+              <div className="mt-3 space-y-3">
+                {scaleSnapshot.globalOpsDashboard.recentMismatchFindings.length > 0 ? (
+                  scaleSnapshot.globalOpsDashboard.recentMismatchFindings.map((finding) => {
+                    const accountHref = `/admin/accounts/${finding.organization.id}` as Route;
+
+                    return (
+                      <div key={`${finding.deliveryState.id}-${finding.code}`} className="rounded-2xl border border-line p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <Link
+                              href={accountHref}
+                              className="font-medium text-ink transition hover:text-accent"
+                            >
+                              {finding.organization.name}
+                            </Link>
+                            <p className="mt-1 text-sm text-steel">
+                              {finding.organization.slug}
+                            </p>
+                          </div>
+                          <div className="text-right text-sm text-steel">
+                            <p>{formatStatus(finding.severity)}</p>
+                            <p className="mt-1">{formatStatus(finding.deliveryState.status)}</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 font-medium text-ink">{finding.title}</p>
+                        <p className="mt-2 text-sm text-steel">{finding.summary}</p>
+                        <div className="mt-3 space-y-1 text-sm text-steel">
+                          <p>Observed: {formatDateTime(new Date(finding.observedAt))}</p>
+                          <p>Age: {finding.ageMinutes} minutes</p>
+                          <p>
+                            Billing: {finding.linkage.stripeEventId ?? finding.linkage.billingEventId ?? "Not linked"}
+                          </p>
+                          <p>
+                            Routing: {finding.linkage.routingSnapshotId ?? "Not linked"} · Execution: {finding.linkage.externalExecutionId ?? finding.linkage.workflowDispatchId ?? "Not linked"}
+                          </p>
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-3 text-sm font-medium">
+                          <Link
+                            href={accountHref}
+                            className="text-accent transition hover:text-ink"
+                          >
+                            Open organization account
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-line p-4 text-sm text-steel">
+                    No recent cross-org reconciliation mismatches matched this view.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-base font-semibold text-ink">
+                Report and delivery findings
+              </h3>
+              <div className="mt-3 space-y-3">
+                {scaleSnapshot.globalOpsDashboard.recentDeliveryOpsFindings.length > 0 ? (
+                  scaleSnapshot.globalOpsDashboard.recentDeliveryOpsFindings.map((finding) => {
+                    const accountHref = `/admin/accounts/${finding.organizationId}` as Route;
+                    const queueHref = `/admin/queues/${finding.id}` as Route;
+
+                    return (
+                      <div key={finding.id} className="rounded-2xl border border-line p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <Link
+                              href={accountHref}
+                              className="font-medium text-ink transition hover:text-accent"
+                            >
+                              {finding.organizationName}
+                            </Link>
+                            <p className="mt-1 text-sm text-steel">
+                              {finding.organizationSlug}
+                            </p>
+                          </div>
+                          <div className="text-right text-sm text-steel">
+                            <p>{formatStatus(finding.severity)}</p>
+                            <p className="mt-1">{formatStatus(finding.status)}</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 font-medium text-ink">{finding.title}</p>
+                        <p className="mt-2 text-sm text-steel">{finding.summary}</p>
+                        <div className="mt-3 space-y-1 text-sm text-steel">
+                          <p>Rule: {finding.ruleCode}</p>
+                          <p>
+                            Record: {finding.sourceRecordType ?? "unknown"} · {finding.sourceRecordId ?? "Not linked"}
+                          </p>
+                          <p>Detected: {formatDateTime(finding.lastDetectedAt)}</p>
+                          {finding.recommendedAction ? (
+                            <p>Recommended action: {finding.recommendedAction}</p>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-3 text-sm font-medium">
+                          <Link
+                            href={queueHref}
+                            className="text-accent transition hover:text-ink"
+                          >
+                            Open queue item
+                          </Link>
+                          <Link
+                            href={accountHref}
+                            className="text-accent transition hover:text-ink"
+                          >
+                            Open organization account
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-line p-4 text-sm text-steel">
+                    No recent report or delivery findings matched this view.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 

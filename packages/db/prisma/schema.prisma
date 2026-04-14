@@ -105,6 +105,16 @@ enum WorkflowDispatchStatus {
   FAILED
 }
 
+enum DeliveryStateStatus {
+  PAID
+  ROUTED
+  PROCESSING
+  AWAITING_REVIEW
+  REPORT_GENERATED
+  DELIVERED
+  FAILED
+}
+
 enum EntitlementOverrideSource {
   ENTERPRISE
   PROMO
@@ -211,6 +221,37 @@ enum BillingEventStatus {
   PROCESSING
   PROCESSED
   FAILED
+}
+
+enum PaymentReconciliationStatus {
+  VERIFIED
+  PAYMENT_CONFIRMED
+  BINDING_PENDING
+  BINDING_RECONCILED
+  RECONCILIATION_FAILED
+}
+
+enum CustomerAccessGrantScopeType {
+  ORGANIZATION_REPORTS
+  REPORT_PLACEHOLDER
+}
+
+enum CustomerAccessGrantStatus {
+  ISSUED
+  BINDING_PENDING
+  EXPIRED
+  REVOKED
+}
+
+enum OperatorWorkflowEventCode {
+  PAYMENT_RECEIVED
+  RECONCILIATION_COMPLETE
+  ACCESS_GRANT_ISSUED
+  INTAKE_RECEIVED
+  REPORT_PROCESSING
+  REPORT_READY
+  REPORT_DELIVERED
+  DELIVERY_FAILED
 }
 
 enum ProvisioningStatus {
@@ -523,6 +564,11 @@ enum AuditActorType {
   ADMIN
 }
 
+enum DataClassification {
+  NON_SENSITIVE
+  SENSITIVE
+}
+
 model User {
   id                      String                     @id @default(cuid())
   email                   String                     @unique
@@ -569,6 +615,9 @@ model User {
   createdEntitlementOverrides EntitlementOverride[] @relation("EntitlementOverrideCreatedBy")
   workflowRoutingDecisions WorkflowRoutingDecision[] @relation("WorkflowRoutingDecisionActor")
   routingSnapshots       RoutingSnapshot[]          @relation("RoutingSnapshotUser")
+  deliveryStates         DeliveryStateRecord[]      @relation("DeliveryStateUser")
+  deliveryStateTransitions DeliveryStateTransition[] @relation("DeliveryStateTransitionActor")
+  customerAccessGrants   CustomerAccessGrantRecord[] @relation("CustomerAccessGrantUser")
 }
 
 model Organization {
@@ -584,6 +633,7 @@ model Organization {
   regulatoryProfile   Json?
   aiUsageSummary      String?
   currentPostureScore Int?
+  dataClassification  DataClassification      @default(SENSITIVE)
   onboardingCompletedAt DateTime?
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
@@ -611,6 +661,9 @@ model Organization {
   customerRuns        CustomerRun[]
   customerAccount     CustomerAccount?
   customerAccountTimelineEntries CustomerAccountTimelineEntry[]
+  paymentReconciliations PaymentReconciliationRecord[]
+  customerAccessGrants CustomerAccessGrantRecord[]
+  operatorWorkflowEvents OperatorWorkflowEventRecord[]
   reportPackages      ReportPackage[]
   monitoringSubscription MonitoringSubscription?
   monitoringFindings  MonitoringFinding[]
@@ -634,6 +687,8 @@ model Organization {
   operationsQueueHistoryEntries OperationsQueueHistoryEntry[]
   workflowRoutingDecisions WorkflowRoutingDecision[]
   routingSnapshots      RoutingSnapshot[]
+  deliveryStates        DeliveryStateRecord[]
+  deliveryStateTransitions DeliveryStateTransition[]
 }
 
 model OrganizationMember {
@@ -768,6 +823,11 @@ model Subscription {
   @@index([billingCustomerId, updatedAt])
 }
 
+/// Canonical Stripe receipt record. This model is intentionally not directly
+/// tenant-owned because some verified payment events can arrive before the app
+/// resolves a workspace. Tenant linkage must be established through downstream
+/// canonical records such as RoutingSnapshot, DeliveryStateRecord, or an
+/// organization-scoped billing projection.
 model BillingEvent {
   id                String             @id @default(cuid())
   stripeEventId     String             @unique
@@ -780,8 +840,135 @@ model BillingEvent {
   payload           Json
   createdAt         DateTime           @default(now())
   replayAttempts    EventReplayAttempt[]
+  routingSnapshots  RoutingSnapshot[]
+  deliveryStates    DeliveryStateRecord[]
+  paymentReconciliations PaymentReconciliationRecord[]
 
   @@index([status, createdAt])
+}
+
+/// Canonical Stripe payment reconciliation record. This model persists the
+/// backend-owned reconciliation outcome derived from a verified billing event so
+/// access issuance and operator review can rely on app state instead of raw
+/// webhook payloads.
+model PaymentReconciliationRecord {
+  id                    String                      @id @default(cuid())
+  billingEventId        String?                     @unique
+  stripeEventId         String                      @unique
+  stripeEventType       String
+  checkoutSessionId     String?
+  stripePaymentReference String?
+  customerEmail         String?
+  selectedPlan          CommercialPlanCode?
+  reconciliationStatus  PaymentReconciliationStatus @default(VERIFIED)
+  correlationId         String?
+  organizationId        String?
+  customerAccountId     String?
+  reportId              String?
+  metadata              Json?
+  lastError             String?
+  reconciledAt          DateTime?
+  failedAt              DateTime?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  billingEvent          BillingEvent?               @relation(fields: [billingEventId], references: [id], onDelete: SetNull)
+  organization          Organization?               @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  customerAccount       CustomerAccount?            @relation(fields: [customerAccountId], references: [id], onDelete: SetNull)
+  report                Report?                     @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  accessGrants          CustomerAccessGrantRecord[]
+  operatorWorkflowEvents OperatorWorkflowEventRecord[]
+
+  @@index([reconciliationStatus, createdAt])
+  @@index([checkoutSessionId, createdAt])
+  @@index([stripePaymentReference, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([customerEmail, createdAt])
+  @@index([customerAccountId, createdAt])
+  @@index([correlationId, createdAt])
+}
+
+/// Canonical customer report-access grant. This model is intentionally narrow:
+/// it stores the app-owned access decision emitted from payment reconciliation
+/// without becoming a full identity or entitlement platform.
+model CustomerAccessGrantRecord {
+  id                      String                       @id @default(cuid())
+  paymentReconciliationId String?                      @unique
+  userId                  String?
+  customerEmail           String?
+  organizationId          String?
+  customerAccountId       String?
+  selectedPlan            CommercialPlanCode?
+  scopeType               CustomerAccessGrantScopeType
+  reportId                String?
+  grantStatus             CustomerAccessGrantStatus   @default(ISSUED)
+  issuedAt                DateTime                    @default(now())
+  expiresAt               DateTime?
+  revokedAt               DateTime?
+  metadata                Json?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+  paymentReconciliation   PaymentReconciliationRecord? @relation(fields: [paymentReconciliationId], references: [id], onDelete: SetNull)
+  user                    User?                       @relation("CustomerAccessGrantUser", fields: [userId], references: [id], onDelete: SetNull)
+  organization            Organization?               @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  customerAccount         CustomerAccount?            @relation(fields: [customerAccountId], references: [id], onDelete: SetNull)
+  report                  Report?                     @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([paymentReconciliationId, createdAt])
+  @@index([grantStatus, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([customerEmail, createdAt])
+  @@index([customerAccountId, createdAt])
+  @@index([reportId, createdAt])
+  @@index([expiresAt, createdAt])
+}
+
+/// Minimal operator-facing workflow event record for first-customer operations.
+/// This is an auditable progress/event stream, not a full admin workflow
+/// product. Use it to surface the key lifecycle moments operators need to
+/// understand payment, access, and delivery state.
+model OperatorWorkflowEventRecord {
+  id                      String                         @id @default(cuid())
+  eventKey                String?                        @unique
+  organizationId          String?
+  customerAccountId       String?
+  reportId                String?
+  paymentReconciliationId String?
+  eventCode               OperatorWorkflowEventCode
+  severity                CustomerAccountTimelineSeverity @default(INFO)
+  message                 String
+  metadata                Json?
+  createdAt               DateTime                       @default(now())
+  organization            Organization?                  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  customerAccount         CustomerAccount?               @relation(fields: [customerAccountId], references: [id], onDelete: SetNull)
+  report                  Report?                        @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  paymentReconciliation   PaymentReconciliationRecord?   @relation(fields: [paymentReconciliationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([customerAccountId, createdAt])
+  @@index([reportId, createdAt])
+  @@index([paymentReconciliationId, createdAt])
+  @@index([eventCode, createdAt])
+  @@index([severity, createdAt])
+}
+
+/// Durable inbound n8n writeback receipt used to prevent duplicate report
+/// writeback side effects from repeated callbacks with the same correlation,
+/// report target, and milestone marker.
+model WorkflowWritebackReceipt {
+  id           String   @id @default(cuid())
+  dedupeKey    String   @unique
+  correlationId String
+  dispatchId   String
+  reportId     String
+  statusMarker String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([correlationId, createdAt])
+  @@index([reportId, createdAt])
+  @@index([dispatchId, createdAt])
+  @@index([statusMarker, createdAt])
 }
 
 model BillingCustomer {
@@ -818,6 +1005,12 @@ model BillingEventLog {
   idempotencyKey    String?
   sourceReference   String?
   canonicalPlanKey  CanonicalPlanKey?
+  planCodeSnapshot  String?
+  stripeEventId     String?
+  stripeCheckoutSessionId String?
+  stripePaymentIntentId   String?
+  amountCents       Int?
+  currency          String?
   payload           Json
   occurredAt        DateTime              @default(now())
   createdAt         DateTime              @default(now())
@@ -833,6 +1026,10 @@ model BillingEventLog {
   @@index([subscriptionId, occurredAt])
   @@index([eventType, occurredAt])
   @@index([canonicalPlanKey, occurredAt])
+  @@index([planCodeSnapshot, occurredAt])
+  @@index([stripeEventId])
+  @@index([stripeCheckoutSessionId])
+  @@index([stripePaymentIntentId])
 }
 
 model EntitlementOverride {
@@ -937,10 +1134,13 @@ model WorkflowRoutingDecision {
   @@index([sourceRecordType, sourceRecordId, createdAt])
 }
 
+/// Canonical backend-owned routing decision. Tenant ownership is explicit here
+/// and downstream workflow execution must inherit from this record.
 model RoutingSnapshot {
   id                    String                @id @default(cuid())
   organizationId        String
   userId                String?
+  billingEventId        String?
   sourceSystem          String
   sourceEventType       String
   sourceEventId         String
@@ -958,14 +1158,20 @@ model RoutingSnapshot {
   updatedAt             DateTime              @updatedAt
   organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user                  User?                 @relation("RoutingSnapshotUser", fields: [userId], references: [id], onDelete: SetNull)
+  billingEvent          BillingEvent?         @relation(fields: [billingEventId], references: [id], onDelete: SetNull)
   workflowDispatches    WorkflowDispatch[]
+  deliveryStates        DeliveryStateRecord[]
 
   @@unique([sourceSystem, sourceEventId])
+  @@index([billingEventId, createdAt])
   @@index([organizationId, createdAt])
   @@index([status, createdAt])
   @@index([planCode, workflowCode, createdAt])
 }
 
+/// Canonical n8n handoff record. Tenant ownership is intentionally inherited
+/// from RoutingSnapshot.organizationId so execution cannot diverge from the
+/// persisted backend routing decision.
 model WorkflowDispatch {
   id                 String                 @id @default(cuid())
   routingSnapshotId  String
@@ -985,14 +1191,90 @@ model WorkflowDispatch {
   requestPayload     Json
   responsePayload    Json?
   metadata           Json?
+  dataClassification DataClassification       @default(NON_SENSITIVE)
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
   routingSnapshot    RoutingSnapshot        @relation(fields: [routingSnapshotId], references: [id], onDelete: Cascade)
+  deliveryStates     DeliveryStateRecord[]
 
   @@unique([routingSnapshotId, eventType, destination])
   @@index([status, nextRetryAt])
   @@index([routingSnapshotId, createdAt])
   @@index([destination, status, createdAt])
+}
+
+/// Canonical paid-request lifecycle record. Tenant ownership is explicit here
+/// because operators use this model directly to reason about fulfillment state.
+model DeliveryStateRecord {
+  id                      String              @id @default(cuid())
+  organizationId          String
+  userId                  String?
+  billingEventId          String?
+  routingSnapshotId       String?             @unique
+  workflowDispatchId      String?             @unique
+  reportId                String?             @unique
+  reportPackageId         String?             @unique
+  sourceSystem            String
+  sourceEventType         String
+  sourceEventId           String
+  sourceRecordType        String?
+  sourceRecordId          String?
+  idempotencyKey          String              @unique
+  planCode                CommercialPlanCode?
+  workflowCode            CanonicalWorkflowCode?
+  externalResultReference String?
+  entitlementsJson        Json?
+  routingHintsJson        Json?
+  statusReasonJson        Json?
+  latestExecutionResultJson Json?
+  lastError               String?
+  status                  DeliveryStateStatus @default(PAID)
+  paidAt                  DateTime?
+  routedAt                DateTime?
+  processingAt            DateTime?
+  awaitingReviewAt        DateTime?
+  reportGeneratedAt       DateTime?
+  deliveredAt             DateTime?
+  failedAt                DateTime?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  organization            Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                    User?               @relation("DeliveryStateUser", fields: [userId], references: [id], onDelete: SetNull)
+  billingEvent            BillingEvent?       @relation(fields: [billingEventId], references: [id], onDelete: SetNull)
+  routingSnapshot         RoutingSnapshot?    @relation(fields: [routingSnapshotId], references: [id], onDelete: SetNull)
+  workflowDispatch        WorkflowDispatch?   @relation(fields: [workflowDispatchId], references: [id], onDelete: SetNull)
+  report                  Report?             @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  reportPackage           ReportPackage?      @relation(fields: [reportPackageId], references: [id], onDelete: SetNull)
+  transitions             DeliveryStateTransition[]
+
+  @@unique([sourceSystem, sourceEventId])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, createdAt])
+  @@index([billingEventId, createdAt])
+  @@index([externalResultReference, createdAt])
+}
+
+model DeliveryStateTransition {
+  id                    String              @id @default(cuid())
+  deliveryStateRecordId String
+  organizationId        String
+  actorUserId           String?
+  actorType             AuditActorType      @default(SYSTEM)
+  actorLabel            String?
+  fromStatus            DeliveryStateStatus?
+  toStatus              DeliveryStateStatus
+  reasonCode            String?
+  note                  String?
+  metadata              Json?
+  occurredAt            DateTime            @default(now())
+  createdAt             DateTime            @default(now())
+  deliveryStateRecord   DeliveryStateRecord @relation(fields: [deliveryStateRecordId], references: [id], onDelete: Cascade)
+  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUser             User?               @relation("DeliveryStateTransitionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([deliveryStateRecordId, occurredAt])
+  @@index([organizationId, occurredAt])
+  @@index([toStatus, occurredAt])
 }
 
 // Provisioning requests are the controlled inbound handoff record for
@@ -1091,6 +1373,9 @@ model ProductAnalyticsEvent {
 // Domain events are the durable integration backbone for downstream workflows.
 // Events are persisted first with PENDING status, deduplicated by idempotencyKey,
 // and can later be replayed or dispatched by external automation safely.
+/// Durable integration event record. `orgId` is the legacy field name here,
+/// but it carries the canonical organization/tenant identifier for downstream
+/// projection and replay flows.
 model DomainEvent {
   id             String            @id @default(cuid())
   type           String
@@ -1113,6 +1398,8 @@ model DomainEvent {
   replayAttempts EventReplayAttempt[]
 }
 
+/// Durable outbound delivery attempt for a DomainEvent. Tenant ownership is
+/// inherited from the parent DomainEvent.orgId.
 model WebhookDelivery {
   id             String                @id @default(cuid())
   eventId        String
@@ -1497,6 +1784,7 @@ model EvidenceFile {
   metadataJson          Json?
   extractionJson        Json?
   visibleSummary        String?
+  dataClassification    DataClassification     @default(SENSITIVE)
   parserVersion         String?
   processingStartedAt   DateTime?
   parsedAt              DateTime?
@@ -1547,6 +1835,7 @@ model EvidenceFileVersion {
   sha256Hash       String?
   source           EvidenceSource @default(CUSTOMER_UPLOAD)
   metadataJson     Json?
+  dataClassification DataClassification @default(SENSITIVE)
   createdAt        DateTime       @default(now())
   evidenceFile     EvidenceFile   @relation(fields: [evidenceFileId], references: [id], onDelete: Cascade)
   organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1774,20 +2063,29 @@ model Report {
   organizationId    String
   assessmentId      String
   engagementProgramId String?
+  customerAccountId String?
   createdByUserId   String?
   deliveredByUserId String?
   viewedByUserId    String?
   title             String
   versionLabel      String
+  organizationNameSnapshot String?
+  customerEmailSnapshot String?
+  selectedPlan      CommercialPlanCode?
   status            ReportStatus @default(PENDING)
+  executiveSummary  String?
+  overallRiskPostureJson Json?
   reportJson        Json
   pdfUrl            String?
+  artifactMetadataJson Json?
+  dataClassification DataClassification @default(SENSITIVE)
   publishedAt       DateTime?
   deliveredAt       DateTime?
   viewedAt          DateTime?
   createdAt         DateTime     @default(now())
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   assessment        Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  customerAccount   CustomerAccount? @relation("CustomerAccountReports", fields: [customerAccountId], references: [id], onDelete: SetNull)
   createdBy         User?        @relation("ReportCreatedBy", fields: [createdByUserId], references: [id])
   deliveredBy       User?        @relation("ReportDeliveredBy", fields: [deliveredByUserId], references: [id])
   viewedBy          User?        @relation("ReportViewedBy", fields: [viewedByUserId], references: [id])
@@ -1802,8 +2100,14 @@ model Report {
   controlAssessments ControlAssessment[]
   controlAssessmentSnapshots ControlAssessmentSnapshot[]
   frameworkPostureSnapshots FrameworkPostureSnapshot[]
+  deliveryStates    DeliveryStateRecord[]
+  paymentReconciliations PaymentReconciliationRecord[]
+  customerAccessGrants CustomerAccessGrantRecord[]
+  operatorWorkflowEvents OperatorWorkflowEventRecord[]
 
   @@index([organizationId, status, publishedAt])
+  @@index([customerAccountId, createdAt])
+  @@index([selectedPlan, createdAt])
   @@index([engagementProgramId, createdAt])
 }
 
@@ -1846,6 +2150,7 @@ model ReportPackage {
   versions                  ReportPackageVersion[]
   engagementProgram         EngagementProgram?          @relation(fields: [engagementProgramId], references: [id], onDelete: SetNull)
   engagementDeliverables    EngagementDeliverable[]
+  deliveryStates            DeliveryStateRecord[]
 
   @@unique([organizationId, assessmentId])
   @@index([organizationId, deliveryStatus, updatedAt])
@@ -2031,6 +2336,10 @@ model CustomerAccount {
   timelineEntries            CustomerAccountTimelineEntry[]
   engagementPrograms         EngagementProgram[]
   operationsQueueItems       OperationsQueueItem[]
+  paymentReconciliations     PaymentReconciliationRecord[]
+  customerAccessGrants       CustomerAccessGrantRecord[]
+  reports                    Report[]                    @relation("CustomerAccountReports")
+  operatorWorkflowEvents     OperatorWorkflowEventRecord[]
 
     @@index([normalizedPrimaryContactEmail, createdAt])
     @@index([lifecycleStage, updatedAt])
@@ -2176,6 +2485,9 @@ model AuditLog {
   action         String
   entityType     String
   entityId       String
+  resourceType   String?
+  resourceId     String?
+  dataClassification DataClassification?
   metadata       Json?
   requestContext Json?
   createdAt      DateTime       @default(now())
@@ -2185,4 +2497,5 @@ model AuditLog {
   @@index([organizationId, createdAt])
   @@index([action, createdAt])
   @@index([entityType, entityId, createdAt])
+  @@index([resourceType, resourceId, createdAt])
 }

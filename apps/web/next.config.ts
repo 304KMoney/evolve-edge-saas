@@ -1,8 +1,10 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 import { PrismaPlugin } from "@prisma/nextjs-monorepo-workaround-plugin";
 
 const nextConfig: NextConfig = {
   typedRoutes: true,
+  outputFileTracingRoot: path.join(__dirname, "../.."),
   serverExternalPackages: ["@prisma/client", "prisma"],
   outputFileTracingIncludes: {
     "/**": [

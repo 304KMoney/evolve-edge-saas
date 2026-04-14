@@ -13,16 +13,16 @@ function runDemoModeTests() {
   delete process.env.DEMO_RESET_COMMAND;
 
   let config = getDemoModeConfig();
-  assert.equal(config.enabled, true);
-  assert.equal(config.source, "auth");
-  assert.equal(shouldBlockDemoExternalSideEffects(), true);
+  assert.equal(config.enabled, false);
+  assert.equal(config.source, "none");
+  assert.equal(shouldBlockDemoExternalSideEffects(), false);
 
-  process.env.AUTH_MODE = "password";
+  process.env.AUTH_MODE = "demo";
   process.env.DEMO_MODE_ENABLED = "false";
 
   config = getDemoModeConfig();
-  assert.equal(config.enabled, false);
-  assert.equal(config.source, "none");
+  assert.equal(config.enabled, true);
+  assert.equal(config.source, "auth");
 
   process.env.DEMO_MODE_ENABLED = "true";
   process.env.DEMO_EXTERNAL_SIDE_EFFECTS = "true";

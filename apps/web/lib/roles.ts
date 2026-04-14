@@ -8,6 +8,14 @@ export const ORGANIZATION_ROLES = [
 
 export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
 
+export const CANONICAL_CUSTOMER_ROLES = [
+  "admin",
+  "analyst",
+  "client_viewer"
+] as const;
+
+export type CanonicalCustomerRole = (typeof CANONICAL_CUSTOMER_ROLES)[number];
+
 export const PLATFORM_USER_ROLES = [
   "NONE",
   "SUPER_ADMIN",
@@ -46,6 +54,12 @@ export function isOrganizationRole(value: string | null | undefined): value is O
 
 export function isPlatformUserRole(value: string | null | undefined): value is PlatformUserRole {
   return PLATFORM_USER_ROLES.includes(value as PlatformUserRole);
+}
+
+export function isCanonicalCustomerRole(
+  value: string | null | undefined
+): value is CanonicalCustomerRole {
+  return CANONICAL_CUSTOMER_ROLES.includes(value as CanonicalCustomerRole);
 }
 
 export function hasOrganizationRole(
@@ -92,4 +106,32 @@ export function canManageBilling(role: string | null | undefined) {
 
 export function getPrimaryOwnerMembership<T extends { role: string }>(members: T[]) {
   return members.find((member) => member.role === "OWNER") ?? members[0] ?? null;
+}
+
+export function mapCanonicalCustomerRoleToOrganizationRole(
+  role: CanonicalCustomerRole
+): OrganizationRole {
+  switch (role) {
+    case "admin":
+      return "ADMIN";
+    case "analyst":
+      return "ANALYST";
+    case "client_viewer":
+      return "VIEWER";
+  }
+}
+
+export function getCanonicalCustomerRoleFromOrganizationRole(
+  role: OrganizationRole
+): CanonicalCustomerRole {
+  switch (role) {
+    case "OWNER":
+    case "ADMIN":
+      return "admin";
+    case "ANALYST":
+    case "MEMBER":
+      return "analyst";
+    case "VIEWER":
+      return "client_viewer";
+  }
 }

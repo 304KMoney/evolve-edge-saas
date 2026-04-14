@@ -14,9 +14,14 @@ import {
 } from "@evolve-edge/db";
 import { writeAuditLog } from "./audit";
 import { ensureDefaultPlans } from "./billing";
+import {
+  getCanonicalCommercialPlanCatalog,
+  getCanonicalCommercialPlanDefinition,
+  mapCanonicalPlanKeyToCanonicalPlanCode,
+  type CanonicalCommercialPlan
+} from "./commercial-catalog";
 import { publishDomainEvent } from "./domain-events";
 import {
-  getCanonicalPlanCatalog,
   getCanonicalPlanDefinition,
   getDefaultRevenuePlanCodeForCanonicalKey,
   getRevenuePlanDefinition,
@@ -41,6 +46,21 @@ export type BillingCustomerSnapshot = {
   customer: BillingCustomer;
   billingOwnerUserId: string | null;
 };
+
+export type PublicCanonicalPlanSnapshot = Pick<
+  CanonicalCommercialPlan,
+  | "code"
+  | "displayName"
+  | "publicPriceUsd"
+  | "publicPriceLabel"
+  | "billingMotion"
+  | "workflowCode"
+  | "reportTemplate"
+  | "processingDepth"
+  | "publicRevenuePlanCode"
+  | "contactSalesOnly"
+  | "hostingerCtaTarget"
+>;
 
 export type OrganizationSubscriptionSnapshot = {
   subscription: (Subscription & { plan: Plan }) | null;
@@ -101,15 +121,43 @@ export type BillingEventLogInput = {
   subscriptionId?: string | null;
   planId?: string | null;
   canonicalPlanKey?: CanonicalPlanKey | null;
+  planCodeSnapshot?: string | null;
   recordedByUserId?: string | null;
   eventSource?: BillingEventLogSource;
   eventType: string;
   idempotencyKey?: string | null;
   sourceReference?: string | null;
+  stripeEventId?: string | null;
+  stripeCheckoutSessionId?: string | null;
+  stripePaymentIntentId?: string | null;
+  amountCents?: number | null;
+  currency?: string | null;
   payload: Prisma.InputJsonValue;
   occurredAt?: Date;
   db?: BillingDbClient;
 };
+
+export function normalizeBillingAmountCents(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+  }
+
+  return null;
+}
+
+export function normalizeBillingCurrency(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
 
 export function deriveBillingAccessStateFromSubscriptionStatus(
   status: SubscriptionStatus
@@ -218,13 +266,48 @@ function buildSubscriptionLogPayload(
 }
 
 export function listCanonicalPlans() {
-  return getCanonicalPlanCatalog();
+  return getCanonicalCommercialPlanCatalog().map((plan: CanonicalCommercialPlan) => ({
+    code: plan.code,
+    displayName: plan.displayName,
+    publicPriceUsd: plan.publicPriceUsd,
+    publicPriceLabel: plan.publicPriceLabel,
+    billingMotion: plan.billingMotion,
+    workflowCode: plan.workflowCode,
+    reportTemplate: plan.reportTemplate,
+    processingDepth: plan.processingDepth,
+    publicRevenuePlanCode: plan.publicRevenuePlanCode,
+    contactSalesOnly: plan.contactSalesOnly,
+    hostingerCtaTarget: plan.hostingerCtaTarget
+  })) satisfies readonly PublicCanonicalPlanSnapshot[];
 }
 
 export function retrieveCanonicalPlan(
   canonicalPlanKey: CanonicalPlanKey | null | undefined
 ) {
-  return getCanonicalPlanDefinition(canonicalPlanKey);
+  if (!canonicalPlanKey) {
+    return null;
+  }
+
+  const planCode = mapCanonicalPlanKeyToCanonicalPlanCode(canonicalPlanKey);
+  const plan = getCanonicalCommercialPlanDefinition(planCode);
+
+  if (!plan) {
+    return null;
+  }
+
+  return {
+    code: plan.code,
+    displayName: plan.displayName,
+    publicPriceUsd: plan.publicPriceUsd,
+    publicPriceLabel: plan.publicPriceLabel,
+    billingMotion: plan.billingMotion,
+    workflowCode: plan.workflowCode,
+    reportTemplate: plan.reportTemplate,
+    processingDepth: plan.processingDepth,
+    publicRevenuePlanCode: plan.publicRevenuePlanCode,
+    contactSalesOnly: plan.contactSalesOnly,
+    hostingerCtaTarget: plan.hostingerCtaTarget
+  } satisfies PublicCanonicalPlanSnapshot;
 }
 
 export function retrieveCanonicalPlanForRevenueCode(
@@ -322,12 +405,18 @@ export async function appendBillingEventLog(
       billingCustomerId: input.billingCustomerId ?? null,
       subscriptionId: input.subscriptionId ?? null,
       planId: input.planId ?? null,
+      planCodeSnapshot: input.planCodeSnapshot ?? null,
       recordedByUserId: input.recordedByUserId ?? null,
       eventSource,
       eventType: input.eventType,
       idempotencyKey: input.idempotencyKey ?? null,
       sourceReference: input.sourceReference ?? null,
       canonicalPlanKey: input.canonicalPlanKey ?? null,
+      stripeEventId: input.stripeEventId ?? null,
+      stripeCheckoutSessionId: input.stripeCheckoutSessionId ?? null,
+      stripePaymentIntentId: input.stripePaymentIntentId ?? null,
+      amountCents: input.amountCents ?? null,
+      currency: input.currency ?? null,
       payload: input.payload,
       occurredAt: input.occurredAt ?? new Date()
     }

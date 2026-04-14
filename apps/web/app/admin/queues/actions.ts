@@ -57,15 +57,17 @@ export async function refreshOperationsQueuesAction() {
 export async function updateOperationsQueueStatusAction(formData: FormData) {
   const session = await requirePlatformPermission("platform.accounts.manage");
   const queueItemId = String(formData.get("queueItemId") ?? "");
+  const organizationId = String(formData.get("organizationId") ?? "");
   const status = parseQueueStatus(String(formData.get("status") ?? ""));
   const note = String(formData.get("note") ?? "");
 
-  if (!queueItemId || !status) {
+  if (!queueItemId || !organizationId || !status) {
     redirect(buildQueueIndexHref("?error=invalid-queue-status"));
   }
 
   const updated = await updateOperationsQueueStatus({
     queueItemId,
+    organizationId,
     status,
     actorUserId: session.user.id,
     actorEmail: session.user.email,
@@ -94,15 +96,17 @@ export async function updateOperationsQueueStatusAction(formData: FormData) {
 export async function assignOperationsQueueItemAction(formData: FormData) {
   const session = await requirePlatformPermission("platform.accounts.manage");
   const queueItemId = String(formData.get("queueItemId") ?? "");
+  const organizationId = String(formData.get("organizationId") ?? "");
   const assignedUserId = String(formData.get("assignedUserId") ?? "");
   const note = String(formData.get("note") ?? "");
 
-  if (!queueItemId) {
+  if (!queueItemId || !organizationId) {
     redirect(buildQueueIndexHref("?error=missing-queue-item"));
   }
 
   const updated = await assignOperationsQueueItem({
     queueItemId,
+    organizationId,
     assignedUserId,
     actorUserId: session.user.id,
     actorEmail: session.user.email,
@@ -131,14 +135,16 @@ export async function assignOperationsQueueItemAction(formData: FormData) {
 export async function addOperationsQueueNoteAction(formData: FormData) {
   const session = await requirePlatformPermission("platform.accounts.manage");
   const queueItemId = String(formData.get("queueItemId") ?? "");
+  const organizationId = String(formData.get("organizationId") ?? "");
   const note = String(formData.get("note") ?? "");
 
-  if (!queueItemId || !note.trim()) {
+  if (!queueItemId || !organizationId || !note.trim()) {
     redirect(buildQueueIndexHref("?error=missing-queue-note"));
   }
 
   const entry = await addOperationsQueueNote({
     queueItemId,
+    organizationId,
     note,
     actorUserId: session.user.id,
     actorEmail: session.user.email

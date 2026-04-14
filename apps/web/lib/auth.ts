@@ -21,7 +21,7 @@ import {
   type OrganizationRole,
   type PlatformUserRole
 } from "./roles";
-import { getAuthMode } from "./runtime-config";
+import { getAuthMode, getOptionalEnv, getRuntimeEnvironment } from "./runtime-config";
 
 export type AppSession = {
   user: {
@@ -54,26 +54,26 @@ function normalizeEmail(email: string) {
 
 function getSeedOwnerEmail() {
   return normalizeEmail(
-    process.env.SEED_OWNER_EMAIL ??
-      process.env.AUTH_ACCESS_EMAIL ??
+    getOptionalEnv("SEED_OWNER_EMAIL") ??
+      getOptionalEnv("AUTH_ACCESS_EMAIL") ??
       "owner@example.com"
   );
 }
 
 function getSeedOwnerFirstName() {
-  return process.env.SEED_OWNER_FIRST_NAME ?? "Primary";
+  return getOptionalEnv("SEED_OWNER_FIRST_NAME") ?? "Primary";
 }
 
 function getSeedOwnerLastName() {
-  return process.env.SEED_OWNER_LAST_NAME ?? "Owner";
+  return getOptionalEnv("SEED_OWNER_LAST_NAME") ?? "Owner";
 }
 
 function getSeedOrganizationName() {
-  return process.env.SEED_ACCOUNT_NAME ?? "Primary Workspace";
+  return getOptionalEnv("SEED_ACCOUNT_NAME") ?? "Primary Workspace";
 }
 
 function getSeedOrganizationSlug() {
-  return process.env.SEED_ACCOUNT_SLUG ?? "primary-workspace";
+  return getOptionalEnv("SEED_ACCOUNT_SLUG") ?? "primary-workspace";
 }
 
 export function isPasswordAuthEnabled() {
@@ -82,9 +82,9 @@ export function isPasswordAuthEnabled() {
 
 export function getPasswordAuthConfig() {
   const email = normalizeEmail(
-    process.env.AUTH_ACCESS_EMAIL ?? getSeedOwnerEmail()
+    getOptionalEnv("AUTH_ACCESS_EMAIL") ?? getSeedOwnerEmail()
   );
-  const password = process.env.AUTH_ACCESS_PASSWORD ?? "";
+  const password = getOptionalEnv("AUTH_ACCESS_PASSWORD") ?? "";
 
   return {
     email,
@@ -136,7 +136,7 @@ export function buildCookieSettings() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: getRuntimeEnvironment() === "production",
     path: "/",
     maxAge: SESSION_TTL_SECONDS
   };

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { BillingEventStatus } from "@evolve-edge/db";
+import { BillingEventStatus, CanonicalPlanKey } from "@evolve-edge/db";
 import {
   getEntitlementBreakdown,
+  resolveSupportSafeBillingPlan,
   summarizeBillingWebhookHealth
 } from "../lib/billing-admin";
 import type { EntitlementSnapshot } from "../lib/entitlements";
@@ -99,6 +100,39 @@ function runBillingAdminTests() {
   assert.equal(
     webhookHealth.recommendedAction?.includes("manual billing resync"),
     true
+  );
+
+  assert.deepEqual(
+    resolveSupportSafeBillingPlan({
+      planCodeSnapshot: "scale-annual",
+      canonicalPlanKey: CanonicalPlanKey.SCALE
+    }),
+    {
+      supportSafePlanCode: "scale",
+      supportSafePlanName: "Scale"
+    }
+  );
+
+  assert.deepEqual(
+    resolveSupportSafeBillingPlan({
+      planCodeSnapshot: "growth-annual",
+      canonicalPlanKey: CanonicalPlanKey.GROWTH
+    }),
+    {
+      supportSafePlanCode: "scale",
+      supportSafePlanName: "Scale"
+    }
+  );
+
+  assert.deepEqual(
+    resolveSupportSafeBillingPlan({
+      planCodeSnapshot: null,
+      canonicalPlanKey: CanonicalPlanKey.ENTERPRISE
+    }),
+    {
+      supportSafePlanCode: "enterprise",
+      supportSafePlanName: "Enterprise"
+    }
   );
 
   console.log("billing admin tests passed");

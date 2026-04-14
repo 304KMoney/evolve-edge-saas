@@ -1,11 +1,21 @@
 import {
   AuditActorType,
   CustomerLifecycleStage,
+  OperationsQueueSeverity,
+  OperationsQueueSourceSystem,
+  OperationsQueueType,
   Prisma,
   ReportStatus,
   prisma
 } from "@evolve-edge/db";
+import {
+  markDeliveryStateAwaitingReviewForReport,
+  markDeliveryStateDeliveredForReport
+} from "./delivery-state";
 import { publishDomainEvent } from "./domain-events";
+import { logServerEvent } from "./monitoring";
+import { recordOperationalFinding } from "./operations-queues";
+import { requireRecordInOrganization } from "./scoped-access";
 
 export const ReportPackageDeliveryStatus = {
   GENERATED: "GENERATED",
@@ -283,6 +293,95 @@ export function canTransitionReportPackage(input: {
   }
 }
 
+export function buildReportPackageSendBlockedFinding(input: {
+  deliveryStatus: ReportPackageDeliveryStatus;
+  qaStatus: ReportPackageQaStatus;
+  requiresFounderReview: boolean;
+  founderReviewedAt: Date | null;
+}) {
+  const blockers: string[] = [];
+
+  if (input.qaStatus !== ReportPackageQaStatus.APPROVED) {
+    blockers.push("qa_not_approved");
+  }
+
+  if (input.requiresFounderReview && !(input.founderReviewedAt instanceof Date)) {
+    blockers.push("founder_review_pending");
+  }
+
+  if (
+    input.deliveryStatus !== ReportPackageDeliveryStatus.GENERATED &&
+    input.deliveryStatus !== ReportPackageDeliveryStatus.REVIEWED
+  ) {
+    blockers.push("delivery_status_not_sendable");
+  }
+
+  return {
+    blockers,
+    summary:
+      "An operator attempted to send an executive delivery package before all delivery gates were satisfied.",
+    recommendedAction:
+      "Confirm QA approval, complete founder review if required, and verify the package is still in a sendable state before retrying delivery."
+  };
+}
+
+async function recordReportPackageSendBlockedFinding(
+  db: ExecutiveDeliveryDbClient,
+  input: {
+    packageId: string;
+    organizationId: string;
+    reportId: string;
+    deliveryStatus: ReportPackageDeliveryStatus;
+    qaStatus: ReportPackageQaStatus;
+    requiresFounderReview: boolean;
+    founderReviewedAt: Date | null;
+  }
+) {
+  const finding = buildReportPackageSendBlockedFinding({
+    deliveryStatus: input.deliveryStatus,
+    qaStatus: input.qaStatus,
+    requiresFounderReview: input.requiresFounderReview,
+    founderReviewedAt: input.founderReviewedAt
+  });
+
+  try {
+    await recordOperationalFinding(
+      {
+        organizationId: input.organizationId,
+        queueType: OperationsQueueType.SUCCESS_RISK,
+        ruleCode: "delivery.report_package_send_blocked",
+        severity: OperationsQueueSeverity.MEDIUM,
+        sourceSystem: OperationsQueueSourceSystem.APP,
+        sourceRecordType: "reportPackage",
+        sourceRecordId: input.packageId,
+        title: "Executive delivery send was blocked",
+        summary: finding.summary,
+        recommendedAction: finding.recommendedAction,
+        metadata: {
+          reportId: input.reportId,
+          deliveryStatus: input.deliveryStatus,
+          qaStatus: input.qaStatus,
+          requiresFounderReview: input.requiresFounderReview,
+          founderReviewedAt: input.founderReviewedAt?.toISOString() ?? null,
+          blockers: finding.blockers
+        }
+      },
+      db
+    );
+  } catch (error) {
+    logServerEvent("warn", "report_package.send_blocked_finding_failed", {
+      org_id: input.organizationId,
+      resource_id: input.packageId,
+      source: "report.delivery",
+      status: "warning",
+      metadata: {
+        reportId: input.reportId,
+        message: error instanceof Error ? error.message : "Unknown error"
+      }
+    });
+  }
+}
+
 async function publishReportPackageEvent(
   db: ExecutiveDeliveryDbClient,
   input: {
@@ -454,6 +553,14 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
     }
   });
 
+  await markDeliveryStateAwaitingReviewForReport({
+    db,
+    organizationId: report.organizationId,
+    reportId: report.id,
+    reportPackageId: deliveryPackage.id,
+    actorUserId: input.actorUserId ?? report.createdByUserId ?? null
+  });
+
   return deliveryPackage;
 }
 
@@ -571,15 +678,28 @@ export async function getOrganizationReportPackages(
   });
 }
 
-async function getPackageById(packageId: string, db: ExecutiveDeliveryDbClient) {
-  const deliveryPackage = await db.reportPackage.findUnique({
-    where: { id: packageId },
-    include: {
-      latestReport: true
-    }
+async function getPackageById(
+  packageId: string,
+  organizationId: string,
+  db: ExecutiveDeliveryDbClient
+) {
+  const deliveryPackage = await requireRecordInOrganization({
+    recordId: packageId,
+    organizationId,
+    entityLabel: "Executive delivery package",
+    load: ({ recordId, organizationId: scopedOrganizationId }) =>
+      db.reportPackage.findFirst({
+        where: {
+          id: recordId,
+          organizationId: scopedOrganizationId
+        },
+        include: {
+          latestReport: true
+        }
+      })
   });
 
-  if (!deliveryPackage || !deliveryPackage.latestReportId || !deliveryPackage.latestReport) {
+  if (!deliveryPackage.latestReportId || !deliveryPackage.latestReport) {
     throw new Error("Executive delivery package is not linked to a report.");
   }
 
@@ -596,12 +716,13 @@ function getLatestReportId(deliveryPackage: { latestReportId: string | null }) {
 
 export async function approveReportPackageQa(input: {
   packageId: string;
+  organizationId: string;
   actorUserId: string;
   notes?: string | null;
   db?: ExecutiveDeliveryDbClient;
 }) {
   const db = (input.db ?? prisma) as ExecutiveDeliveryDbClient;
-  const deliveryPackage = await getPackageById(input.packageId, db);
+  const deliveryPackage = await getPackageById(input.packageId, input.organizationId, db);
   const latestReportId = getLatestReportId(deliveryPackage);
 
   if (
@@ -647,12 +768,13 @@ export async function approveReportPackageQa(input: {
 
 export async function requestReportPackageChanges(input: {
   packageId: string;
+  organizationId: string;
   actorUserId: string;
   notes: string;
   db?: ExecutiveDeliveryDbClient;
 }) {
   const db = (input.db ?? prisma) as ExecutiveDeliveryDbClient;
-  const deliveryPackage = await getPackageById(input.packageId, db);
+  const deliveryPackage = await getPackageById(input.packageId, input.organizationId, db);
   const latestReportId = getLatestReportId(deliveryPackage);
 
   if (
@@ -695,12 +817,13 @@ export async function requestReportPackageChanges(input: {
 
 export async function completeFounderReview(input: {
   packageId: string;
+  organizationId: string;
   actorUserId: string;
   notes?: string | null;
   db?: ExecutiveDeliveryDbClient;
 }) {
   const db = (input.db ?? prisma) as ExecutiveDeliveryDbClient;
-  const deliveryPackage = await getPackageById(input.packageId, db);
+  const deliveryPackage = await getPackageById(input.packageId, input.organizationId, db);
   const latestReportId = getLatestReportId(deliveryPackage);
 
   if (
@@ -743,12 +866,13 @@ export async function completeFounderReview(input: {
 
 export async function markReportPackageSent(input: {
   packageId: string;
+  organizationId: string;
   actorUserId: string;
   notes?: string | null;
   db?: ExecutiveDeliveryDbClient;
 }) {
   const db = (input.db ?? prisma) as ExecutiveDeliveryDbClient;
-  const deliveryPackage = await getPackageById(input.packageId, db);
+  const deliveryPackage = await getPackageById(input.packageId, input.organizationId, db);
   const latestReportId = getLatestReportId(deliveryPackage);
 
   if (
@@ -760,6 +884,15 @@ export async function markReportPackageSent(input: {
       action: "send"
     })
   ) {
+    await recordReportPackageSendBlockedFinding(db, {
+      packageId: deliveryPackage.id,
+      organizationId: deliveryPackage.organizationId,
+      reportId: latestReportId,
+      deliveryStatus: deliveryPackage.deliveryStatus,
+      qaStatus: deliveryPackage.qaStatus,
+      requiresFounderReview: deliveryPackage.requiresFounderReview,
+      founderReviewedAt: deliveryPackage.founderReviewedAt
+    });
     throw new Error("The package must pass QA review before it can be sent.");
   }
 
@@ -796,17 +929,26 @@ export async function markReportPackageSent(input: {
     }
   });
 
+  await markDeliveryStateDeliveredForReport({
+    db,
+    organizationId: updated.organizationId,
+    reportId: latestReportId,
+    reportPackageId: updated.id,
+    actorUserId: input.actorUserId
+  });
+
   return updated;
 }
 
 export async function markReportPackageBriefingBooked(input: {
   packageId: string;
+  organizationId: string;
   actorUserId: string;
   notes?: string | null;
   db?: ExecutiveDeliveryDbClient;
 }) {
   const db = (input.db ?? prisma) as ExecutiveDeliveryDbClient;
-  const deliveryPackage = await getPackageById(input.packageId, db);
+  const deliveryPackage = await getPackageById(input.packageId, input.organizationId, db);
   const latestReportId = getLatestReportId(deliveryPackage);
 
   if (
@@ -850,12 +992,13 @@ export async function markReportPackageBriefingBooked(input: {
 
 export async function markReportPackageBriefingCompleted(input: {
   packageId: string;
+  organizationId: string;
   actorUserId: string;
   notes?: string | null;
   db?: ExecutiveDeliveryDbClient;
 }) {
   const db = (input.db ?? prisma) as ExecutiveDeliveryDbClient;
-  const deliveryPackage = await getPackageById(input.packageId, db);
+  const deliveryPackage = await getPackageById(input.packageId, input.organizationId, db);
   const latestReportId = getLatestReportId(deliveryPackage);
 
   if (

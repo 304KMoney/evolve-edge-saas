@@ -138,6 +138,12 @@ These events are safe for:
 - n8n lead-pipeline workflow handling
 - downstream ops visibility
 
+`customer_account.stage_changed` intentionally includes a small set of CRM and
+operator-facing fields such as `primaryContactEmail`, `crmCompanyId`,
+`crmDealId`, `nextActionLabel`, and `reason`. Keep that payload operationally
+minimal and do not expand it into a broader customer-state dump without a
+deliberate contract review.
+
 ## Environment Variables Required
 
 No new environment variables are required for this phase.

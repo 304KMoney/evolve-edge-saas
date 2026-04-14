@@ -20,6 +20,7 @@ import {
   TriangleAlert
 } from "lucide-react";
 import { ActivationGuide } from "./activation-guide";
+import { Brand } from "./brand";
 import { ProductSurfacePanel } from "./product-surface-panel";
 import type { ActivationSnapshot } from "../lib/activation";
 import { RetentionOverview } from "./retention-overview";
@@ -129,7 +130,7 @@ const navigation: Array<{
   { href: "/dashboard/programs" as Route, label: "Programs", icon: Building2 },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
   { href: "/dashboard/roadmap", label: "Roadmap", icon: ListTodo },
-  { href: "/dashboard/settings", label: "Billing & Settings", icon: CreditCard }
+  { href: "/dashboard/billing" as Route, label: "Billing", icon: CreditCard }
 ];
 
 function cn(...values: Array<string | false | null | undefined>) {
@@ -152,18 +153,21 @@ export function DashboardShell({ data }: { data: DashboardData }) {
   return (
     <div className="min-h-screen bg-transparent px-4 py-4 md:px-6">
       <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-[1520px] grid-cols-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="rounded-[28px] border border-white/80 bg-[#0f172a] p-5 text-white shadow-panel">
+        <aside className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(11,21,48,0.94),rgba(6,14,28,0.98))] p-5 text-white shadow-panel">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-200">
-                Evolve Edge
-              </p>
+              <Brand
+                lockupClassName="border-white/10 bg-white/95 p-1.5"
+                imageClassName="w-[126px]"
+                subtitle="Signal-led compliance"
+                labelClassName="text-white/50"
+              />
               <p className="mt-2 text-lg font-semibold">{data.organizationName}</p>
             </div>
-            <Building2 className="h-5 w-5 text-teal-200" />
+            <Building2 className="h-5 w-5 text-[#8debf4]" />
           </div>
 
-          <div className="mt-8 rounded-2xl bg-white/8 p-4">
+          <div className="mt-8 rounded-2xl border border-white/[0.08] bg-white/[0.06] p-4">
             <p className="text-xs uppercase tracking-[0.24em] text-slate-300">
               Active Plan
             </p>
@@ -186,7 +190,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
                     "flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition",
                     active
                       ? "bg-white text-ink"
-                      : "text-slate-200 hover:bg-white/10 hover:text-white"
+                      : "text-slate-200 hover:bg-white/[0.08] hover:text-white"
                   )}
                 >
                   <span className="flex items-center gap-3">
@@ -199,7 +203,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
             })}
           </nav>
 
-          <div className="mt-8 rounded-2xl border border-white/10 p-4">
+          <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
             <p className="text-sm font-semibold">Trust Center</p>
             <p className="mt-2 text-sm leading-6 text-slate-300">
               Review data handling, audit logs, access controls, and methodology
@@ -207,7 +211,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
             </p>
             <Link
               href="/dashboard/settings"
-              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-teal-200"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#8debf4]"
             >
               Open trust center
               <ArrowRight className="h-4 w-4" />
@@ -215,7 +219,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
           </div>
         </aside>
 
-        <main className="rounded-[28px] border border-white/75 bg-white/85 p-5 shadow-panel backdrop-blur md:p-6">
+        <main className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(243,249,255,0.9))] p-5 shadow-panel backdrop-blur md:p-6">
           <header className="flex flex-col gap-4 border-b border-line pb-6 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-sm font-medium text-accent">{data.workspaceLabel}</p>
@@ -245,7 +249,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               </Link>
               <Link
                 href="/dashboard/assessments"
-                className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white"
+                className="rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-4 py-2 text-sm font-semibold text-[#05111d]"
               >
                 Start Reassessment
               </Link>
@@ -736,3 +740,5 @@ export function DashboardShell({ data }: { data: DashboardData }) {
     </div>
   );
 }
+
+export const DashboardLayoutShell = DashboardShell;

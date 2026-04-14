@@ -6,6 +6,8 @@ import {
   synchronizeStripeCheckoutSession
 } from "../../../lib/billing";
 import { getLatestLeadSubmissionForConversion } from "../../../lib/lead-pipeline";
+import { logServerEvent } from "../../../lib/monitoring";
+import { createPaymentCustomerBinding } from "../../../lib/payment-customer-binding";
 import { trackProductAnalyticsEvent } from "../../../lib/product-analytics";
 import { getPlanTransitionDirection } from "../../../lib/revenue-catalog";
 
@@ -56,6 +58,17 @@ export default async function BillingReturnPage({
       redirect("/dashboard/settings?billing=processing");
     }
 
+    const paymentBinding = createPaymentCustomerBinding({
+      stripeCheckoutSessionId: checkoutSessionId,
+      stripePaymentReference: syncedSubscription.stripeSubscriptionId ?? null,
+      customerEmail: session.user.email,
+      selectedPlan:
+        leadSubmission?.requestedPlanCode ?? syncedSubscription.plan.code,
+      organizationId: session.organization!.id,
+      customerId: session.user.id,
+      bindingStatus: "organization_bound"
+    });
+
     await trackProductAnalyticsEvent({
       name: "billing.checkout_completed",
       payload: {
@@ -86,6 +99,14 @@ export default async function BillingReturnPage({
       organizationId: session.organization!.id,
       userId: session.user.id,
       billingPlanCode: syncedSubscription.plan.code
+    });
+
+    logServerEvent("info", "billing.checkout.binding_reconciled", {
+      org_id: session.organization!.id,
+      user_id: session.user.id,
+      status: "reconciled",
+      source: "billing-return",
+      metadata: paymentBinding
     });
 
     redirect("/dashboard/settings?billing=success");

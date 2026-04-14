@@ -93,11 +93,14 @@ The new `WorkflowDispatch` table stores outbound `audit.requested` dispatch stat
 The new `audit.requested` payload contains:
 
 - normalized routing snapshot ID
+- compact request aliases for the n8n workflow handoff such as `request_id`, `app_customer_id`, `app_org_id`, `customer_email`, `company_name`, and purchased-tier fields
 - normalized workflow code
 - normalized plan code
+- persisted normalized routing hints such as `report_template` and `processing_depth`
 - entitlement summary
 - quota state
 - execution context
+- callback URLs for status, report-ready, failure, and report-writeback handoff back into the app
 
 It intentionally does **not** include raw Stripe price IDs or product IDs.
 
@@ -122,6 +125,35 @@ It intentionally does **not** include raw Stripe price IDs or product IDs.
     "source_record_id": "cs_test_123",
     "environment": "preview"
   },
+  "callbacks": {
+    "status_url": "https://app.example.com/api/internal/workflows/status",
+    "report_ready_url": "https://app.example.com/api/internal/workflows/report-ready",
+    "failure_url": "https://app.example.com/api/internal/workflows/failed",
+    "report_writeback_url": "https://app.example.com/api/internal/workflows/report-writeback",
+    "auth_scheme": "bearer"
+  },
+  "callback_urls": {
+    "status_update_url": "https://app.example.com/api/internal/workflows/status",
+    "report_ready_url": "https://app.example.com/api/internal/workflows/report-ready",
+    "failure_url": "https://app.example.com/api/internal/workflows/failed"
+  },
+  "request_id": "wd_123",
+  "app_customer_id": "usr_123",
+  "app_org_id": "org_123",
+  "customer_email": "ops@example.com",
+  "customer_name": "Alex Example",
+  "company_name": "Example Health",
+  "purchased_tier": "scale",
+  "purchased_plan_code": "scale",
+  "stripe_session_id": "cs_test_123",
+  "amount_paid": 500000,
+  "currency": "usd",
+  "top_concerns": ["Vendor review debt"],
+  "uses_ai_tools": true,
+  "company_size": "11-50",
+  "industry": "healthtech",
+  "additional_notes": "Uses external AI tooling in support workflows.",
+  "website": null,
   "routing": {
     "plan_code": "scale",
     "workflow_code": "audit_scale",
@@ -143,14 +175,18 @@ It intentionally does **not** include raw Stripe price IDs or product IDs.
 Authorization:
 
 - `Authorization: Bearer <N8N_CALLBACK_SECRET>`
+- compatible alias: `Authorization: Bearer <N8N_CALLBACK_SHARED_SECRET>`
 
 Payload:
 
 ```json
 {
   "dispatchId": "wd_123",
+  "request_id": "wd_123",
   "status": "acknowledged",
   "externalExecutionId": "n8n_456",
+  "customer_email": "ops@example.com",
+  "purchased_tier": "scale",
   "message": "Workflow accepted",
   "metadata": {
     "step": "accepted"
@@ -172,20 +208,47 @@ Allowed `status` values:
 Authorization:
 
 - `Authorization: Bearer <N8N_CALLBACK_SECRET>`
+- compatible alias: `Authorization: Bearer <N8N_CALLBACK_SHARED_SECRET>`
 
 Payload:
 
 ```json
 {
   "dispatchId": "wd_123",
+  "request_id": "wd_123",
   "reportReference": "report_run_789",
+  "report_id": "report_run_789",
   "reportUrl": "https://example.com/report/789",
+  "report_url": "https://example.com/report/789",
   "externalExecutionId": "n8n_456",
   "executiveSummary": "High-level summary",
   "riskLevel": "Moderate",
   "topConcerns": ["Policy gaps", "Vendor review debt"],
   "metadata": {
     "generatedBy": "n8n"
+  }
+}
+```
+
+### Failure callback
+
+`POST /api/internal/workflows/failed`
+
+Authorization:
+
+- `Authorization: Bearer <N8N_CALLBACK_SECRET>`
+- compatible alias: `Authorization: Bearer <N8N_CALLBACK_SHARED_SECRET>`
+
+Payload:
+
+```json
+{
+  "request_id": "wd_123",
+  "customer_email": "ops@example.com",
+  "purchased_tier": "scale",
+  "failure_reason": "Dify processing timed out",
+  "metadata": {
+    "step": "analysis"
   }
 }
 ```
@@ -230,6 +293,19 @@ Example:
 ]
 ```
 
+When n8n receives `audit.requested`, map nodes as follows:
+
+1. App to n8n inbound handoff:
+   `N8N_WORKFLOW_DESTINATIONS[auditRequested].url`
+2. n8n status callback node:
+   `callbacks.status_url` or `callback_urls.status_update_url`
+3. n8n report-ready callback node:
+   `callbacks.report_ready_url` or `callback_urls.report_ready_url`
+4. n8n failure callback node:
+   `callbacks.failure_url` or `callback_urls.failure_url`
+5. n8n report writeback node:
+   `callbacks.report_writeback_url`
+
 ## Deferred by design
 
 These are intentionally not solved in this phase:
@@ -245,7 +321,7 @@ These are intentionally not solved in this phase:
 1. Apply the Prisma migration.
 2. Set the new Stripe product/price env vars.
 3. Add `auditRequested` to `N8N_WORKFLOW_DESTINATIONS`.
-4. Set `N8N_CALLBACK_SECRET`.
+4. Set `N8N_CALLBACK_SECRET` or `N8N_CALLBACK_SHARED_SECRET`.
 5. Verify checkout completion creates:
    - Stripe subscription sync
    - `RoutingSnapshot`

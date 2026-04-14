@@ -2,18 +2,27 @@ import {
   BillingEventStatus,
   DomainEventStatus,
   EmailNotificationStatus,
+  CanonicalPlanKey,
   LeadSubmissionStatus,
+  OperationsQueueType,
   Prisma,
   SubscriptionStatus,
   WebhookDeliveryStatus,
   prisma
 } from "@evolve-edge/db";
 import { getCurrentSubscription, hasStripeBillingConfig } from "./billing";
+import {
+  getCanonicalCommercialPlanDefinition,
+  mapCanonicalPlanKeyToCanonicalPlanCode,
+  resolveCanonicalPlanCode,
+  resolveCanonicalPlanCodeFromRevenuePlanCode
+} from "./commercial-catalog";
+import { listDeliveryMismatchFindings } from "./delivery-mismatch-detection";
 import { getFeatureFlags } from "./feature-flags";
 import { getOpsReadinessSnapshot } from "./ops-readiness";
 import { getPrimaryOwnerMembership } from "./roles";
 import { getOutboundWebhookDestinations } from "./webhook-dispatcher";
-import { getOptionalEnv, getOptionalListEnv } from "./runtime-config";
+import { getAuthMode, getOptionalEnv, getOptionalListEnv } from "./runtime-config";
 import { getOrganizationUsageSnapshot } from "./usage";
 
 type AdminConsoleDbClient = Prisma.TransactionClient | typeof prisma;
@@ -27,6 +36,35 @@ function buildContainsFilter(q: string) {
     : undefined;
 }
 
+function resolveSupportSafePlanCode(input: {
+  planCode?: string | null;
+  canonicalPlanKey?: CanonicalPlanKey | null;
+}) {
+  return (
+    resolveCanonicalPlanCode(input.planCode) ??
+    resolveCanonicalPlanCodeFromRevenuePlanCode(input.planCode) ??
+    (input.canonicalPlanKey
+      ? mapCanonicalPlanKeyToCanonicalPlanCode(input.canonicalPlanKey)
+      : null)
+  );
+}
+
+function matchesGlobalOpsSearch(
+  q: string,
+  values: Array<string | null | undefined>
+) {
+  if (!q) {
+    return true;
+  }
+
+  const normalizedQuery = q.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return values.some((value) => value?.toLowerCase().includes(normalizedQuery));
+}
+
 export async function getAdminConsoleScaleSnapshot(input: {
   q: string;
   db?: AdminConsoleDbClient;
@@ -37,7 +75,14 @@ export async function getAdminConsoleScaleSnapshot(input: {
   const webhookDestinations = getOutboundWebhookDestinations();
   const opsReadiness = await getOpsReadinessSnapshot();
 
-  const [organizations, recentBillingEvents, recentLeadSubmissions, analyticsCounts] =
+  const [
+    organizations,
+    recentBillingEvents,
+    recentLeadSubmissions,
+    analyticsCounts,
+    recentDeliveryOpsQueueItems,
+    rawGlobalMismatchFindings
+  ] =
     await Promise.all([
       db.organization.findMany({
         where: input.q
@@ -147,8 +192,58 @@ export async function getAdminConsoleScaleSnapshot(input: {
             }
           }
         })
-      ])
+      ]),
+      db.operationsQueueItem.findMany({
+        where: {
+          queueType: OperationsQueueType.SUCCESS_RISK,
+          OR: [{ sourceRecordType: "report" }, { sourceRecordType: "reportPackage" }],
+          ...(input.q
+            ? {
+                OR: [
+                  { title: containsFilter },
+                  { summary: containsFilter },
+                  { ruleCode: containsFilter },
+                  { sourceRecordId: containsFilter },
+                  { organization: { name: containsFilter } },
+                  { organization: { slug: containsFilter } }
+                ]
+              }
+            : {})
+        },
+        include: {
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              slug: true
+            }
+          }
+        },
+        orderBy: [{ lastDetectedAt: "desc" }, { createdAt: "desc" }],
+        take: 8
+      }),
+      listDeliveryMismatchFindings({
+        db,
+        limit: 80
+      })
     ]);
+
+  const recentGlobalMismatchFindings = rawGlobalMismatchFindings
+    .filter((finding) =>
+      matchesGlobalOpsSearch(input.q, [
+        finding.code,
+        finding.title,
+        finding.summary,
+        finding.organization.name,
+        finding.organization.slug,
+        finding.linkage.stripeEventId,
+        finding.linkage.externalExecutionId,
+        finding.linkage.billingEventId,
+        finding.linkage.routingSnapshotId,
+        finding.linkage.workflowDispatchId
+      ])
+    )
+    .slice(0, 8);
 
   const supportSafeAccountSummaries = await Promise.all(
     organizations.map(async (organization) => {
@@ -158,6 +253,15 @@ export async function getAdminConsoleScaleSnapshot(input: {
       const latestLead = organization.leadSubmissions[0] ?? null;
       const latestReport = organization.reports[0] ?? null;
       const latestAssessment = organization.assessments[0] ?? null;
+      const supportSafePlanCode = resolveSupportSafePlanCode({
+        planCode: currentSubscription?.planCodeSnapshot ?? currentSubscription?.plan.code ?? null,
+        canonicalPlanKey: currentSubscription?.canonicalPlanKeySnapshot ?? null
+      });
+      const supportSafePlan =
+        getCanonicalCommercialPlanDefinition(supportSafePlanCode);
+      const supportSafeLeadPlanCode = resolveSupportSafePlanCode({
+        planCode: latestLead?.requestedPlanCode ?? null
+      });
 
       return {
         organizationId: organization.id,
@@ -165,8 +269,11 @@ export async function getAdminConsoleScaleSnapshot(input: {
         slug: organization.slug,
         ownerEmail: ownerMembership?.user.email ?? null,
         billing: {
-          planName: currentSubscription?.plan.name ?? "No active plan",
-          planCode: currentSubscription?.plan.code ?? currentSubscription?.planCodeSnapshot ?? "none",
+          planName:
+            supportSafePlan?.displayName ??
+            currentSubscription?.plan.name ??
+            "No active plan",
+          planCode: supportSafePlan?.code ?? "none",
           status: currentSubscription?.status ?? null,
           accessState: currentSubscription?.accessState ?? null,
           renewsAt: currentSubscription?.currentPeriodEnd ?? null,
@@ -188,7 +295,8 @@ export async function getAdminConsoleScaleSnapshot(input: {
               email: latestLead.email,
               source: latestLead.source,
               stage: latestLead.stage,
-              requestedPlanCode: latestLead.requestedPlanCode,
+              requestedPlanCode:
+                supportSafeLeadPlanCode ?? latestLead.requestedPlanCode,
               submittedAt: latestLead.submittedAt
             }
           : null
@@ -200,11 +308,34 @@ export async function getAdminConsoleScaleSnapshot(input: {
     supportSafeAccountSummaries,
     recentBillingEvents,
     recentLeadSubmissions,
-    configSummary: {
-      authMode: getOptionalEnv("AUTH_MODE") ?? "demo",
-      stripeConfigured: hasStripeBillingConfig(),
-      adminEmailCount: getOptionalListEnv("INTERNAL_ADMIN_EMAILS").length,
-      webhookDestinationsConfigured: webhookDestinations.length,
+    globalOpsDashboard: {
+      counts: {
+        recentMismatchFindings: recentGlobalMismatchFindings.length,
+        recentDeliveryOpsFindings: recentDeliveryOpsQueueItems.length
+      },
+      recentMismatchFindings: recentGlobalMismatchFindings,
+      recentDeliveryOpsFindings: recentDeliveryOpsQueueItems.map((finding) => ({
+        id: finding.id,
+        organizationId: finding.organizationId,
+        organizationName: finding.organization.name,
+        organizationSlug: finding.organization.slug,
+        queueType: finding.queueType,
+        ruleCode: finding.ruleCode,
+        title: finding.title,
+        summary: finding.summary,
+        recommendedAction: finding.recommendedAction,
+        severity: finding.severity,
+        status: finding.status,
+        sourceRecordType: finding.sourceRecordType,
+        sourceRecordId: finding.sourceRecordId,
+        lastDetectedAt: finding.lastDetectedAt
+      }))
+      },
+      configSummary: {
+        authMode: getAuthMode(),
+        stripeConfigured: hasStripeBillingConfig(),
+        adminEmailCount: getOptionalListEnv("INTERNAL_ADMIN_EMAILS").length,
+        webhookDestinationsConfigured: webhookDestinations.length,
       opsAlertsConfigured: Boolean(getOptionalEnv("OPS_ALERT_WEBHOOK_URL")),
       cronConfigured: Boolean(getOptionalEnv("CRON_SECRET")),
       outboundDispatchConfigured: Boolean(getOptionalEnv("OUTBOUND_DISPATCH_SECRET")),

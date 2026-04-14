@@ -42,11 +42,20 @@ Responsibilities:
 - onboarding gating
 - tenant-scoped identity
 - internal admin allowlist checks
+- service-layer mutations should prove tenant ownership when a caller provides a
+  global record id
+- current narrow adoption: executive delivery package mutations now resolve
+  `ReportPackage` inside the expected `organizationId` before update
 
 ### Billing And Revenue
 
 - `apps/web/lib/billing.ts`
 - `apps/web/lib/entitlements.ts`
+- `apps/web/lib/commercial-routing.ts`
+- `apps/web/lib/workflow-routing.ts`
+- `apps/web/lib/delivery-state.ts`
+- `apps/web/lib/delivery-reconciliation.ts`
+- `apps/web/lib/delivery-mismatch-detection.ts`
 - `apps/web/lib/revenue-catalog.ts`
 - `apps/web/lib/usage-metering.ts`
 - `apps/web/lib/expansion-engine.ts`
@@ -55,13 +64,20 @@ Responsibilities:
 
 - Stripe-synced billing copy
 - plan mapping and entitlements
+- checkout/billing-originated routing snapshots
+- in-app workflow-family routing decisions
 - pricing and upgrade logic
+- paid-request lifecycle tracking
+- billing reconciliation and mismatch detection
 - usage metering and revenue pressure
 
 Authority:
 
 - Stripe is authoritative for billing lifecycle
 - app database is authoritative for product access derived from Stripe sync
+- `commercial-routing.ts` is authoritative for paid-request routing snapshots
+- `workflow-routing.ts` is authoritative for dashboard assessment/report routing
+  decisions
 
 ### Customer Lifecycle And Lead Pipeline
 
@@ -81,12 +97,14 @@ Responsibilities:
 
 - `apps/web/app/dashboard/assessments/*`
 - `apps/web/app/dashboard/reports/*`
+- `apps/web/lib/dify-adapter.ts`
 - `apps/web/lib/executive-delivery.ts`
 - `apps/web/lib/customer-runs.ts`
 
 Responsibilities:
 
 - intake and assessment records
+- typed Dify input/output normalization
 - report generation
 - executive package versioning
 - run-state tracking across delivery steps
@@ -173,3 +191,5 @@ Responsibilities:
 3. `docs/how-to-operate-platform.md`
 4. `docs/what-to-touch-carefully.md`
 5. phase docs relevant to the area you are editing
+6. `docs/billing-reconciliation-and-delivery-operations.md`
+7. `docs/first-customer-launch-checks.md`

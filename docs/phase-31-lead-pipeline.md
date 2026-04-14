@@ -252,6 +252,15 @@ Recommended events:
 | `event.payload.companyName` | company name |
 | `event.payload.attribution` | attribution object |
 
+Payload governance note:
+
+- `lead.captured` is allowed to reach n8n for sales and lifecycle automation, but
+  the payload should remain narrowly operational
+- do not add secrets, raw form dumps, or broader customer-state snapshots to this
+  event without a deliberate contract review
+- `normalizedEmail` and `attribution` are already the broadest fields in this
+  event and should be treated carefully
+
 ## Environment variables
 
 Required or recommended for this phase:

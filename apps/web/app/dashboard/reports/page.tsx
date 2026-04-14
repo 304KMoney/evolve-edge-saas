@@ -1,15 +1,17 @@
 import Link from "next/link";
-import { AssessmentStatus, Prisma, prisma } from "@evolve-edge/db";
+import { AssessmentStatus, prisma } from "@evolve-edge/db";
 import { ActivationTipCard } from "../../../components/activation-guide";
 import { ProductSurfacePanel } from "../../../components/product-surface-panel";
 import { UpsellOfferStack } from "../../../components/upsell-offer-stack";
 import { getOrganizationActivationSnapshot } from "../../../lib/activation";
-import { requireCurrentSession } from "../../../lib/auth";
 import { getCurrentSubscription } from "../../../lib/billing";
+import { requireCurrentSession } from "../../../lib/auth";
+import { toCustomerAccessSession } from "../../../lib/customer-access-session";
 import { getOrganizationEntitlements } from "../../../lib/entitlements";
 import { getOrganizationReportPackages } from "../../../lib/executive-delivery";
 import { getExpansionOffers } from "../../../lib/expansion-engine";
 import { buildProductSurfaceModel } from "../../../lib/product-surface";
+import { listDashboardReportSummaryViewsForAccessSession } from "../../../lib/report-records";
 import {
   getOrganizationUsageMeteringSnapshot,
   getUsageMetricSnapshot
@@ -19,11 +21,6 @@ import { generateReportAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-type ReportListItem = Prisma.ReportGetPayload<{
-  include: {
-    assessment: true;
-  };
-}>;
 type AssessmentListItem = Awaited<ReturnType<typeof prisma.assessment.findMany>>[number];
 type DeliveryPackageListItem = Awaited<
   ReturnType<typeof getOrganizationReportPackages>
@@ -54,7 +51,11 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<{ error?: string; generated?: string }>;
 }) {
+  // This index page is a product surface and control center for report generation,
+  // billing posture, and delivery status. Direct report artifact access remains
+  // permission-gated on the detail/export paths.
   const session = await requireCurrentSession({ requireOrganization: true });
+  const accessSession = toCustomerAccessSession(session);
   const organizationId = session.organization!.id;
   const [
     reports,
@@ -66,12 +67,8 @@ export default async function ReportsPage({
     params
   ] =
     await Promise.all([
-      prisma.report.findMany({
-        where: { organizationId },
-        include: {
-          assessment: true
-        },
-        orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }]
+      listDashboardReportSummaryViewsForAccessSession({
+        accessSession
       }),
       prisma.assessment.findMany({
         where: {
@@ -142,7 +139,7 @@ export default async function ReportsPage({
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
-      <div className="rounded-[28px] border border-white/70 bg-white/90 p-8 shadow-panel">
+      <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(243,249,255,0.9))] p-8 shadow-panel backdrop-blur">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-accent">Report Center</p>
@@ -233,7 +230,7 @@ export default async function ReportsPage({
             disabled={
               assessments.length === 0 || !entitlements.canGenerateReports
             }
-            className="w-fit rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-fit rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-5 py-3 text-sm font-semibold text-[#05111d] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Generate report
           </button>
@@ -256,21 +253,15 @@ export default async function ReportsPage({
 
         <div className="mt-8 grid gap-4">
           {entitlements.canAccessReports
-            ? reports.map((report: ReportListItem) => {
+            ? reports.map((report) => {
                 const deliveryPackage = deliveryPackageByReportId.get(report.id);
-                const postureScore =
-                  typeof report.reportJson === "object" &&
-                  report.reportJson &&
-                  !Array.isArray(report.reportJson) &&
-                  typeof (report.reportJson as Record<string, unknown>).postureScore === "number"
-                    ? ((report.reportJson as Record<string, unknown>).postureScore as number)
-                    : null;
+                const postureScore = report.postureScore;
 
                 return (
                   <Link
                     key={report.id}
                     href={`/dashboard/reports/${report.id}`}
-                    className="rounded-2xl border border-line bg-mist p-5 transition hover:border-accent"
+                    className="rounded-2xl border border-line bg-mist p-5 transition hover:border-accent hover:shadow-[0_18px_40px_rgba(28,199,216,0.14)]"
                   >
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
@@ -298,7 +289,9 @@ export default async function ReportsPage({
                       </div>
                       <div className="text-sm text-steel">
                         <p>
-                          {deliveryPackage?.deliveryStatus === "BRIEFING_COMPLETED"
+                        {report.deliveryStatus
+                            ? `Delivery ${formatCompactStatus(report.deliveryStatus)}`
+                            : deliveryPackage?.deliveryStatus === "BRIEFING_COMPLETED"
                             ? "Briefing completed"
                             : report.status === "DELIVERED"
                               ? "Delivered package"
@@ -309,9 +302,13 @@ export default async function ReportsPage({
                             ? `Posture ${postureScore}/100`
                             : "Posture pending"}
                         </p>
-                        {deliveryPackage?.sentAt ? (
-                          <p className="mt-1">Sent {formatDate(deliveryPackage.sentAt)}</p>
-                        ) : null}
+                        <p className="mt-1">
+                          {report.artifactAvailability.canDownload
+                            ? "Artifact ready"
+                            : report.artifactMetadata?.downloadStatus === "failed"
+                              ? "Artifact unavailable"
+                              : "Artifact pending"}
+                        </p>
                       </div>
                     </div>
                   </Link>

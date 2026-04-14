@@ -1,48 +1,130 @@
 import { Prisma } from "@evolve-edge/db";
 import { NextResponse } from "next/server";
 import { buildAuditRequestContextFromRequest } from "../../../../../lib/audit";
-import { sendOperationalAlert } from "../../../../../lib/monitoring";
+import { logServerEvent, sendOperationalAlert } from "../../../../../lib/monitoring";
+import { applyRouteRateLimit } from "../../../../../lib/security-rate-limit";
 import {
-  recordWorkflowStatusCallback,
-  requireWorkflowCallbackSecret
+  expectObject,
+  parseJsonRequestBody,
+  readOptionalEnumValue,
+  readOptionalJsonValue,
+  readOptionalString,
+  ValidationError
+} from "../../../../../lib/security-validation";
+import {
+  isAuthorizedWorkflowWritebackRequest,
+  recordWorkflowStatusCallback
 } from "../../../../../lib/workflow-dispatch";
 
-function isAuthorized(request: Request) {
-  const expected = requireWorkflowCallbackSecret();
-  const header = request.headers.get("authorization") ?? "";
-  const provided = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+function readDispatchIdFromPayload(payload: Record<string, unknown>) {
+  const dispatchId =
+    readOptionalString(payload, "dispatchId", { maxLength: 200 }) ??
+    readOptionalString(payload, "request_id", { maxLength: 200 });
 
-  return provided === expected;
+  if (!dispatchId) {
+    throw new ValidationError("dispatchId or request_id is required.");
+  }
+
+  return dispatchId;
+}
+
+function buildCallbackMetadata(payload: Record<string, unknown>) {
+  const metadataValue = readOptionalJsonValue(payload, "metadata");
+  const metadataObject =
+    metadataValue && typeof metadataValue === "object" && !Array.isArray(metadataValue)
+      ? (metadataValue as Record<string, unknown>)
+      : {};
+  const compactMetadata = {
+    appCustomerId: readOptionalString(payload, "app_customer_id", { maxLength: 200 }),
+    appOrgId: readOptionalString(payload, "app_org_id", { maxLength: 200 }),
+    customerEmail: readOptionalString(payload, "customer_email", { maxLength: 320 }),
+    companyName: readOptionalString(payload, "company_name", { maxLength: 200 }),
+    purchasedTier: readOptionalString(payload, "purchased_tier", { maxLength: 100 }),
+    hubspotContactId: readOptionalString(payload, "hubspot_contact_id", { maxLength: 200 }),
+    hubspotDealId: readOptionalString(payload, "hubspot_deal_id", { maxLength: 200 }),
+    reportId: readOptionalString(payload, "report_id", { maxLength: 200 }),
+    reportUrl: readOptionalString(payload, "report_url", { maxLength: 2000 }),
+    failureReason: readOptionalString(payload, "failure_reason", {
+      maxLength: 2000,
+      allowEmpty: true
+    }),
+    timestamp: readOptionalString(payload, "timestamp", { maxLength: 100 })
+  };
+
+  return {
+    ...metadataObject,
+    ...Object.fromEntries(
+      Object.entries(compactMetadata).filter(([, value]) => value !== null)
+    )
+  } as Prisma.InputJsonValue;
 }
 
 export async function POST(request: Request) {
+  const requestContext = buildAuditRequestContextFromRequest(request);
   try {
-    if (!isAuthorized(request)) {
+    const rateLimited = applyRouteRateLimit(request, {
+      key: "internal-workflows-status",
+      category: "webhook"
+    });
+    if (rateLimited) {
+      return rateLimited;
+    }
+
+    if (!isAuthorizedWorkflowWritebackRequest(request)) {
+      logServerEvent("warn", "workflow.callback.status.unauthorized", {
+        status: "unauthorized",
+        source: "n8n.callback",
+        requestContext
+      });
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const body = (await request.json()) as {
-      dispatchId?: string;
-      status?: "acknowledged" | "running" | "succeeded" | "failed";
-      externalExecutionId?: string | null;
-      message?: string | null;
-      metadata?: unknown;
-    };
-
-    if (!body.dispatchId || !body.status) {
-      return NextResponse.json(
-        { error: "dispatchId and status are required." },
-        { status: 400 }
+    const payload = expectObject(await parseJsonRequestBody(request));
+    const dispatchId = readDispatchIdFromPayload(payload);
+    const status = readOptionalEnumValue(payload, "status", [
+      "acknowledged",
+      "running",
+      "succeeded",
+      "failed"
+    ] as const);
+    if (!status) {
+      throw new ValidationError(
+        "status must be one of: acknowledged, running, succeeded, failed."
       );
     }
 
+    logServerEvent("info", "workflow.callback.status.received", {
+      request_id: dispatchId,
+      dispatch_id: dispatchId,
+      customer_email: readOptionalString(payload, "customer_email", { maxLength: 320 }),
+      purchased_tier: readOptionalString(payload, "purchased_tier", { maxLength: 100 }),
+      status,
+      source: "n8n.callback",
+      requestContext
+    });
+
     const result = await recordWorkflowStatusCallback({
-      dispatchId: body.dispatchId,
-      status: body.status,
-      externalExecutionId: body.externalExecutionId ?? null,
-      message: body.message ?? null,
-      metadata: (body.metadata ?? null) as Prisma.InputJsonValue | null,
-      requestContext: buildAuditRequestContextFromRequest(request)
+      dispatchId,
+      status,
+      externalExecutionId: readOptionalString(payload, "externalExecutionId", {
+        maxLength: 200
+      }),
+      message: readOptionalString(payload, "message", {
+        maxLength: 1000,
+        allowEmpty: true
+      }) ?? readOptionalString(payload, "failure_reason", {
+        maxLength: 2000,
+        allowEmpty: true
+      }),
+      metadata: buildCallbackMetadata(payload),
+      requestContext
+    });
+
+    logServerEvent("info", "workflow.callback.status.completed", {
+      dispatch_id: result.id,
+      status: result.status,
+      source: "n8n.callback",
+      requestContext
     });
 
     return NextResponse.json({
@@ -51,6 +133,26 @@ export async function POST(request: Request) {
       status: result.status
     });
   } catch (error) {
+    if (error instanceof ValidationError) {
+      logServerEvent("warn", "workflow.callback.status.invalid_payload", {
+        status: "invalid",
+        source: "n8n.callback",
+        requestContext,
+        metadata: {
+          message: error.message
+        }
+      });
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    logServerEvent("error", "workflow.callback.status.failed", {
+      status: "failed",
+      source: "n8n.callback",
+      requestContext,
+      metadata: {
+        message: error instanceof Error ? error.message : "Unknown error"
+      }
+    });
     await sendOperationalAlert({
       source: "api.internal.workflows.status",
       title: "Workflow status callback failed",

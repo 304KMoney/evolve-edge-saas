@@ -5,6 +5,15 @@ import {
   provisionOrganizationFromExternalTrigger
 } from "../../../../lib/provisioning";
 import { sendOperationalAlert } from "../../../../lib/monitoring";
+import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
+import {
+  expectObject,
+  parseJsonRequestBody,
+  readOptionalJsonObject,
+  readOptionalString,
+  readRequiredString,
+  ValidationError
+} from "../../../../lib/security-validation";
 
 type ProvisionOrgRequestBody = {
   sourceSystem?: string;
@@ -47,30 +56,56 @@ function parseSubscriptionStatus(value: string | null | undefined) {
 // - creates one durable ProvisioningRequest audit record before returning success
 export async function POST(request: Request) {
   try {
+    const rateLimited = applyRouteRateLimit(request, {
+      key: "internal-provision-org",
+      category: "webhook"
+    });
+    if (rateLimited) {
+      return rateLimited;
+    }
+
     if (!isProvisioningAuthorized(request)) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const body = (await request.json()) as ProvisionOrgRequestBody;
+    const body = expectObject(
+      await parseJsonRequestBody(request)
+    ) as ProvisionOrgRequestBody & Record<string, unknown>;
     const result = await provisionOrganizationFromExternalTrigger({
-      sourceSystem: String(body.sourceSystem ?? ""),
-      externalReferenceId: String(body.externalReferenceId ?? ""),
-      companyName: String(body.companyName ?? ""),
-      primaryContactEmail: String(body.primaryContactEmail ?? ""),
-      planCode: body.planCode ?? null,
-      crmAccountId: body.crmAccountId ?? null,
-      crmDealId: body.crmDealId ?? null,
-      workspaceMetadata: (body.workspaceMetadata ?? undefined) as
+      sourceSystem: readRequiredString(body, "sourceSystem", { maxLength: 100 }),
+      externalReferenceId: readRequiredString(body, "externalReferenceId", {
+        maxLength: 200
+      }),
+      companyName: readRequiredString(body, "companyName", { maxLength: 200 }),
+      primaryContactEmail: readRequiredString(body, "primaryContactEmail", {
+        maxLength: 320
+      }),
+      planCode: readOptionalString(body, "planCode", { maxLength: 100 }),
+      crmAccountId: readOptionalString(body, "crmAccountId", { maxLength: 200 }),
+      crmDealId: readOptionalString(body, "crmDealId", { maxLength: 200 }),
+      workspaceMetadata: readOptionalJsonObject(body, "workspaceMetadata") as
         | Prisma.InputJsonValue
         | undefined,
-      stripeCustomerId: body.stripeCustomerId ?? null,
-      stripeSubscriptionId: body.stripeSubscriptionId ?? null,
-      stripePriceId: body.stripePriceId ?? null,
-      subscriptionStatus: parseSubscriptionStatus(body.subscriptionStatus)
+      stripeCustomerId: readOptionalString(body, "stripeCustomerId", {
+        maxLength: 200
+      }),
+      stripeSubscriptionId: readOptionalString(body, "stripeSubscriptionId", {
+        maxLength: 200
+      }),
+      stripePriceId: readOptionalString(body, "stripePriceId", {
+        maxLength: 200
+      }),
+      subscriptionStatus: parseSubscriptionStatus(
+        readOptionalString(body, "subscriptionStatus", { maxLength: 100 })
+      )
     });
 
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof ValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     await sendOperationalAlert({
       source: "api.internal.provision-org",
       title: "Org provisioning API failed",

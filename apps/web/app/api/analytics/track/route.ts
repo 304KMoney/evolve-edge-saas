@@ -5,6 +5,15 @@ import {
   isKnownProductAnalyticsEventName,
   trackProductAnalyticsEvent
 } from "../../../../lib/product-analytics";
+import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
+import {
+  expectObject,
+  parseJsonRequestBody,
+  readOptionalJsonValue,
+  readOptionalString,
+  readRequiredString,
+  ValidationError
+} from "../../../../lib/security-validation";
 import type {
   ProductAnalyticsEventMap,
   ProductAnalyticsEventName
@@ -21,15 +30,33 @@ type AnalyticsTrackRequest = {
 };
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as AnalyticsTrackRequest;
+  const rateLimited = applyRouteRateLimit(request, {
+    key: "analytics-track"
+  });
+  if (rateLimited) {
+    return rateLimited;
+  }
+
+  let body: AnalyticsTrackRequest & Record<string, unknown>;
+  try {
+    body = expectObject(await parseJsonRequestBody(request)) as AnalyticsTrackRequest &
+      Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
+  }
+
+  const name = readRequiredString(body, "name", { maxLength: 120 });
+  const source = readRequiredString(body, "source", { maxLength: 120 });
+  const payload = readOptionalJsonValue(body, "payload");
 
   if (
-    !body.name ||
-    !isKnownProductAnalyticsEventName(body.name) ||
-    !body.source ||
-    !body.payload ||
-    typeof body.payload !== "object" ||
-    Array.isArray(body.payload)
+    !isKnownProductAnalyticsEventName(name) ||
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload)
   ) {
     return NextResponse.json(
       {
@@ -41,13 +68,13 @@ export async function POST(request: Request) {
 
   const session = await getOptionalCurrentSession();
   await trackProductAnalyticsEvent({
-    name: body.name as ProductAnalyticsEventName,
-    payload: body.payload as ProductAnalyticsEventMap[ProductAnalyticsEventName],
-    source: body.source,
-    path: body.path ?? new URL(request.url).pathname,
-    referrer: body.referrer ?? null,
-    anonymousId: body.anonymousId ?? null,
-    sessionId: body.sessionId ?? null,
+    name: name as ProductAnalyticsEventName,
+    payload: payload as ProductAnalyticsEventMap[ProductAnalyticsEventName],
+    source,
+    path: readOptionalString(body, "path", { maxLength: 500 }) ?? new URL(request.url).pathname,
+    referrer: readOptionalString(body, "referrer", { maxLength: 1000 }),
+    anonymousId: readOptionalString(body, "anonymousId", { maxLength: 200 }),
+    sessionId: readOptionalString(body, "sessionId", { maxLength: 200 }),
     session
   });
 

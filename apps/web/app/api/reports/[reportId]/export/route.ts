@@ -1,7 +1,54 @@
-import { prisma } from "@evolve-edge/db";
-import { requireCurrentSession } from "../../../../../lib/auth";
+import {
+  OperationsQueueSeverity,
+  OperationsQueueSourceSystem,
+  OperationsQueueType,
+  prisma
+} from "@evolve-edge/db";
+import {
+  getOptionalCurrentSession,
+  requireCurrentSession,
+  requireOrganizationPermission
+} from "../../../../../lib/auth";
+import { AuditActorType } from "@evolve-edge/db";
+import { writeAuditLog, buildAuditRequestContextFromRequest } from "../../../../../lib/audit";
+import { createPlaceholderCustomerAccessGrant } from "../../../../../lib/customer-access-grants";
+import { findLatestCustomerAccessGrant } from "../../../../../lib/customer-access-grant-records";
+import { toCustomerAccessSession } from "../../../../../lib/customer-access-session";
+import { logServerEvent } from "../../../../../lib/monitoring";
+import { recordOperationalFinding } from "../../../../../lib/operations-queues";
+import {
+  canUseSignedReportAccess,
+  shouldRequireAuthenticatedReportAccessWhenSigned,
+  verifySignedReportAccessToken
+} from "../../../../../lib/report-access";
+import {
+  buildReportAccessStateHref,
+  evaluateCustomerReportAccess,
+  mapReportAccessDecisionToStateReason,
+  type ReportAccessStateReason
+} from "../../../../../lib/report-access-control";
+import { getReportArtifactAvailability } from "../../../../../lib/report-artifacts";
+import {
+  getExportableReportById,
+  getReportAccessCandidateById
+} from "../../../../../lib/report-records";
+import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+function buildAccessRedirectUrl(input: {
+  request: Request;
+  reason: ReportAccessStateReason;
+  reportId?: string | null;
+}) {
+  return new URL(
+    buildReportAccessStateHref({
+      reason: input.reason,
+      reportId: input.reportId
+    }),
+    input.request.url
+  );
+}
 
 function escapeHtml(value: string) {
   return value
@@ -186,25 +233,272 @@ function buildReportHtml(input: {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ reportId: string }> }
 ) {
-  const session = await requireCurrentSession({ requireOrganization: true });
   const { reportId } = await context.params;
+  if (!reportId?.trim()) {
+    return new Response("Missing report identifier.", { status: 400 });
+  }
+  const url = new URL(request.url);
+  const signedToken = url.searchParams.get("token");
+  let signedAccess = null;
+  const requestContext = buildAuditRequestContextFromRequest(request);
 
-  const report = await prisma.report.findFirst({
-    where: {
-      id: reportId,
-      organizationId: session.organization!.id
-    },
-    include: {
-      assessment: true
+  if (signedToken) {
+    try {
+      signedAccess = verifySignedReportAccessToken(signedToken);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message.toLowerCase() : "invalid signed report token";
+      const reason = message.includes("expired") ? "expired" : "unauthorized";
+
+      logServerEvent("warn", "report.export.invalid_signed_token", {
+        resource_id: reportId,
+        status: "forbidden",
+        source: "report.delivery",
+        requestContext
+      });
+      return NextResponse.redirect(
+        buildAccessRedirectUrl({
+          request,
+          reason,
+          reportId
+        })
+      );
     }
+  }
+
+  if (signedAccess && signedAccess.reportId !== reportId) {
+    logServerEvent("warn", "report.export.signed_token_mismatch", {
+      resource_id: reportId,
+      org_id: signedAccess.organizationId,
+      status: "forbidden",
+      source: "report.delivery",
+      requestContext
+    });
+    return NextResponse.redirect(
+      buildAccessRedirectUrl({
+        request,
+        reason: "not-bound",
+        reportId
+      })
+    );
+  }
+
+  let session = null;
+  if (!signedAccess || shouldRequireAuthenticatedReportAccessWhenSigned()) {
+    session = signedAccess
+      ? await requireCurrentSession({ requireOrganization: true })
+      : await requireOrganizationPermission("reports.view");
+  } else {
+    session = await getOptionalCurrentSession();
+  }
+
+  const accessSession = toCustomerAccessSession(session);
+  const reportAccessCandidate = await getReportAccessCandidateById(reportId);
+
+  if (!reportAccessCandidate) {
+    logServerEvent("warn", "report.export.not_found", {
+      resource_id: reportId,
+      org_id: signedAccess?.organizationId ?? session?.organization?.id ?? null,
+      user_id: session?.user.id ?? null,
+      status: "not_found",
+      source: "report.delivery",
+      requestContext
+    });
+    return new Response("Report not found.", { status: 404 });
+  }
+
+  // Current behavior:
+  // - authenticated dashboard access is organization-scoped
+  // - local/demo export can also flow through a signed organization binding
+  // Future behavior should swap the organization check for a persisted
+  // payment/customer/report binding. Durable grants are preferred here now,
+  // with the existing placeholder session grant kept as a local/demo fallback.
+  const durableAccessGrant = await findLatestCustomerAccessGrant({
+    organizationId:
+      signedAccess?.organizationId ?? accessSession.organizationId ?? null,
+    userId: accessSession.customerId,
+    reportId
+  });
+
+  const reportAccessDecision = evaluateCustomerReportAccess({
+    reportId,
+    reportOrganizationId: reportAccessCandidate.organizationId,
+    accessSession,
+    requiredScope: "report_artifacts",
+    accessGrant:
+      durableAccessGrant ??
+      createPlaceholderCustomerAccessGrant({
+        accessSession,
+        requiredScope: "report_artifacts",
+        reportId,
+        boundOrganizationId: signedAccess?.organizationId ?? null
+      }),
+    boundOrganizationId: signedAccess?.organizationId ?? null
+  });
+
+  if (!reportAccessDecision.allowed) {
+    const status =
+      reportAccessDecision.reason === "missing_access_scope" ||
+      reportAccessDecision.reason === "unauthenticated"
+        ? 403
+        : 404;
+
+    logServerEvent("warn", "report.export.access_denied", {
+      resource_id: reportId,
+      org_id: signedAccess?.organizationId ?? session?.organization?.id ?? null,
+      user_id: session?.user.id ?? null,
+      status: status === 403 ? "forbidden" : "not_found",
+      source: "report.delivery",
+      requestContext,
+      metadata: {
+        accessReason: reportAccessDecision.reason
+      }
+    });
+
+    return NextResponse.redirect(
+      buildAccessRedirectUrl({
+        request,
+        reason: mapReportAccessDecisionToStateReason(reportAccessDecision),
+        reportId
+      }),
+      {
+        status
+      }
+    );
+  }
+
+  const report = await getExportableReportById({
+    reportId,
+    organizationId: reportAccessCandidate.organizationId
   });
 
   if (!report) {
+    logServerEvent("warn", "report.export.not_found", {
+      resource_id: reportId,
+      org_id: signedAccess?.organizationId ?? session?.organization?.id ?? null,
+      user_id: session?.user.id ?? null,
+      status: "not_found",
+      source: "report.delivery",
+      requestContext
+    });
     return new Response("Report not found.", { status: 404 });
   }
+
+  const artifactAvailability = getReportArtifactAvailability({
+    reportId: report.id,
+    status: report.status
+  });
+
+  if (!artifactAvailability.canDownload) {
+    logServerEvent("warn", "report.export.not_ready", {
+      resource_id: report.id,
+      org_id: report.organizationId,
+      user_id: session?.user.id ?? null,
+      status: "conflict",
+      source: "report.delivery",
+      requestContext,
+      metadata: {
+        reportStatus: report.status,
+        artifactState: artifactAvailability.state
+      }
+    });
+    return NextResponse.redirect(
+      buildAccessRedirectUrl({
+        request,
+        reason: "unavailable",
+        reportId: report.id
+      }),
+      {
+        status: 307
+      }
+    );
+  }
+
+  if (
+    signedAccess &&
+    !canUseSignedReportAccess({
+      status: report.status,
+      deliveredAt: report.deliveredAt
+    })
+  ) {
+    await recordOperationalFinding({
+      organizationId: report.organizationId,
+      queueType: OperationsQueueType.SUCCESS_RISK,
+      ruleCode: "delivery.signed_export_before_delivery",
+      severity: OperationsQueueSeverity.MEDIUM,
+      sourceSystem: OperationsQueueSourceSystem.APP,
+      sourceRecordType: "report",
+      sourceRecordId: report.id,
+      title: "Signed report access attempted before delivery",
+      summary:
+        "A signed report link was used before the report reached a delivered state, which suggests early sharing, delivery confusion, or an operator workflow gap.",
+      recommendedAction:
+        "Confirm whether the report package was actually sent, then review delivery-state progression and signed-link issuance timing before sharing the report again.",
+      metadata: {
+        reportId: report.id,
+        assessmentId: report.assessmentId,
+        reportStatus: report.status,
+        deliveredAt: report.deliveredAt?.toISOString() ?? null
+      }
+    });
+    logServerEvent("warn", "report.export.signed_token_not_delivered", {
+      resource_id: reportId,
+      org_id: report.organizationId,
+      user_id: session?.user.id ?? null,
+      status: "forbidden",
+      source: "report.delivery",
+      requestContext,
+      metadata: {
+        reportStatus: report.status,
+        deliveredAt: report.deliveredAt?.toISOString() ?? null
+      }
+    });
+    return NextResponse.redirect(
+      buildAccessRedirectUrl({
+        request,
+        reason: "unavailable",
+        reportId: report.id
+      }),
+      {
+        status: 307
+      }
+    );
+  }
+
+  await writeAuditLog(prisma, {
+    organizationId: report.organizationId,
+    userId: session?.user.id ?? null,
+    actorType: signedAccess ? AuditActorType.SYSTEM : AuditActorType.USER,
+    actorLabel: signedAccess ? "signed-report-link" : session?.user.email ?? null,
+    action: "report.exported",
+    entityType: "report",
+    entityId: report.id,
+    resourceType: "report",
+    resourceId: report.id,
+    dataClassification: report.dataClassification,
+    metadata: {
+      assessmentId: report.assessmentId,
+      signedAccess: Boolean(signedAccess)
+    },
+    requestContext
+  });
+
+  logServerEvent("info", "report.export.delivered", {
+    resource_id: report.id,
+    org_id: report.organizationId,
+    user_id: session?.user.id ?? null,
+    status: "delivered",
+    source: "report.delivery",
+    requestContext,
+    metadata: {
+      assessmentId: report.assessmentId,
+      signedAccess: Boolean(signedAccess),
+      dataClassification: report.dataClassification
+    }
+  });
 
   const html = buildReportHtml({
     title: report.title,

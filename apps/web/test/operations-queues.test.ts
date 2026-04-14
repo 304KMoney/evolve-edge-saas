@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   CustomerLifecycleStage,
   FindingSeverity,
+  OperationsQueueStatus,
   MonitoringFindingStatus,
   MonitoringSubscriptionStatus,
   OperationsQueueType,
@@ -10,6 +11,7 @@ import {
   SubscriptionStatus
 } from "@evolve-edge/db";
 import {
+  updateOperationsQueueStatus,
   buildOperationsQueueDedupeKey,
   evaluateOperationsQueueRules
 } from "../lib/operations-queues";
@@ -56,7 +58,7 @@ function baseContext() {
   } as const;
 }
 
-function runOperationsQueueTests() {
+async function runOperationsQueueTests() {
   {
     const context = baseContext();
     const candidates = evaluateOperationsQueueRules(
@@ -147,7 +149,35 @@ function runOperationsQueueTests() {
     );
   }
 
+  {
+    let updateCalled = false;
+    const db = {
+      operationsQueueItem: {
+        findFirst: async () => null,
+        update: async () => {
+          updateCalled = true;
+          throw new Error("should not update");
+        }
+      }
+    } as any;
+
+    await assert.rejects(
+      () =>
+        updateOperationsQueueStatus({
+          queueItemId: "queue_cross_tenant",
+          organizationId: "org_expected",
+          status: OperationsQueueStatus.RESOLVED,
+          actorUserId: "usr_admin",
+          actorEmail: "admin@evolveedge.ai",
+          db
+        }),
+      /Queue item not found/
+    );
+
+    assert.equal(updateCalled, false);
+  }
+
   console.log("operations-queues tests passed");
 }
 
-runOperationsQueueTests();
+void runOperationsQueueTests();
