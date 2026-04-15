@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { getServerAuditRequestContext } from "../../lib/audit";
 import {
   buildTraceRequestContext,
@@ -287,6 +288,10 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       })
     );
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
     logServerEvent("error", "contact_sales.submit.failed", {
       traceId,
       route: "contact-sales.action",

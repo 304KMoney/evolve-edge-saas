@@ -243,7 +243,7 @@ export default async function ContactSalesPage({
               Work email and company name are required so we can prepare the right next step for your team.
             </div>
           ) : null}
-          {error === "submission-failed" ? (
+          {submission !== "received" && error === "submission-failed" ? (
             <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-[#92400e]">
               We could not submit your request just now. Please try again, or email {salesEmail} if
               you need an immediate response.
