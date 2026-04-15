@@ -1,6 +1,9 @@
 .next
 node_modules
 .turbo
+.vercel/*
+!.vercel/project.json
+!.vercel/README.txt
 .env
 .env.local
 dist
