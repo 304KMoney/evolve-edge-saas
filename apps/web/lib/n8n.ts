@@ -254,6 +254,13 @@ export function getN8nWorkflowDestinations(): N8nDestination[] {
       timeoutMs: getDefaultN8nTimeoutMs()
     },
     {
+      name: "leadPipeline",
+      url: legacyUrl,
+      secret: getDefaultN8nSecret(),
+      provider: "n8n",
+      timeoutMs: getDefaultN8nTimeoutMs()
+    },
+    {
       name: "customerOnboarding",
       url: legacyUrl,
       secret: getDefaultN8nSecret(),
