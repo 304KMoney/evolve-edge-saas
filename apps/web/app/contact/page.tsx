@@ -1,6 +1,7 @@
-import ContactSalesPage, { metadata } from "../contact-sales/page";
+import ContactSalesPage, { dynamic, metadata } from "../contact-sales/page";
 
 export { metadata };
+export { dynamic };
 
 export default async function ContactPage(props: Parameters<typeof ContactSalesPage>[0]) {
   try {

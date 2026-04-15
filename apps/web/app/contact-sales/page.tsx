@@ -13,6 +13,8 @@ export const metadata: Metadata = {
     "Book a call about the Founding Risk Audit or broader Evolve Edge AI risk and compliance engagements."
 };
 
+export const dynamic = "force-dynamic";
+
 const defaultTrustBullets = [
   "Executive-ready risk reporting",
   "Built for regulated and high-trust teams",
