@@ -49,6 +49,8 @@ function runMonitoringTests() {
     assert.equal(captured[0].user_id, "user_123");
     assert.equal(captured[0].workflow_code, "audit_scale");
     assert.equal(captured[0].source, "stripe");
+    assert.equal(captured[0].route, null);
+    assert.equal(captured[0].trace_id, null);
     assert.equal(captured[0].event_id, "evt_123");
 
     const metadata = captured[0].metadata as Record<string, unknown>;

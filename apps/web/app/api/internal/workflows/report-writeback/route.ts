@@ -1,6 +1,13 @@
 import { prisma } from "@evolve-edge/db";
 import { NextResponse } from "next/server";
 import { buildAuditRequestContextFromRequest } from "../../../../../lib/audit";
+import {
+  buildTraceRequestContext,
+  createTraceId,
+  getIntakeEnvPresence,
+  maybeAddTraceDebug,
+  readTraceIdFromHeaders
+} from "../../../../../lib/intake-observability";
 import { logServerEvent, sendOperationalAlert } from "../../../../../lib/monitoring";
 import { appendOperatorWorkflowEventRecord } from "../../../../../lib/operator-workflow-event-records";
 import {
@@ -94,9 +101,25 @@ function inferOperatorEventMessage(input: {
 }
 
 export async function POST(request: Request) {
-  const requestContext = buildAuditRequestContextFromRequest(request);
+  const route = "api.internal.workflows.report-writeback";
+  const traceId = readTraceIdFromHeaders(request.headers) ?? createTraceId("workflow-callback");
+  const requestContext = buildTraceRequestContext(
+    buildAuditRequestContextFromRequest(request) as Record<string, unknown>,
+    traceId,
+    route
+  );
+  const envPresence = getIntakeEnvPresence();
 
   try {
+    logServerEvent("info", "workflow.callback.report_writeback.request_received", {
+      traceId,
+      route,
+      status: "received",
+      source: "n8n.callback",
+      metadata: envPresence,
+      requestContext
+    });
+
     const rateLimited = applyRouteRateLimit(request, {
       key: "internal-workflows-report-writeback",
       category: "webhook"
@@ -106,19 +129,33 @@ export async function POST(request: Request) {
     }
 
     if (!isAuthorizedWorkflowWritebackRequest(request)) {
-      logServerEvent("warn", "workflow.callback.report_writeback.unauthorized", {
+      logServerEvent("warn", "workflow.callback.report_writeback.auth_failed", {
+        traceId,
+        route,
         status: "unauthorized",
         source: "n8n.callback",
+        metadata: envPresence,
         requestContext
       });
       return toWorkflowWritebackErrorResponse(unauthorizedWritebackError());
     }
+
+    logServerEvent("info", "workflow.callback.report_writeback.auth_passed", {
+      traceId,
+      route,
+      status: "authorized",
+      source: "n8n.callback",
+      metadata: envPresence,
+      requestContext
+    });
 
     const payload = parseWorkflowWritebackPayload(
       await parseJsonRequestBody(request)
     );
 
     logServerEvent("info", "workflow.callback.report_writeback.received", {
+      traceId,
+      route,
       dispatch_id: payload.dispatchId,
       correlation_id: payload.correlationId,
       source: "n8n.callback",
@@ -292,6 +329,8 @@ export async function POST(request: Request) {
     }
 
     logServerEvent("info", "workflow.callback.report_writeback.persisted", {
+      traceId,
+      route,
       dispatch_id: payload.dispatchId,
       correlation_id: payload.correlationId,
       status: updatedReport.status,
@@ -303,18 +342,35 @@ export async function POST(request: Request) {
       }
     });
 
-    return NextResponse.json({
-      ok: true,
-      accepted: true,
-      dispatchId: payload.dispatchId,
-      correlationId: payload.correlationId,
-      reportId: updatedReport.id,
-      reportReference: payload.reportReference
+    logServerEvent("info", "workflow.callback.report_writeback.final_response", {
+      traceId,
+      route,
+      dispatch_id: payload.dispatchId,
+      correlation_id: payload.correlationId,
+      status: updatedReport.status,
+      source: "n8n.callback",
+      requestContext
     });
+
+    return NextResponse.json(
+      maybeAddTraceDebug(
+        {
+          ok: true,
+          accepted: true,
+          dispatchId: payload.dispatchId,
+          correlationId: payload.correlationId,
+          reportId: updatedReport.id,
+          reportReference: payload.reportReference
+        },
+        traceId
+      )
+    );
   } catch (error) {
     if (error instanceof ValidationError) {
       const responseError = malformedWritebackPayloadError(error.message);
       logServerEvent("warn", "workflow.callback.report_writeback.invalid_payload", {
+        traceId,
+        route,
         status: "invalid",
         source: "n8n.callback",
         requestContext,
@@ -337,6 +393,8 @@ export async function POST(request: Request) {
       error instanceof Error ? error.message : "Workflow writeback persistence failed."
     );
     logServerEvent("error", "workflow.callback.report_writeback.failed", {
+      traceId,
+      route,
       status: "failed",
       source: "n8n.callback",
       requestContext,

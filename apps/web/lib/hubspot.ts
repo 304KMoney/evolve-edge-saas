@@ -12,6 +12,7 @@ import {
 } from "./reliability";
 import { shouldBlockDemoExternalSideEffects } from "./demo-mode";
 import { stripEmptyStringProperties } from "./integration-contracts";
+import { maskEmail } from "./intake-observability";
 import { logServerEvent } from "./monitoring";
 import { getOptionalEnv } from "./runtime-config";
 
@@ -526,6 +527,7 @@ async function upsertPrimaryContactForEvent(
 export async function syncDomainEventToHubSpot(input: {
   event: DomainEvent;
   timeoutMs?: number;
+  traceId?: string | null;
 }) {
   const timeoutMs = clampTimeoutMs(input.timeoutMs ?? DEFAULT_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
   assertHubSpotProjectionEvent(input.event.type);
@@ -547,7 +549,9 @@ export async function syncDomainEventToHubSpot(input: {
     );
 
     logServerEvent("info", "hubspot.sync.completed", {
-      customer_email: customerEmail || null,
+      traceId: input.traceId ?? (requestId || null),
+      route: "hubspot.sync",
+      customer_email: maskEmail(customerEmail) || null,
       hubspot_contact_id: contactId,
       hubspot_deal_id: null,
       request_id: requestId || null,
@@ -570,7 +574,9 @@ export async function syncDomainEventToHubSpot(input: {
       "HubSpot synchronization failed."
     );
     logServerEvent("error", "hubspot.sync.failed", {
-      customer_email: customerEmail || null,
+      traceId: input.traceId ?? (requestId || null),
+      route: "hubspot.sync",
+      customer_email: maskEmail(customerEmail) || null,
       hubspot_contact_id: null,
       hubspot_deal_id: null,
       request_id: requestId || null,

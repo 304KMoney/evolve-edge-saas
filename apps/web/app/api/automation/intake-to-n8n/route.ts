@@ -1,4 +1,12 @@
 import { NextResponse } from "next/server";
+import {
+  createTraceId,
+  getIntakeEnvPresence,
+  maskEmail,
+  maybeAddTraceDebug,
+  readTraceIdFromHeaders,
+  readTraceIdFromPayload
+} from "../../../../lib/intake-observability";
 import { getAppUrl, requireEnv } from "../../../../lib/runtime-config";
 import { logServerEvent, sendOperationalAlert } from "../../../../lib/monitoring";
 import {
@@ -120,35 +128,90 @@ function normalizePayload(payload: Record<string, unknown>) {
 }
 
 export async function POST(request: Request) {
+  const route = "api.automation.intake-to-n8n";
+  const envPresence = getIntakeEnvPresence();
+  let traceId = readTraceIdFromHeaders(request.headers) ?? createTraceId("intake-api");
   let requestId: string | null = null;
   let orgId: string | null = null;
   let customerEmail: string | null = null;
   let purchasedTier: string | null = null;
 
   try {
+    logServerEvent("info", "automation.intake_to_n8n.request_received", {
+      traceId,
+      route,
+      status: "received",
+      source: route,
+      metadata: envPresence
+    });
+
     const payload = expectObject(await parseJsonRequestBody(request));
+    traceId = readTraceIdFromPayload(payload) ?? traceId;
+    logServerEvent("info", "automation.intake_to_n8n.payload_parsed", {
+      traceId,
+      route,
+      status: "parsed",
+      source: route,
+      metadata: {
+        ...envPresence,
+        payloadKeys: Object.keys(payload).slice(0, 20)
+      }
+    });
+
     const normalized = normalizePayload(payload);
     requestId = normalized.request_id;
     orgId = normalized.app_org_id;
     customerEmail = normalized.customer_email;
     purchasedTier = normalized.purchased_tier;
+    traceId = readTraceIdFromPayload(normalized) ?? traceId;
 
-    logServerEvent("info", "automation.intake_to_n8n.received", {
+    logServerEvent("info", "automation.intake_to_n8n.payload_validated", {
+      traceId,
+      route,
       request_id: requestId,
       org_id: orgId,
-      customer_email: customerEmail,
+      status: "validated",
+      source: route,
+      metadata: {
+        customerEmail: maskEmail(customerEmail),
+        purchasedTier,
+        ...envPresence
+      }
+    });
+
+    logServerEvent("info", "automation.intake_to_n8n.received", {
+      traceId,
+      route,
+      request_id: requestId,
+      org_id: orgId,
+      customer_email: maskEmail(customerEmail),
       purchased_tier: purchasedTier,
       status: "received",
-      source: "api.automation.intake-to-n8n"
+      source: route
     });
 
     const webhookUrl = requireEnv("N8N_WEBHOOK_URL");
     const callbackSharedSecret = requireEnv("N8N_CALLBACK_SHARED_SECRET");
+    logServerEvent("info", "automation.intake_to_n8n.dispatch_begin", {
+      traceId,
+      route,
+      request_id: requestId,
+      org_id: orgId,
+      status: "begin",
+      source: route,
+      metadata: {
+        customerEmail: maskEmail(customerEmail),
+        purchasedTier,
+        ...envPresence
+      }
+    });
+
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${callbackSharedSecret}`,
+        "x-evolve-edge-trace-id": traceId,
         "x-evolve-edge-request-id": normalized.request_id,
         "x-evolve-edge-org-id": normalized.app_org_id ?? "",
         "x-evolve-edge-customer-email": normalized.customer_email,
@@ -166,47 +229,69 @@ export async function POST(request: Request) {
     }
 
     logServerEvent("info", "automation.intake_to_n8n.accepted", {
+      traceId,
+      route,
       request_id: requestId,
       org_id: orgId,
-      customer_email: customerEmail,
+      customer_email: maskEmail(customerEmail),
       purchased_tier: purchasedTier,
       status: "accepted",
-      source: "api.automation.intake-to-n8n"
+      source: route
     });
 
-    return NextResponse.json({
-      ok: true,
-      accepted: true,
-      request_id: requestId
+    logServerEvent("info", "automation.intake_to_n8n.final_response", {
+      traceId,
+      route,
+      request_id: requestId,
+      org_id: orgId,
+      status: "accepted",
+      source: route
     });
+
+    return NextResponse.json(
+      maybeAddTraceDebug(
+        {
+          ok: true,
+          accepted: true,
+          request_id: requestId
+        },
+        traceId
+      )
+    );
   } catch (error) {
     if (error instanceof ValidationError) {
       logServerEvent("warn", "automation.intake_to_n8n.invalid_payload", {
+        traceId,
+        route,
         request_id: requestId,
         org_id: orgId,
-        customer_email: customerEmail,
+        customer_email: maskEmail(customerEmail),
         purchased_tier: purchasedTier,
         status: "invalid",
-        source: "api.automation.intake-to-n8n",
+        source: route,
         metadata: {
+          ...envPresence,
           message: error.message
         }
       });
 
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json(maybeAddTraceDebug({ error: error.message }, traceId), { status: 400 });
     }
 
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
 
     logServerEvent("error", "automation.intake_to_n8n.failed", {
+      traceId,
+      route,
       request_id: requestId,
       org_id: orgId,
-      customer_email: customerEmail,
+      customer_email: maskEmail(customerEmail),
       purchased_tier: purchasedTier,
       status: "failed",
-      source: "api.automation.intake-to-n8n",
+      source: route,
       metadata: {
+        ...envPresence,
         message: errorMessage
       }
     });
@@ -217,17 +302,13 @@ export async function POST(request: Request) {
       metadata: {
         requestId,
         orgId,
-        customerEmail,
+        customerEmail: maskEmail(customerEmail),
         purchasedTier,
+        traceId,
         message: errorMessage
       }
     });
 
-    return NextResponse.json(
-      {
-        error: errorMessage
-      },
-      { status: 500 }
-    );
+    return NextResponse.json(maybeAddTraceDebug({ error: errorMessage }, traceId), { status: 500 });
   }
 }

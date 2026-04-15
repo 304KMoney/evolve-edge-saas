@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
 import { MarketingShell } from "../../components/marketing-shell";
 import { getOptionalCurrentSession } from "../../lib/auth";
-import { getSalesContactEmail } from "../../lib/runtime-config";
+import { getRuntimeEnvironment, getSalesContactEmail } from "../../lib/runtime-config";
 import { FOUNDING_RISK_AUDIT } from "../../lib/pricing-content";
 import { submitContactSalesLeadAction } from "./actions";
 
@@ -44,6 +44,11 @@ export default async function ContactSalesPage({
     intent?: string | string[];
     source?: string | string[];
     submitted?: string | string[];
+    submission?: string | string[];
+    status?: string | string[];
+    hubspot?: string | string[];
+    workflow?: string | string[];
+    trace?: string | string[];
     error?: string | string[];
   }>;
 }) {
@@ -72,6 +77,38 @@ export default async function ContactSalesPage({
       ? rawParams.error
       : Array.isArray(rawParams.error)
         ? rawParams.error[0] ?? ""
+        : "";
+  const submission =
+    typeof rawParams.submission === "string"
+      ? rawParams.submission
+      : Array.isArray(rawParams.submission)
+        ? rawParams.submission[0] ?? ""
+        : submitted;
+  const status =
+    typeof rawParams.status === "string"
+      ? rawParams.status
+      : Array.isArray(rawParams.status)
+        ? rawParams.status[0] ?? ""
+        : submitted
+          ? "success"
+          : "";
+  const hubspot =
+    typeof rawParams.hubspot === "string"
+      ? rawParams.hubspot
+      : Array.isArray(rawParams.hubspot)
+        ? rawParams.hubspot[0] ?? ""
+        : "";
+  const workflow =
+    typeof rawParams.workflow === "string"
+      ? rawParams.workflow
+      : Array.isArray(rawParams.workflow)
+        ? rawParams.workflow[0] ?? ""
+        : "";
+  const trace =
+    typeof rawParams.trace === "string"
+      ? rawParams.trace
+      : Array.isArray(rawParams.trace)
+        ? rawParams.trace[0] ?? ""
         : "";
   const salesEmail = getSalesContactEmail();
   const isFoundingAuditIntent = intent.includes("founding-risk-audit");
@@ -182,9 +219,21 @@ export default async function ContactSalesPage({
             </a>
           </div>
 
-          {submitted ? (
-            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-[#0f766e]">
-              {successMessage}
+          {submission === "received" ? (
+            <div
+              className={`mt-6 rounded-2xl p-4 text-sm ${
+                status === "success"
+                  ? "border border-emerald-200 bg-emerald-50 text-[#0f766e]"
+                  : "border border-amber-200 bg-amber-50 text-[#92400e]"
+              }`}
+            >
+              <p>{status === "success" ? successMessage : "Your request was received, but one or more follow-up handoff steps did not complete yet."}</p>
+              <p className="mt-3">
+                Submission: received. HubSpot: {hubspot || "not configured"}. Workflow: {workflow || "not configured"}.
+              </p>
+              {getRuntimeEnvironment() !== "production" && trace ? (
+                <p className="mt-2 font-mono text-xs text-current/80">Trace: {trace}</p>
+              ) : null}
             </div>
           ) : null}
           {error === "missing-required" ? (

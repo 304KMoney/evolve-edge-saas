@@ -12,6 +12,8 @@ import {
   upsertCustomerAccountFromLead
 } from "./customer-accounts";
 import { publishDomainEvent } from "./domain-events";
+import { maskEmail } from "./intake-observability";
+import { logServerEvent } from "./monitoring";
 import { getOptionalEnv } from "./runtime-config";
 
 type LeadDbClient = Prisma.TransactionClient | typeof prisma;
@@ -65,6 +67,20 @@ export type LeadCaptureInput = {
 
 const ATTRIBUTION_COOKIE = "evolve_edge_attribution";
 const DEFAULT_LEAD_DEDUPE_WINDOW_DAYS = 14;
+
+export class LeadSubmissionPipelineError extends Error {
+  constructor(
+    readonly stage:
+      | "lead_capture"
+      | "lead_event_publish"
+      | "lead_customer_account_sync",
+    message: string,
+    readonly cause?: unknown
+  ) {
+    super(message);
+    this.name = "LeadSubmissionPipelineError";
+  }
+}
 
 function trimOrNull(value: string | null | undefined, maxLength = 500) {
   const normalized = value?.trim();
@@ -231,6 +247,30 @@ export async function captureLeadSubmission(
         : ({ notes: trimOrNull(String(input.payload ?? ""), 2_000) } satisfies Prisma.InputJsonValue)
   } satisfies Prisma.InputJsonValue;
 
+  logServerEvent("info", "lead.capture.persist.begin", {
+    traceId:
+      typeof (input.requestContext as Record<string, unknown> | null | undefined)?.traceId ===
+      "string"
+        ? ((input.requestContext as Record<string, unknown>).traceId as string)
+        : null,
+    route: "contact-sales.action",
+    request_id:
+      typeof (input.requestContext as Record<string, unknown> | null | undefined)?.requestId ===
+      "string"
+        ? ((input.requestContext as Record<string, unknown>).requestId as string)
+        : null,
+    user_id: input.userId ?? null,
+    org_id: input.organizationId ?? null,
+    status: "begin",
+    source: "lead.capture",
+    metadata: {
+      leadSource: input.source,
+      email: maskEmail(normalizedEmail),
+      companyName: trimOrNull(input.companyName, 200),
+      requestedPlanCode
+    }
+  });
+
   const lead = existingLead
     ? await db.leadSubmission.update({
         where: { id: existingLead.id },
@@ -282,9 +322,11 @@ export async function captureLeadSubmission(
         }
       });
 
+  let publishedEventId: string | null = null;
+
   if (!existingLead) {
     try {
-      await publishDomainEvent(db, {
+      const publishedEvent = await publishDomainEvent(db, {
         type: "lead.captured",
         aggregateType: "leadSubmission",
         aggregateId: lead.id,
@@ -304,11 +346,17 @@ export async function captureLeadSubmission(
           intent,
           sourcePath,
           requestedPlanCode,
+          trace_id:
+            typeof (input.requestContext as Record<string, unknown> | null | undefined)?.traceId ===
+            "string"
+              ? ((input.requestContext as Record<string, unknown>).traceId as string)
+              : null,
           pricingContext: trimOrNull(input.pricingContext, 160),
           attribution,
           ...crmSafePayload
         } satisfies Prisma.InputJsonValue
       });
+      publishedEventId = publishedEvent?.id ?? null;
 
       await writeAuditLog(db, {
         organizationId: input.organizationId ?? null,
@@ -327,10 +375,32 @@ export async function captureLeadSubmission(
         requestContext: input.requestContext ?? null
       });
     } catch (error) {
-      console.error("[lead-pipeline] Lead follow-up event logging failed.", {
-        leadSubmissionId: lead.id,
-        error
+      logServerEvent("error", "lead.capture.event_publish.failed", {
+        traceId:
+          typeof (input.requestContext as Record<string, unknown> | null | undefined)?.traceId ===
+          "string"
+            ? ((input.requestContext as Record<string, unknown>).traceId as string)
+            : null,
+        route: "contact-sales.action",
+        request_id:
+          typeof (input.requestContext as Record<string, unknown> | null | undefined)?.requestId ===
+          "string"
+            ? ((input.requestContext as Record<string, unknown>).requestId as string)
+            : null,
+        resource_id: lead.id,
+        status: "failed",
+        source: "lead.capture",
+        metadata: {
+          stage: "lead_event_publish",
+          email: maskEmail(normalizedEmail),
+          message: error instanceof Error ? error.message : "Unknown error"
+        }
       });
+      throw new LeadSubmissionPipelineError(
+        "lead_event_publish",
+        "Lead submission was stored but downstream event handoff could not be created.",
+        error
+      );
     }
   }
 
@@ -340,15 +410,33 @@ export async function captureLeadSubmission(
       db
     });
   } catch (error) {
-    console.error("[lead-pipeline] Customer account sync from lead failed.", {
-      leadSubmissionId: lead.id,
-      error
+    logServerEvent("warn", "lead.capture.customer_account_sync.failed", {
+      traceId:
+        typeof (input.requestContext as Record<string, unknown> | null | undefined)?.traceId ===
+        "string"
+          ? ((input.requestContext as Record<string, unknown>).traceId as string)
+          : null,
+      route: "contact-sales.action",
+      request_id:
+        typeof (input.requestContext as Record<string, unknown> | null | undefined)?.requestId ===
+        "string"
+          ? ((input.requestContext as Record<string, unknown>).requestId as string)
+          : null,
+      resource_id: lead.id,
+      status: "failed",
+      source: "lead.capture",
+      metadata: {
+        stage: "lead_customer_account_sync",
+        email: maskEmail(normalizedEmail),
+        message: error instanceof Error ? error.message : "Unknown error"
+      }
     });
   }
 
   return {
     lead,
-    deduped: Boolean(existingLead)
+    deduped: Boolean(existingLead),
+    eventId: existingLead ? null : publishedEventId
   };
 }
 

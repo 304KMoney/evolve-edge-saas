@@ -12,6 +12,8 @@ type CanonicalLogField =
   | "workflow_code"
   | "status"
   | "source"
+  | "route"
+  | "trace_id"
   | "correlation_id"
   | "dispatch_id"
   | "event_id"
@@ -40,6 +42,8 @@ const CANONICAL_LOG_FIELDS = [
   "workflow_code",
   "status",
   "source",
+  "route",
+  "trace_id",
   "correlation_id",
   "dispatch_id",
   "event_id",
@@ -109,6 +113,8 @@ function readCanonicalLogContext(
       metadata.sourceSystem,
       metadata.eventSource
     ),
+    route: readStringValue(metadata.route, metadata.routeName),
+    trace_id: readStringValue(metadata.trace_id, metadata.traceId),
     correlation_id: readStringValue(
       metadata.correlation_id,
       metadata.correlationId
@@ -134,6 +140,8 @@ function buildResidualMetadata(metadata: StructuredLogMetadata) {
       "workflowCode",
       "sourceSystem",
       "eventSource",
+      "routeName",
+      "traceId",
       "correlationId",
       "dispatchId",
       "eventId",

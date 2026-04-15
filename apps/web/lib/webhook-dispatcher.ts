@@ -9,6 +9,7 @@ import {
   isProcessingClaimStale,
   normalizeExternalError
 } from "./reliability";
+import { maskEmail, readTraceIdFromPayload } from "./intake-observability";
 import { markCustomerRunCrmSyncResult } from "./customer-runs";
 import { logServerEvent, sendOperationalAlert } from "./monitoring";
 import { getOptionalEnv, getOptionalJsonEnv, requireEnv } from "./runtime-config";
@@ -314,6 +315,19 @@ async function deliverWebhook(deliveryId: string, destination: OutboundWebhookDe
   }
 
   const correlationId = buildCorrelationId("webhook");
+  const eventPayload =
+    refreshed.event.payload && typeof refreshed.event.payload === "object" && !Array.isArray(refreshed.event.payload)
+      ? (refreshed.event.payload as Record<string, unknown>)
+      : {};
+  const traceId = readTraceIdFromPayload(eventPayload) ?? correlationId;
+  const maskedEmail =
+    typeof eventPayload.normalizedEmail === "string"
+      ? maskEmail(eventPayload.normalizedEmail)
+      : typeof eventPayload.email === "string"
+        ? maskEmail(eventPayload.email)
+        : typeof eventPayload.customer_email === "string"
+          ? maskEmail(eventPayload.customer_email)
+          : null;
   const envelope =
     destination.provider === "n8n"
       ? buildN8nEnvelope({
@@ -343,9 +357,25 @@ async function deliverWebhook(deliveryId: string, destination: OutboundWebhookDe
     const timeoutMs = getWebhookDeliveryTimeoutMs(destination.timeoutMs);
 
     if (destination.provider === "hubspot") {
+      logServerEvent("info", "hubspot.sync.begin", {
+        traceId,
+        route: "webhook-dispatcher.deliver",
+        correlationId,
+        eventId: refreshed.eventId,
+        resourceId: refreshed.id,
+        status: "begin",
+        source: "hubspot.sync",
+        metadata: {
+          destination: destination.name,
+          eventType: refreshed.event.type,
+          email: maskedEmail
+        }
+      });
+
       await syncDomainEventToHubSpot({
         event: refreshed.event,
-        timeoutMs
+        timeoutMs,
+        traceId
       });
 
       await prisma.webhookDelivery.update({
@@ -368,6 +398,8 @@ async function deliverWebhook(deliveryId: string, destination: OutboundWebhookDe
       }
 
       logServerEvent("info", "outbound.webhook.delivered", {
+        traceId,
+        route: "webhook-dispatcher.deliver",
         correlationId,
         eventId: refreshed.eventId,
         deliveryId: refreshed.id,
@@ -378,10 +410,28 @@ async function deliverWebhook(deliveryId: string, destination: OutboundWebhookDe
       return { delivered: true, skipped: false as const };
     }
 
+    if (destination.provider === "n8n") {
+      logServerEvent("info", "n8n.dispatch.begin", {
+        traceId,
+        route: "webhook-dispatcher.deliver",
+        correlationId,
+        eventId: refreshed.eventId,
+        resourceId: refreshed.id,
+        status: "begin",
+        source: "n8n.dispatch",
+        metadata: {
+          destination: destination.name,
+          eventType: refreshed.event.type,
+          email: maskedEmail
+        }
+      });
+    }
+
     const response = await fetch(destination.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-evolve-edge-trace-id": traceId,
         "x-evolve-edge-correlation-id": correlationId,
         "x-evolve-edge-event-id": refreshed.eventId,
         "x-evolve-edge-delivery-id": refreshed.id,
@@ -410,6 +460,8 @@ async function deliverWebhook(deliveryId: string, destination: OutboundWebhookDe
     await reconcileEventStatus(refreshed.eventId);
 
     logServerEvent("info", "outbound.webhook.delivered", {
+      traceId,
+      route: "webhook-dispatcher.deliver",
       correlationId,
       eventId: refreshed.eventId,
       deliveryId: refreshed.id,
@@ -417,6 +469,22 @@ async function deliverWebhook(deliveryId: string, destination: OutboundWebhookDe
       provider: destination.provider ?? "generic",
       responseStatus: response.status
     });
+
+    if (destination.provider === "n8n") {
+      logServerEvent("info", "n8n.dispatch.succeeded", {
+        traceId,
+        route: "webhook-dispatcher.deliver",
+        correlationId,
+        eventId: refreshed.eventId,
+        resourceId: refreshed.id,
+        status: "dispatched",
+        source: "n8n.dispatch",
+        metadata: {
+          destination: destination.name,
+          responseStatus: response.status
+        }
+      });
+    }
 
     return { delivered: true, skipped: false as const };
   } catch (error) {
@@ -453,6 +521,8 @@ async function deliverWebhook(deliveryId: string, destination: OutboundWebhookDe
       });
     }
     logServerEvent("warn", "outbound.webhook.delivery_failed", {
+      traceId,
+      route: "webhook-dispatcher.deliver",
       correlationId,
       eventId: refreshed.eventId,
       deliveryId: refreshed.id,
@@ -464,6 +534,41 @@ async function deliverWebhook(deliveryId: string, destination: OutboundWebhookDe
       statusCode: normalizedError.statusCode,
       message: normalizedError.message
     });
+
+    if (destination.provider === "hubspot") {
+      logServerEvent("error", "hubspot.sync.failed", {
+        traceId,
+        route: "webhook-dispatcher.deliver",
+        correlationId,
+        eventId: refreshed.eventId,
+        resourceId: refreshed.id,
+        status: shouldRetry ? "retrying" : "failed",
+        source: "hubspot.sync",
+        metadata: {
+          destination: destination.name,
+          email: maskedEmail,
+          message: normalizedError.message
+        }
+      });
+    }
+
+    if (destination.provider === "n8n") {
+      logServerEvent("error", "n8n.dispatch.failed", {
+        traceId,
+        route: "webhook-dispatcher.deliver",
+        correlationId,
+        eventId: refreshed.eventId,
+        resourceId: refreshed.id,
+        status: shouldRetry ? "retrying" : "failed",
+        source: "n8n.dispatch",
+        metadata: {
+          destination: destination.name,
+          email: maskedEmail,
+          message: normalizedError.message
+        }
+      });
+    }
+
     await sendOperationalAlert({
       source: "outbound.webhook",
       title: "Outbound delivery failed",
@@ -575,6 +680,64 @@ export async function dispatchPendingWebhookDeliveries(options?: { limit?: numbe
     delivered,
     failed,
     reviewRequired
+  };
+}
+
+export async function dispatchWebhookDeliveriesForEvent(eventId: string) {
+  await ensureWebhookDeliveriesForEvent(eventId);
+
+  const destinations = getOutboundWebhookDestinations();
+  const eventDeliveries = await prisma.webhookDelivery.findMany({
+    where: { eventId },
+    orderBy: { createdAt: "asc" }
+  });
+
+  const results: Array<{
+    deliveryId: string;
+    destination: string;
+    provider: string;
+    status: string;
+    lastError: string | null;
+  }> = [];
+
+  for (const delivery of eventDeliveries) {
+    const destination = destinations.find((item) => item.name === delivery.destination);
+
+    if (!destination) {
+      await prisma.webhookDelivery.update({
+        where: { id: delivery.id },
+        data: {
+          status: WebhookDeliveryStatus.FAILED,
+          lastError: `Missing destination configuration: ${delivery.destination}`
+        }
+      });
+      await reconcileEventStatus(delivery.eventId);
+      results.push({
+        deliveryId: delivery.id,
+        destination: delivery.destination,
+        provider: "missing",
+        status: "failed",
+        lastError: `Missing destination configuration: ${delivery.destination}`
+      });
+      continue;
+    }
+
+    await deliverWebhook(delivery.id, destination);
+    const refreshed = await prisma.webhookDelivery.findUniqueOrThrow({
+      where: { id: delivery.id }
+    });
+    results.push({
+      deliveryId: refreshed.id,
+      destination: refreshed.destination,
+      provider: destination.provider ?? "generic",
+      status: refreshed.status,
+      lastError: refreshed.lastError
+    });
+  }
+
+  return {
+    eventId,
+    results
   };
 }
 

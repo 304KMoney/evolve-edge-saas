@@ -1,6 +1,15 @@
 import { Prisma } from "@evolve-edge/db";
 import { NextResponse } from "next/server";
 import { buildAuditRequestContextFromRequest } from "../../../../../lib/audit";
+import {
+  buildTraceRequestContext,
+  createTraceId,
+  getIntakeEnvPresence,
+  maskEmail,
+  maybeAddTraceDebug,
+  readTraceIdFromHeaders,
+  readTraceIdFromPayload
+} from "../../../../../lib/intake-observability";
 import { logServerEvent, sendOperationalAlert } from "../../../../../lib/monitoring";
 import { applyRouteRateLimit } from "../../../../../lib/security-rate-limit";
 import {
@@ -56,8 +65,24 @@ function buildCallbackMetadata(payload: Record<string, unknown>) {
 }
 
 export async function POST(request: Request) {
-  const requestContext = buildAuditRequestContextFromRequest(request);
+  const route = "api.internal.workflows.report-ready";
+  let traceId = readTraceIdFromHeaders(request.headers) ?? createTraceId("workflow-callback");
+  const envPresence = getIntakeEnvPresence();
+  const requestContext = buildTraceRequestContext(
+    buildAuditRequestContextFromRequest(request) as Record<string, unknown>,
+    traceId,
+    route
+  );
   try {
+    logServerEvent("info", "workflow.callback.report_ready.request_received", {
+      traceId,
+      route,
+      status: "received",
+      source: "n8n.callback",
+      metadata: envPresence,
+      requestContext
+    });
+
     const rateLimited = applyRouteRateLimit(request, {
       key: "internal-workflows-report-ready",
       category: "webhook"
@@ -67,21 +92,38 @@ export async function POST(request: Request) {
     }
 
     if (!isAuthorizedWorkflowWritebackRequest(request)) {
-      logServerEvent("warn", "workflow.callback.report_ready.unauthorized", {
+      logServerEvent("warn", "workflow.callback.report_ready.auth_failed", {
+        traceId,
+        route,
         status: "unauthorized",
         source: "n8n.callback",
+        metadata: envPresence,
         requestContext
       });
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
+    logServerEvent("info", "workflow.callback.report_ready.auth_passed", {
+      traceId,
+      route,
+      status: "authorized",
+      source: "n8n.callback",
+      metadata: envPresence,
+      requestContext
+    });
+
     const payload = expectObject(await parseJsonRequestBody(request));
+    traceId = readTraceIdFromPayload(payload) ?? traceId;
     const dispatchId = readDispatchIdFromPayload(payload);
 
     logServerEvent("info", "workflow.callback.report_ready.received", {
+      traceId,
+      route,
       request_id: dispatchId,
       dispatch_id: dispatchId,
-      customer_email: readOptionalString(payload, "customer_email", { maxLength: 320 }),
+      customer_email: maskEmail(
+        readOptionalString(payload, "customer_email", { maxLength: 320 })
+      ),
       purchased_tier: readOptionalString(payload, "purchased_tier", { maxLength: 100 }),
       status: readOptionalString(payload, "status", { maxLength: 100 }) ?? "received",
       source: "n8n.callback",
@@ -121,20 +163,38 @@ export async function POST(request: Request) {
     });
 
     logServerEvent("info", "workflow.callback.report_ready.completed", {
+      traceId,
+      route,
       dispatch_id: result.id,
       status: result.status,
       source: "n8n.callback",
       requestContext
     });
 
-    return NextResponse.json({
-      ok: true,
-      dispatchId: result.id,
-      status: result.status
+    logServerEvent("info", "workflow.callback.report_ready.final_response", {
+      traceId,
+      route,
+      dispatch_id: result.id,
+      status: result.status,
+      source: "n8n.callback",
+      requestContext
     });
+
+    return NextResponse.json(
+      maybeAddTraceDebug(
+        {
+          ok: true,
+          dispatchId: result.id,
+          status: result.status
+        },
+        traceId
+      )
+    );
   } catch (error) {
     if (error instanceof ValidationError) {
       logServerEvent("warn", "workflow.callback.report_ready.invalid_payload", {
+        traceId,
+        route,
         status: "invalid",
         source: "n8n.callback",
         requestContext,
@@ -142,14 +202,17 @@ export async function POST(request: Request) {
           message: error.message
         }
       });
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json(maybeAddTraceDebug({ error: error.message }, traceId), { status: 400 });
     }
 
     logServerEvent("error", "workflow.callback.report_ready.failed", {
+      traceId,
+      route,
       status: "failed",
       source: "n8n.callback",
       requestContext,
       metadata: {
+        traceId,
         message: error instanceof Error ? error.message : "Unknown error"
       }
     });
@@ -157,13 +220,17 @@ export async function POST(request: Request) {
       source: "api.internal.workflows.report-ready",
       title: "Workflow report-ready callback failed",
       metadata: {
+        traceId,
         message: error instanceof Error ? error.message : "Unknown error"
       }
     });
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Unknown error"
-      },
+      maybeAddTraceDebug(
+        {
+          error: error instanceof Error ? error.message : "Unknown error"
+        },
+        traceId
+      ),
       { status: 500 }
     );
   }
