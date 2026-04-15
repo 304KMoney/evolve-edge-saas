@@ -247,9 +247,11 @@ export default async function ContactSalesPage({
               }`}
             >
               <p>{status === "success" ? successMessage : "Your request was received, but one or more follow-up handoff steps did not complete yet."}</p>
-              <p className="mt-3">
-                Submission: received. HubSpot: {formatDeliveryStatus(hubspot, "hubspot")}. Workflow: {formatDeliveryStatus(workflow, "workflow")}.
-              </p>
+              {getRuntimeEnvironment() !== "production" ? (
+                <p className="mt-3">
+                  Submission: received. HubSpot: {formatDeliveryStatus(hubspot, "hubspot")}. Workflow: {formatDeliveryStatus(workflow, "workflow")}.
+                </p>
+              ) : null}
               {getRuntimeEnvironment() !== "production" && trace ? (
                 <p className="mt-2 font-mono text-xs text-current/80">Trace: {trace}</p>
               ) : null}
