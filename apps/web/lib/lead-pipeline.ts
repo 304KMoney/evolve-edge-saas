@@ -357,23 +357,6 @@ export async function captureLeadSubmission(
         } satisfies Prisma.InputJsonValue
       });
       publishedEventId = publishedEvent?.id ?? null;
-
-      await writeAuditLog(db, {
-        organizationId: input.organizationId ?? null,
-        userId: input.userId ?? null,
-        actorType: input.userId ? AuditActorType.USER : AuditActorType.SYSTEM,
-        actorLabel: input.actorLabel ?? normalizedEmail,
-        action: "lead.captured",
-        entityType: "leadSubmission",
-        entityId: lead.id,
-        metadata: {
-          source: input.source,
-          intent,
-          requestedPlanCode,
-          normalizedEmail
-        },
-        requestContext: input.requestContext ?? null
-      });
     } catch (error) {
       logServerEvent("error", "lead.capture.event_publish.failed", {
         traceId:
@@ -401,6 +384,47 @@ export async function captureLeadSubmission(
         "Lead submission was stored but downstream event handoff could not be created.",
         error
       );
+    }
+
+    try {
+      await writeAuditLog(db, {
+        organizationId: input.organizationId ?? null,
+        userId: input.userId ?? null,
+        actorType: input.userId ? AuditActorType.USER : AuditActorType.SYSTEM,
+        actorLabel: input.actorLabel ?? normalizedEmail,
+        action: "lead.captured",
+        entityType: "leadSubmission",
+        entityId: lead.id,
+        metadata: {
+          source: input.source,
+          intent,
+          requestedPlanCode,
+          normalizedEmail
+        },
+        requestContext: input.requestContext ?? null
+      });
+    } catch (error) {
+      logServerEvent("warn", "lead.capture.audit_log.failed", {
+        traceId:
+          typeof (input.requestContext as Record<string, unknown> | null | undefined)?.traceId ===
+          "string"
+            ? ((input.requestContext as Record<string, unknown>).traceId as string)
+            : null,
+        route: "contact-sales.action",
+        request_id:
+          typeof (input.requestContext as Record<string, unknown> | null | undefined)?.requestId ===
+          "string"
+            ? ((input.requestContext as Record<string, unknown>).requestId as string)
+            : null,
+        resource_id: lead.id,
+        status: "failed",
+        source: "lead.capture",
+        metadata: {
+          stage: "lead_audit_log",
+          email: maskEmail(normalizedEmail),
+          message: error instanceof Error ? error.message : "Unknown error"
+        }
+      });
     }
   }
 

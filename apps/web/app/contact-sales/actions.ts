@@ -185,16 +185,43 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       }
     });
 
-    const deliverySummary =
-      leadCapture.eventId !== null
-        ? await dispatchWebhookDeliveriesForEvent(leadCapture.eventId)
-        : { results: [] };
+    let deliverySummary: { results: Array<{ provider: string; status: string }> } = {
+      results: []
+    };
+    let deliveryDispatchFailed = false;
+
+    if (leadCapture.eventId !== null) {
+      try {
+        deliverySummary = await dispatchWebhookDeliveriesForEvent(leadCapture.eventId);
+      } catch (error) {
+        deliveryDispatchFailed = true;
+        logServerEvent("error", "contact_sales.submit.dispatch_failed", {
+          traceId,
+          route: "contact-sales.action",
+          request_id: requestId,
+          resource_id: leadCapture.lead.id,
+          event_id: leadCapture.eventId,
+          status: "failed",
+          source: "contact-sales.action",
+          metadata: {
+            email: maskedEmail,
+            stage: "webhook_dispatch",
+            message: error instanceof Error ? error.message : "Unknown error"
+          }
+        });
+      }
+    }
+
     const hubspotStatus = leadCapture.deduped
       ? "not_repeated"
-      : summarizeDelivery(deliverySummary.results, "hubspot");
+      : deliveryDispatchFailed
+        ? "failed"
+        : summarizeDelivery(deliverySummary.results, "hubspot");
     const workflowStatus = leadCapture.deduped
       ? "not_repeated"
-      : summarizeDelivery(deliverySummary.results, "n8n");
+      : deliveryDispatchFailed
+        ? "failed"
+        : summarizeDelivery(deliverySummary.results, "n8n");
     const overallStatus =
       hubspotStatus === "failed" || workflowStatus === "failed"
         ? "partial"
