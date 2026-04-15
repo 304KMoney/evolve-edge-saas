@@ -39,6 +39,23 @@ const foundingNextSteps = [
   "We recommend the fastest path to a high-trust executive-ready assessment"
 ] as const;
 
+function formatDeliveryStatus(value: string, provider: "hubspot" | "workflow") {
+  switch (value) {
+    case "captured":
+      return "captured";
+    case "dispatched":
+      return "dispatched";
+    case "failed":
+      return "failed";
+    case "not_configured":
+      return "not configured";
+    case "not_repeated":
+      return provider === "hubspot" ? "already captured" : "already dispatched";
+    default:
+      return "not configured";
+  }
+}
+
 export default async function ContactSalesPage({
   searchParams
 }: {
@@ -231,7 +248,7 @@ export default async function ContactSalesPage({
             >
               <p>{status === "success" ? successMessage : "Your request was received, but one or more follow-up handoff steps did not complete yet."}</p>
               <p className="mt-3">
-                Submission: received. HubSpot: {hubspot || "not configured"}. Workflow: {workflow || "not configured"}.
+                Submission: received. HubSpot: {formatDeliveryStatus(hubspot, "hubspot")}. Workflow: {formatDeliveryStatus(workflow, "workflow")}.
               </p>
               {getRuntimeEnvironment() !== "production" && trace ? (
                 <p className="mt-2 font-mono text-xs text-current/80">Trace: {trace}</p>
