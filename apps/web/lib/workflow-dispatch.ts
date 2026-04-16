@@ -385,6 +385,13 @@ async function dispatchWorkflow(dispatchId: string, db: WorkflowDispatchDbClient
   }
 }
 
+export async function dispatchWorkflowById(
+  dispatchId: string,
+  db: WorkflowDispatchDbClient = prisma
+) {
+  return dispatchWorkflow(dispatchId, db);
+}
+
 export async function dispatchPendingWorkflowDispatches(options?: { limit?: number }) {
   const limit = options?.limit ?? 20;
   const pending = await prisma.workflowDispatch.findMany({
