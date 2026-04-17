@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import { Suspense } from "react";
 import { AttributionCapture } from "../components/attribution-capture";
+import { assertCriticalEnvironmentParity, logEnvironmentParityStatus } from "../lib/env-validation";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -24,6 +25,9 @@ export const metadata: Metadata = {
     images: ["/brand/evolve-edge-logo.png"]
   }
 };
+
+assertCriticalEnvironmentParity();
+logEnvironmentParityStatus();
 
 export default function RootLayout({
   children
