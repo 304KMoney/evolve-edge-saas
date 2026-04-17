@@ -382,26 +382,57 @@ function buildSourceRecordMetadata(payload: PublicIntakePayload) {
   };
 }
 
+function toOptional<T>(value: T | null) {
+  return value ?? undefined;
+}
+
+function normalizeInputJsonValue(
+  value: Prisma.InputJsonValue | null
+): Prisma.JsonValue | undefined {
+  if (value == null) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeInputJsonValue(item) ?? null) as Prisma.JsonArray;
+  }
+
+  if (typeof value === "object") {
+    const normalized: Prisma.JsonObject = {};
+    for (const [key, nestedValue] of Object.entries(
+      value as Record<string, Prisma.InputJsonValue | null>
+    )) {
+      const normalizedValue = normalizeInputJsonValue(nestedValue);
+      if (normalizedValue !== undefined) {
+        normalized[key] = normalizedValue;
+      }
+    }
+    return normalized;
+  }
+
+  return value;
+}
+
 function buildIntakeStatusReason(payload: PublicIntakePayload) {
   return {
     requestId: payload.request_id,
     customerEmail: payload.customer_email,
     purchasedTier: payload.purchased_tier,
     purchasedPlanCode: payload.purchased_plan_code,
-    amountPaid: payload.amount_paid,
-    currency: payload.currency,
-    stripeSessionId: payload.stripe_session_id,
-    stripePaymentIntent: payload.stripe_payment_intent,
-    stripeCustomerId: payload.stripe_customer_id,
-    orderId: payload.order_id,
+    amountPaid: toOptional(payload.amount_paid),
+    currency: toOptional(payload.currency),
+    stripeSessionId: toOptional(payload.stripe_session_id),
+    stripePaymentIntent: toOptional(payload.stripe_payment_intent),
+    stripeCustomerId: toOptional(payload.stripe_customer_id),
+    orderId: toOptional(payload.order_id),
     topConcerns: payload.top_concerns,
-    usesAiTools: payload.uses_ai_tools,
-    companySize: payload.company_size,
-    industry: payload.industry,
-    additionalNotes: payload.additional_notes,
-    website: payload.website,
-    intakeAnswers: payload.intake_answers,
-    purchaseTimestamp: payload.purchase_timestamp
+    usesAiTools: toOptional(payload.uses_ai_tools),
+    companySize: toOptional(payload.company_size),
+    industry: toOptional(payload.industry),
+    additionalNotes: toOptional(payload.additional_notes),
+    website: toOptional(payload.website),
+    intakeAnswers: normalizeInputJsonValue(payload.intake_answers),
+    purchaseTimestamp: toOptional(payload.purchase_timestamp)
   } satisfies Prisma.JsonObject;
 }
 
