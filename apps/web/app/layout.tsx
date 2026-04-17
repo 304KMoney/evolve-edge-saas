@@ -1,14 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Manrope } from "next/font/google";
 import { Suspense } from "react";
 import { AttributionCapture } from "../components/attribution-capture";
-
-const manrope = Manrope({
-  subsets: ["latin"],
-  variable: "--font-manrope",
-  display: "swap"
-});
+import { assertCriticalEnvironmentParity, logEnvironmentParityStatus } from "../lib/env-validation";
 
 export const metadata: Metadata = {
   title: "Evolve Edge",
@@ -25,12 +19,15 @@ export const metadata: Metadata = {
   }
 };
 
+assertCriticalEnvironmentParity();
+logEnvironmentParityStatus();
+
 export default function RootLayout({
   children
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={manrope.variable}>
+      <body>
         <Suspense fallback={null}>
           <AttributionCapture />
         </Suspense>
