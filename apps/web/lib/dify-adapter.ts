@@ -89,6 +89,33 @@ export type DifyRunResponse = {
   };
 };
 
+
+export type NormalizedDifyReportSections = {
+  executive_summary: string;
+  risk_analysis: DifyFinding[];
+  risk_scoring: {
+    posture_score: number;
+    risk_level: string;
+  };
+  remediation_roadmap: DifyRecommendation[];
+};
+
+export function normalizeDifyReportSections(
+  outputs: Record<string, unknown>
+): NormalizedDifyReportSections {
+  const normalized = normalizeDifyWorkflowOutputs(outputs);
+
+  return {
+    executive_summary: normalized.executiveSummary,
+    risk_analysis: normalized.findings,
+    risk_scoring: {
+      posture_score: normalized.postureScore,
+      risk_level: normalized.riskLevel
+    },
+    remediation_roadmap: normalized.roadmap
+  };
+}
+
 function asStringArray(value: unknown) {
   if (!Array.isArray(value)) {
     return [];

@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+  --font-manrope: "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
   color-scheme: light;
   --brand-navy: #081120;
   --brand-navy-deep: #040b16;

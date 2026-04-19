@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import {
   normalizeDifyWorkflowOutputs,
-  normalizeDifyContractShape
+  normalizeDifyContractShape,
+  normalizeDifyReportSections
 } from "../lib/dify-adapter";
 
 function runDifyAdapterTests() {
@@ -67,6 +68,36 @@ function runDifyAdapterTests() {
 
     assert.equal(normalized.topConcerns.length, 1);
     assert.match(normalized.topConcerns[0], /Logging coverage/);
+  }
+
+
+  {
+    const normalizedSections = normalizeDifyReportSections({
+      executive_summary: "Exec summary",
+      postureScore: 65,
+      risk_level: "Elevated",
+      findings: [
+        {
+          title: "Vendor due diligence gap",
+          summary: "Critical vendor reviews are not consistently tracked.",
+          severity: "HIGH",
+          riskDomain: "third-party",
+          impactedFrameworks: ["SOC 2"]
+        }
+      ],
+      roadmap: [
+        {
+          title: "Launch vendor review runbook",
+          description: "Document and enforce quarterly vendor reassessment.",
+          priority: "HIGH"
+        }
+      ]
+    });
+
+    assert.equal(normalizedSections.executive_summary, "Exec summary");
+    assert.equal(normalizedSections.risk_scoring.posture_score, 65);
+    assert.equal(normalizedSections.risk_analysis.length, 1);
+    assert.equal(normalizedSections.remediation_roadmap.length, 1);
   }
 
   assert.throws(

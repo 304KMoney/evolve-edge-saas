@@ -9,9 +9,7 @@ import { redirect } from "next/navigation";
 import { timingSafeEqual } from "node:crypto";
 import {
   buildAuthorizationContext,
-  canAccessAdminConsole,
   hasPermission,
-  isInternalAdminEmail,
   type OrganizationPermission,
   type PlatformPermission
 } from "./authorization";
@@ -68,14 +66,6 @@ function getSeedOwnerLastName() {
   return getOptionalEnv("SEED_OWNER_LAST_NAME") ?? "Owner";
 }
 
-function getSeedOrganizationName() {
-  return getOptionalEnv("SEED_ACCOUNT_NAME") ?? "Primary Workspace";
-}
-
-function getSeedOrganizationSlug() {
-  return getOptionalEnv("SEED_ACCOUNT_SLUG") ?? "primary-workspace";
-}
-
 export function isPasswordAuthEnabled() {
   return getAuthMode() === "password";
 }
@@ -90,27 +80,6 @@ export function getPasswordAuthConfig() {
     email,
     password,
     isComplete: Boolean(email && password)
-  };
-}
-
-function buildDemoSession(): AppSession {
-  return {
-    user: {
-      id: "seed_owner_user",
-      email: getSeedOwnerEmail(),
-      firstName: getSeedOwnerFirstName(),
-      lastName: getSeedOwnerLastName(),
-      platformRole: isInternalAdminEmail(getSeedOwnerEmail()) ? "SUPER_ADMIN" : "NONE"
-    },
-    organization: {
-      id: "seed_org",
-      slug: getSeedOrganizationSlug(),
-      name: getSeedOrganizationName(),
-      role: "OWNER",
-      isBillingAdmin: false
-    },
-    onboardingRequired: false,
-    authMode: "demo"
   };
 }
 
@@ -337,7 +306,11 @@ async function resolveCurrentSession(options?: {
   redirectOnMissing?: boolean;
 }): Promise<AppSession | null> {
   if (!isPasswordAuthEnabled()) {
-    return buildDemoSession();
+    if (options?.redirectOnMissing ?? true) {
+      redirectToSignIn("config");
+    }
+
+    return null;
   }
 
   const config = getPasswordAuthConfig();
