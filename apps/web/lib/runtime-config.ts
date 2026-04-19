@@ -1,5 +1,3 @@
-import "server-only";
-
 import {
   CANONICAL_ENV_KEYS,
   CANONICAL_PLAN_CODES,
@@ -7,17 +5,37 @@ import {
   getCanonicalStripeProductEnvVar,
   type CanonicalPlanCode
 } from "./canonical-domain";
+import { getEnvironmentParityStatus } from "./env-validation";
 
 function readEnv(name: string) {
   const value = process.env[name];
   return typeof value === "string" ? value.trim() : "";
 }
 
+function readEnvWithAliases(name: string, aliases: string[] = []) {
+  const keys = [name, ...aliases];
+  for (const key of keys) {
+    const value = readEnv(key);
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
 export type AppRuntimeEnvironment = "development" | "preview" | "production";
 export type AppLogLevel = "debug" | "info" | "warn" | "error";
 
 export function getAppUrl() {
-  return readEnv(CANONICAL_ENV_KEYS.appUrl) || "http://localhost:3000";
+  return (
+    readEnvWithAliases(CANONICAL_ENV_KEYS.appUrl, ["APP_BASE_URL"]) ||
+    "http://localhost:3000"
+  );
+}
+
+export function getDifyBaseUrl() {
+  return readEnvWithAliases(CANONICAL_ENV_KEYS.difyApiBaseUrl, ["DIFY_BASE_URL"]);
 }
 
 export function getSalesContactEmail() {
@@ -85,6 +103,47 @@ export function getOptionalJsonEnv<T>(name: string): T | null {
       }`
     );
   }
+}
+
+
+let runtimeConfigLogged = false;
+
+export function getRuntimeConfigStatus() {
+  return getEnvironmentParityStatus().map((entry) => ({
+    key: entry.key,
+    required: entry.required,
+    configured: entry.configured
+  }));
+}
+
+export function assertRequiredRuntimeConfig() {
+  const missing = getEnvironmentParityStatus()
+    .filter((entry) => entry.required && !entry.configured)
+    .map((entry) => entry.key);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required runtime environment variables: ${missing.join(", ")}. ` +
+        "Ensure production integrations are configured before booting the app."
+    );
+  }
+}
+
+export function logRuntimeConfigStatus() {
+  if (runtimeConfigLogged) {
+    return;
+  }
+
+  runtimeConfigLogged = true;
+  const status = getRuntimeConfigStatus();
+  const summary = {
+    requiredConfigured: status.filter((entry) => entry.required && entry.configured).length,
+    requiredTotal: status.filter((entry) => entry.required).length,
+    configured: status.filter((entry) => entry.configured).map((entry) => entry.key),
+    missing: status.filter((entry) => entry.required && !entry.configured).map((entry) => entry.key)
+  };
+
+  console.info("[runtime-config] startup status", summary);
 }
 
 export function getOptionalListEnv(name: string) {

@@ -107,6 +107,30 @@ export type AuditRequestedN8nPayload = {
     report_ready_url: string;
     failure_url: string;
   };
+  workflowDispatchId: string;
+  dispatchId: string;
+  organizationId: string;
+  deliveryStateRecordId: string;
+  routingSnapshotId: string;
+  callbackToken: string;
+  callback_token: string;
+  callbackBaseUrl: string;
+  statusCallbackPath: string;
+  reportReadyCallbackPath: string;
+  correlationId: string;
+  tier: string;
+  workflowType: string;
+  analysisProvider: string | null;
+  analysisModel: string | null;
+  synthesisProvider: string | null;
+  synthesisModel: string | null;
+  synthesisAllowed: boolean | null;
+  privateMode: boolean | null;
+  businessContext: Prisma.JsonValue;
+  intakeSummary: Prisma.JsonValue;
+  executionStartedAt: string;
+  executionStatus: "acknowledged";
+  executionStage: "intake_received";
   request_id: string;
   app_customer_id: string | null;
   app_org_id: string;
@@ -167,6 +191,30 @@ function buildCompactWorkflowCallbackUrls() {
     report_ready_url: callbacks.report_ready_url,
     failure_url: callbacks.failure_url
   };
+}
+
+const DEFAULT_CALLBACK_BASE_URL = "https://evolveedgeai.com";
+
+function deriveCallbackParts(urlValue: string | null | undefined, fallbackPath: string) {
+  if (typeof urlValue !== "string" || urlValue.trim().length === 0) {
+    return {
+      baseUrl: DEFAULT_CALLBACK_BASE_URL,
+      path: fallbackPath
+    };
+  }
+
+  try {
+    const parsed = new URL(urlValue);
+    return {
+      baseUrl: parsed.origin,
+      path: `${parsed.pathname}${parsed.search}` || fallbackPath
+    };
+  } catch {
+    return {
+      baseUrl: DEFAULT_CALLBACK_BASE_URL,
+      path: fallbackPath
+    };
+  }
 }
 
 export type N8nDestination = {
@@ -473,6 +521,18 @@ export function buildAuditRequestedPayload(input: {
       : getCanonicalProcessingDepthForPlan(canonicalPlanCode);
   const callbacks = buildWorkflowCallbackUrls();
   const callbackUrls = buildCompactWorkflowCallbackUrls();
+  const statusCallbackParts = deriveCallbackParts(
+    callbackUrls.status_update_url,
+    "/api/internal/workflows/status"
+  );
+  const reportReadyCallbackParts = deriveCallbackParts(
+    callbackUrls.report_ready_url,
+    "/api/internal/workflows/report-ready"
+  );
+  const callbackToken =
+    getOptionalEnv("N8N_CALLBACK_SHARED_SECRET") ??
+    getOptionalEnv("N8N_CALLBACK_SECRET") ??
+    "";
   const routingReasonRecord = readJsonObject(routingReason);
   const hintedTopConcerns = normalizeOptionalStringArray(normalizedHintRecord.top_concerns);
   const topConcerns =
@@ -494,6 +554,40 @@ export function buildAuditRequestedPayload(input: {
       : input.organization?.aiUsageSummary
         ? true
         : null;
+  const workflowType =
+    typeof normalizedHintRecord.workflow_type === "string"
+      ? normalizedHintRecord.workflow_type.trim()
+      : "";
+  const businessContext = readJsonObject(
+    normalizedHintRecord.business_context
+  ) as Prisma.JsonObject;
+  const intakeSummary = readJsonObject(
+    normalizedHintRecord.intake_summary
+  ) as Prisma.JsonObject;
+  const analysisProvider =
+    typeof normalizedHintRecord.analysis_provider === "string"
+      ? normalizedHintRecord.analysis_provider.trim()
+      : null;
+  const analysisModel =
+    typeof normalizedHintRecord.analysis_model === "string"
+      ? normalizedHintRecord.analysis_model.trim()
+      : null;
+  const synthesisProvider =
+    typeof normalizedHintRecord.synthesis_provider === "string"
+      ? normalizedHintRecord.synthesis_provider.trim()
+      : null;
+  const synthesisModel =
+    typeof normalizedHintRecord.synthesis_model === "string"
+      ? normalizedHintRecord.synthesis_model.trim()
+      : null;
+  const synthesisAllowed =
+    typeof normalizedHintRecord.synthesis_allowed === "boolean"
+      ? normalizedHintRecord.synthesis_allowed
+      : null;
+  const privateMode =
+    typeof normalizedHintRecord.private_mode === "boolean"
+      ? normalizedHintRecord.private_mode
+      : null;
 
   return {
     source: "evolve-edge",
@@ -532,6 +626,30 @@ export function buildAuditRequestedPayload(input: {
     },
     callbacks,
     callback_urls: callbackUrls,
+    workflowDispatchId: input.dispatchId ?? "",
+    dispatchId: input.dispatchId ?? "",
+    organizationId: input.routingSnapshot.organizationId,
+    deliveryStateRecordId: input.routingSnapshot.sourceRecordId ?? "",
+    routingSnapshotId: input.routingSnapshot.id,
+    callbackToken,
+    callback_token: callbackToken,
+    callbackBaseUrl: statusCallbackParts.baseUrl,
+    statusCallbackPath: statusCallbackParts.path,
+    reportReadyCallbackPath: reportReadyCallbackParts.path,
+    correlationId: input.correlationId ?? "",
+    tier: normalizedPlanCode,
+    workflowType,
+    analysisProvider,
+    analysisModel,
+    synthesisProvider,
+    synthesisModel,
+    synthesisAllowed,
+    privateMode,
+    businessContext,
+    intakeSummary,
+    executionStartedAt: new Date().toISOString(),
+    executionStatus: "acknowledged",
+    executionStage: "intake_received",
     routing: {
       plan_code: String(input.routingSnapshot.planCode).toLowerCase(),
       workflow_code: String(input.routingSnapshot.workflowCode).toLowerCase(),

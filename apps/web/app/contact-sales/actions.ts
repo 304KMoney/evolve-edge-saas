@@ -18,6 +18,13 @@ import { logServerEvent } from "../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../lib/product-analytics";
 import { dispatchWebhookDeliveriesForEvent } from "../../lib/webhook-dispatcher";
 
+const CONTACT_ROUTE = "contact-sales.action";
+const CONTACT_SOURCE = "contact-sales.action";
+const DEFAULT_N8N_TIMEOUT_MS = 10_000;
+const MAX_RESPONSE_SNIPPET_LENGTH = 500;
+
+type CanonicalContactTier = "starter" | "growth" | "scale" | "enterprise";
+
 function buildContactRedirect(input: {
   intent: string;
   source: string;
@@ -69,6 +76,185 @@ function summarizeDelivery(results: Array<{ provider: string; status: string }>,
   return "failed";
 }
 
+function normalizeLookupKey(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  return value.trim().toLowerCase().replace(/[\s_]+/g, "-");
+}
+
+function normalizeCanonicalTier(value: string | null | undefined): CanonicalContactTier | null {
+  const normalized = normalizeLookupKey(value);
+
+  switch (normalized) {
+    case "founding-risk-audit":
+    case "starter":
+      return "starter";
+    case "growth":
+      return "growth";
+    case "scale":
+      return "scale";
+    case "enterprise":
+      return "enterprise";
+    default:
+      return null;
+  }
+}
+
+function resolveCanonicalContactTier(input: {
+  intent: string;
+  tier?: string | null;
+  workflowType?: string | null;
+  requestedPlanCode?: string | null;
+}): CanonicalContactTier {
+  return (
+    normalizeCanonicalTier(input.tier) ??
+    normalizeCanonicalTier(input.workflowType) ??
+    normalizeCanonicalTier(input.intent) ??
+    normalizeCanonicalTier(input.requestedPlanCode) ??
+    "starter"
+  );
+}
+
+async function dispatchContactSubmissionToN8n(input: {
+  traceId: string;
+  leadId: string;
+  requestId: string | null;
+  eventId: string | null;
+  email: string;
+  companyName: string;
+  firstName: string;
+  lastName: string;
+  jobTitle: string;
+  phone: string;
+  teamSize: string;
+  intent: string;
+  tier: string;
+  workflowType: string;
+  sourcePath: string;
+  requestedPlanCode: string;
+  message: string;
+}) {
+  const rawIntent = normalizeLookupKey(input.intent);
+  const canonicalTier = resolveCanonicalContactTier({
+    intent: input.intent,
+    tier: input.tier,
+    workflowType: input.workflowType,
+    requestedPlanCode: input.requestedPlanCode
+  });
+  const intakeDispatchPath = "/api/automation/intake-to-app-dispatch";
+  const intakeDispatchUrl = intakeDispatchPath;
+  const dispatchSecret = process.env.PUBLIC_INTAKE_SHARED_SECRET?.trim() ?? "";
+  if (!dispatchSecret) {
+    throw new Error("PUBLIC_INTAKE_SHARED_SECRET is required.");
+  }
+  const requestId = `contact_${input.traceId}_${Date.now()}`;
+  const customerName = `${input.firstName} ${input.lastName}`.trim();
+
+  logServerEvent("info", "contact_sales.submit.workflow_resolution", {
+    traceId: input.traceId,
+    route: CONTACT_ROUTE,
+    request_id: input.requestId,
+    resource_id: input.leadId,
+    event_id: input.eventId,
+    status: "resolved",
+    source: CONTACT_SOURCE,
+    metadata: {
+      rawIntent,
+      canonicalTier,
+      selectedDestination: "api.automation.intake-to-app-dispatch",
+      selectedDestinationPath: intakeDispatchPath,
+      selectedDestinationUrl: intakeDispatchUrl
+    }
+  });
+
+  const timeoutMs = DEFAULT_N8N_TIMEOUT_MS;
+  const payload = {
+    request_id: requestId,
+    customer_email: input.email,
+    customer_name: customerName || null,
+    first_name: input.firstName || null,
+    last_name: input.lastName || null,
+    company_name: input.companyName || null,
+    phone: input.phone || null,
+    purchased_tier: canonicalTier,
+    purchased_plan_code: canonicalTier,
+    additional_notes: input.message || null,
+    lead_source_detail: input.sourcePath,
+    intake_answers: {
+      intent: input.intent,
+      canonicalTier,
+      workflowType: input.workflowType || null
+    },
+    trace_id: input.traceId,
+    submitted_at: new Date().toISOString(),
+    lead_id: input.leadId,
+    event_id: input.eventId
+  };
+
+  logServerEvent("info", "contact_sales.submit.outbound_fetch_start", {
+    traceId: input.traceId,
+    route: CONTACT_ROUTE,
+    request_id: input.requestId,
+    resource_id: input.leadId,
+    event_id: input.eventId,
+    status: "begin",
+    source: CONTACT_SOURCE,
+    metadata: {
+      destinationUrl: intakeDispatchUrl,
+      destinationPath: intakeDispatchPath,
+      destination: "api.automation.intake-to-app-dispatch",
+      canonicalTier,
+      timeoutMs
+    }
+  });
+  console.info("[contact_sales.submit] intake dispatch request", {
+    path: intakeDispatchPath,
+    hasAuthorizationHeader: dispatchSecret.length > 0
+  });
+
+  const response = await fetch(intakeDispatchUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${dispatchSecret}`,
+      "x-evolve-edge-trace-id": input.traceId
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  const responseText = (await response.text()).slice(0, MAX_RESPONSE_SNIPPET_LENGTH);
+
+  logServerEvent("info", "contact_sales.submit.outbound_fetch_status", {
+    traceId: input.traceId,
+    route: CONTACT_ROUTE,
+    request_id: input.requestId,
+    resource_id: input.leadId,
+    event_id: input.eventId,
+    status: response.ok ? "accepted" : "failed",
+    source: CONTACT_SOURCE,
+    metadata: {
+      destinationUrl: intakeDispatchUrl,
+      destinationPath: intakeDispatchPath,
+      destination: "api.automation.intake-to-app-dispatch",
+      canonicalTier,
+      rawIntent,
+      responseStatus: response.status,
+      responseSnippet: responseText
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Contact workflow dispatch failed with status ${response.status}.`);
+  }
+
+  return {
+    canonicalTier,
+    rawIntent
+  };
+}
+
 export async function submitContactSalesLeadAction(formData: FormData) {
   const traceId = createTraceId("lead");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -79,6 +265,8 @@ export async function submitContactSalesLeadAction(formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim();
   const teamSize = String(formData.get("teamSize") ?? "").trim();
   const intent = String(formData.get("intent") ?? "").trim() || "general-sales";
+  const tier = String(formData.get("tier") ?? "").trim();
+  const workflowType = String(formData.get("workflowType") ?? "").trim();
   const source = String(formData.get("source") ?? "").trim() || "contact-sales-page";
   const sourcePath = String(formData.get("sourcePath") ?? "").trim() || "/contact";
   const requestedPlanCode = String(formData.get("requestedPlanCode") ?? "").trim();
@@ -88,9 +276,9 @@ export async function submitContactSalesLeadAction(formData: FormData) {
 
   logServerEvent("info", "contact_sales.submit.begin", {
     traceId,
-    route: "contact-sales.action",
+    route: CONTACT_ROUTE,
     status: "begin",
-    source: "contact-sales.action",
+    source: CONTACT_SOURCE,
     metadata: {
       email: maskedEmail,
       companyName,
@@ -101,13 +289,24 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       ...envPresence
     }
   });
+  logServerEvent("info", "contact_sales.submit.live_path_entered", {
+    traceId,
+    route: CONTACT_ROUTE,
+    status: "entered",
+    source: CONTACT_SOURCE,
+    metadata: {
+      submitPath: "/contact",
+      dispatchPath: "/api/automation/intake-to-app-dispatch",
+      intent
+    }
+  });
 
   if (!email || !companyName) {
     logServerEvent("warn", "contact_sales.submit.invalid", {
       traceId,
-      route: "contact-sales.action",
+      route: CONTACT_ROUTE,
       status: "invalid",
-      source: "contact-sales.action",
+      source: CONTACT_SOURCE,
       metadata: {
         email: maskedEmail,
         companyNamePresent: Boolean(companyName),
@@ -138,13 +337,15 @@ export async function submitContactSalesLeadAction(formData: FormData) {
 
     logServerEvent("info", "contact_sales.submit.payload_normalized", {
       traceId,
-      route: "contact-sales.action",
+      route: CONTACT_ROUTE,
       request_id: requestId,
       status: "validated",
-      source: "contact-sales.action",
+      source: CONTACT_SOURCE,
       metadata: {
         email: maskedEmail,
         intent,
+        tier: tier || null,
+        workflowType: workflowType || null,
         sourcePath,
         requestedPlanCode: requestedPlanCode || null,
         hasAttribution: Boolean(attribution)
@@ -174,11 +375,11 @@ export async function submitContactSalesLeadAction(formData: FormData) {
 
     logServerEvent("info", "contact_sales.submit.received", {
       traceId,
-      route: "contact-sales.action",
+      route: CONTACT_ROUTE,
       request_id: requestId,
       resource_id: leadCapture.lead.id,
       status: "received",
-      source: "contact-sales.action",
+      source: CONTACT_SOURCE,
       metadata: {
         email: maskedEmail,
         deduped: leadCapture.deduped,
@@ -186,6 +387,7 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       }
     });
 
+    let workflowStatus: "dispatched" | "failed" = "failed";
     let deliverySummary: { results: Array<{ provider: string; status: string }> } = {
       results: []
     };
@@ -193,17 +395,57 @@ export async function submitContactSalesLeadAction(formData: FormData) {
 
     if (leadCapture.eventId !== null) {
       try {
+        await dispatchContactSubmissionToN8n({
+          traceId,
+          leadId: leadCapture.lead.id,
+          requestId,
+          eventId: leadCapture.eventId,
+          email,
+          companyName,
+          firstName,
+          lastName,
+          jobTitle,
+          phone,
+          teamSize,
+          intent,
+          tier,
+          workflowType,
+          sourcePath,
+          requestedPlanCode,
+          message
+        });
+        workflowStatus = "dispatched";
+      } catch (error) {
+        deliveryDispatchFailed = true;
+        workflowStatus = "failed";
+        logServerEvent("error", "contact_sales.submit.workflow_dispatch_failed", {
+          traceId,
+          route: CONTACT_ROUTE,
+          request_id: requestId,
+          resource_id: leadCapture.lead.id,
+          event_id: leadCapture.eventId,
+          status: "failed",
+          source: CONTACT_SOURCE,
+          metadata: {
+            email: maskedEmail,
+            intent,
+            message: error instanceof Error ? error.message : "Unknown error"
+          }
+        });
+      }
+
+      try {
         deliverySummary = await dispatchWebhookDeliveriesForEvent(leadCapture.eventId);
       } catch (error) {
         deliveryDispatchFailed = true;
         logServerEvent("error", "contact_sales.submit.dispatch_failed", {
           traceId,
-          route: "contact-sales.action",
+          route: CONTACT_ROUTE,
           request_id: requestId,
           resource_id: leadCapture.lead.id,
           event_id: leadCapture.eventId,
           status: "failed",
-          source: "contact-sales.action",
+          source: CONTACT_SOURCE,
           metadata: {
             email: maskedEmail,
             stage: "webhook_dispatch",
@@ -218,28 +460,70 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       : deliveryDispatchFailed
         ? "failed"
         : summarizeDelivery(deliverySummary.results, "hubspot");
-    const workflowStatus = leadCapture.deduped
+    if (leadCapture.eventId === null) {
+      try {
+        await dispatchContactSubmissionToN8n({
+          traceId,
+          leadId: leadCapture.lead.id,
+          requestId,
+          eventId: null,
+          email,
+          companyName,
+          firstName,
+          lastName,
+          jobTitle,
+          phone,
+          teamSize,
+          intent,
+          tier,
+          workflowType,
+          sourcePath,
+          requestedPlanCode,
+          message
+        });
+        workflowStatus = "dispatched";
+      } catch (error) {
+        deliveryDispatchFailed = true;
+        workflowStatus = "failed";
+        logServerEvent("error", "contact_sales.submit.workflow_dispatch_failed", {
+          traceId,
+          route: CONTACT_ROUTE,
+          request_id: requestId,
+          resource_id: leadCapture.lead.id,
+          status: "failed",
+          source: CONTACT_SOURCE,
+          metadata: {
+            email: maskedEmail,
+            intent,
+            message: error instanceof Error ? error.message : "Unknown error"
+          }
+        });
+      }
+    }
+
+    const inboundWorkflowStatus = leadCapture.deduped
       ? "not_repeated"
       : deliveryDispatchFailed
         ? "failed"
         : summarizeDelivery(deliverySummary.results, "n8n");
+    const workflowSummaryStatus = workflowStatus === "dispatched" ? "dispatched" : inboundWorkflowStatus;
     const overallStatus =
       hubspotStatus === "failed" || workflowStatus === "failed"
-        ? "partial"
+        ? "failed"
         : "success";
 
     logServerEvent("info", "contact_sales.submit.final_response", {
       traceId,
-      route: "contact-sales.action",
+      route: CONTACT_ROUTE,
       request_id: requestId,
       resource_id: leadCapture.lead.id,
       status: overallStatus,
-      source: "contact-sales.action",
+      source: CONTACT_SOURCE,
       metadata: {
         email: maskedEmail,
         submission: "received",
         hubspot: hubspotStatus,
-        workflow: workflowStatus
+        workflow: workflowSummaryStatus
       }
     });
 
@@ -263,9 +547,9 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       } catch (error) {
         logServerEvent("warn", "contact_sales.submit.analytics_failed", {
           traceId,
-          route: "contact-sales.action",
+          route: CONTACT_ROUTE,
           status: "failed",
-          source: "contact-sales.action",
+          source: CONTACT_SOURCE,
           metadata: {
             email: maskedEmail,
             intent,
@@ -276,14 +560,28 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       }
     }
 
+    if (overallStatus === "failed") {
+      redirect(
+        buildContactRedirect({
+          intent,
+          source,
+          status: "failed",
+          error: "submission-failed",
+          hubspot: hubspotStatus,
+          workflow: workflowSummaryStatus,
+          traceId
+        })
+      );
+    }
+
     redirect(
       buildContactRedirect({
         intent,
         source,
-        status: overallStatus,
+        status: "success",
         submission: "received",
         hubspot: hubspotStatus,
-        workflow: workflowStatus,
+        workflow: workflowSummaryStatus,
         traceId
       })
     );
@@ -294,9 +592,9 @@ export async function submitContactSalesLeadAction(formData: FormData) {
 
     logServerEvent("error", "contact_sales.submit.failed", {
       traceId,
-      route: "contact-sales.action",
+      route: CONTACT_ROUTE,
       status: "failed",
-      source: "contact-sales.action",
+      source: CONTACT_SOURCE,
       metadata: {
         email: maskedEmail,
         companyName,

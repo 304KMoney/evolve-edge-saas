@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.8.1",
   "scripts": {
-    "build": "turbo run build",
+    "build": "pnpm --filter @evolve-edge/db prisma:generate && turbo run build",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
     "test": "turbo run test",
