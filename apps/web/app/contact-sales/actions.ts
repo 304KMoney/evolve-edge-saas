@@ -158,6 +158,10 @@ async function dispatchContactSubmissionToN8n(input: {
     workflowType: input.workflowType,
     requestedPlanCode: input.requestedPlanCode
   });
+  const intakeDispatchPath = "/api/automation/intake-to-app-dispatch";
+  const dispatchSecret = process.env.PUBLIC_INTAKE_SHARED_SECRET?.trim() ?? "";
+  if (!dispatchSecret) {
+    throw new Error("PUBLIC_INTAKE_SHARED_SECRET is required.");
   const intakeDispatchUrl = await buildIntakeDispatchUrl();
   const dispatchSecret =
     getOptionalEnv("PUBLIC_INTAKE_SHARED_SECRET") ?? getOptionalEnv("OUTBOUND_DISPATCH_SECRET");
@@ -179,6 +183,7 @@ async function dispatchContactSubmissionToN8n(input: {
       rawIntent,
       canonicalTier,
       selectedDestination: "api.automation.intake-to-app-dispatch",
+      selectedDestinationPath: intakeDispatchPath
       selectedDestinationUrl: intakeDispatchUrl
     }
   });
@@ -216,6 +221,8 @@ async function dispatchContactSubmissionToN8n(input: {
     status: "begin",
     source: CONTACT_SOURCE,
     metadata: {
+      destinationUrl: intakeDispatchPath,
+      destinationPath: intakeDispatchPath,
       destinationUrl: intakeDispatchUrl,
       destination: "api.automation.intake-to-app-dispatch",
       canonicalTier,
@@ -244,6 +251,8 @@ async function dispatchContactSubmissionToN8n(input: {
     status: response.ok ? "accepted" : "failed",
     source: CONTACT_SOURCE,
     metadata: {
+      destinationUrl: intakeDispatchPath,
+      destinationPath: intakeDispatchPath,
       destinationUrl: intakeDispatchUrl,
       destination: "api.automation.intake-to-app-dispatch",
       canonicalTier,
