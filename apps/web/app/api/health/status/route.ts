@@ -20,6 +20,7 @@ export async function GET(request: Request) {
     .map((entry) => entry.key);
 
   let databaseOk = false;
+
   try {
     await prisma.$queryRaw`SELECT 1`;
     databaseOk = true;
@@ -29,21 +30,21 @@ export async function GET(request: Request) {
 
   const ok = databaseOk && missingRequired.length === 0;
 
-return NextResponse.json(
-  {
-    ok,
-    runtime: getRuntimeEnvironment(),
-    checks: {
-      database: databaseOk,
-      envParity: missingRequired.length === 0,
+  return NextResponse.json(
+    {
+      ok,
+      runtime: getRuntimeEnvironment(),
+      checks: {
+        database: databaseOk,
+        envParity: missingRequired.length === 0,
+      },
+      databaseOk,
+      missingRequired,
+      parity,
+      timestamp: new Date().toISOString(),
     },
-    databaseOk,
-    missingRequired,
-    parity,
-    timestamp: new Date().toISOString(),
-  },
-  {
-    status: ok ? 200 : 503,
-  }
-);
+    {
+      status: ok ? 200 : 503,
+    }
+  );
 }
