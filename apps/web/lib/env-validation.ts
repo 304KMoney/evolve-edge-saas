@@ -1,4 +1,3 @@
-
 type EnvCategory =
   | "database"
   | "auth/session"
@@ -55,7 +54,6 @@ function readEnvWithAliases(name: string, aliases: string[] = []) {
 
   return "";
 }
-
 
 function getRuntimeEnvironment(): AppRuntimeEnvironment {
   const rawValue = readEnv("VERCEL_ENV") || readEnv("NODE_ENV") || "development";
@@ -158,6 +156,14 @@ const ENV_RULES: EnvRule[] = [
     requiredWhen: (context) => context.features.n8n
   },
   {
+    key: "PUBLIC_INTAKE_SHARED_SECRET",
+    aliases: ["OUTBOUND_DISPATCH_SECRET"],
+    category: "n8n",
+    requiredWhen: (context) => context.runtime === "production",
+    notes:
+      "Required to authenticate public intake POST requests and prevent spoofed workflow triggers."
+  },
+  {
     key: "HUBSPOT_ACCESS_TOKEN",
     category: "hubspot",
     requiredWhen: (context) => context.features.hubspot
@@ -183,6 +189,12 @@ const ENV_RULES: EnvRule[] = [
     aliases: ["APP_BASE_URL"],
     category: "monitoring",
     requiredWhen: () => true
+  },
+  {
+    key: "OPS_READINESS_SECRET",
+    category: "monitoring",
+    requiredWhen: (context) => context.runtime === "production",
+    notes: "Protects health/readiness endpoints from public environment disclosure."
   },
   {
     key: "SENTRY_DSN",

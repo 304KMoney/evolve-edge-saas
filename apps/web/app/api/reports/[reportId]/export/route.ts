@@ -4,11 +4,7 @@ import {
   OperationsQueueType,
   prisma
 } from "@evolve-edge/db";
-import {
-  getOptionalCurrentSession,
-  requireCurrentSession,
-  requireOrganizationPermission
-} from "../../../../../lib/auth";
+import { requireOrganizationPermission } from "../../../../../lib/auth";
 import { AuditActorType } from "@evolve-edge/db";
 import { writeAuditLog, buildAuditRequestContextFromRequest } from "../../../../../lib/audit";
 import { createPlaceholderCustomerAccessGrant } from "../../../../../lib/customer-access-grants";
@@ -18,7 +14,6 @@ import { logServerEvent } from "../../../../../lib/monitoring";
 import { recordOperationalFinding } from "../../../../../lib/operations-queues";
 import {
   canUseSignedReportAccess,
-  shouldRequireAuthenticatedReportAccessWhenSigned,
   verifySignedReportAccessToken
 } from "../../../../../lib/report-access";
 import {
@@ -33,6 +28,7 @@ import {
   getReportAccessCandidateById
 } from "../../../../../lib/report-records";
 import { NextResponse } from "next/server";
+import { applyRouteRateLimit } from "../../../../../lib/security-rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -236,6 +232,14 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ reportId: string }> }
 ) {
+  const rateLimited = applyRouteRateLimit(request, {
+    key: "reports-export",
+    category: "api"
+  });
+  if (rateLimited) {
+    return rateLimited;
+  }
+
   const { reportId } = await context.params;
   if (!reportId?.trim()) {
     return new Response("Missing report identifier.", { status: 400 });
@@ -286,14 +290,7 @@ export async function GET(
     );
   }
 
-  let session = null;
-  if (!signedAccess || shouldRequireAuthenticatedReportAccessWhenSigned()) {
-    session = signedAccess
-      ? await requireCurrentSession({ requireOrganization: true })
-      : await requireOrganizationPermission("reports.view");
-  } else {
-    session = await getOptionalCurrentSession();
-  }
+  const session = await requireOrganizationPermission("reports.view");
 
   const accessSession = toCustomerAccessSession(session);
   const reportAccessCandidate = await getReportAccessCandidateById(reportId);

@@ -7,8 +7,15 @@ import {
   readTraceIdFromHeaders,
   readTraceIdFromPayload
 } from "../../../../lib/intake-observability";
-import { getAppUrl, requireEnv } from "../../../../lib/runtime-config";
+import {
+  getAppUrl,
+  getOptionalEnv,
+  getRuntimeEnvironment,
+  requireEnv
+} from "../../../../lib/runtime-config";
 import { logServerEvent, sendOperationalAlert } from "../../../../lib/monitoring";
+import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
+import { isAuthorizedBearerRequest } from "../../../../lib/security-auth";
 import {
   expectObject,
   parseJsonRequestBody,
@@ -129,6 +136,28 @@ function normalizePayload(payload: Record<string, unknown>) {
 
 export async function POST(request: Request) {
   const route = "api.automation.intake-to-n8n";
+  const rateLimited = applyRouteRateLimit(request, {
+    key: "automation-intake-to-n8n",
+    category: "api"
+  });
+  if (rateLimited) {
+    return rateLimited;
+  }
+
+  const intakeSecret =
+    getOptionalEnv("PUBLIC_INTAKE_SHARED_SECRET") ??
+    getOptionalEnv("OUTBOUND_DISPATCH_SECRET");
+  if (!intakeSecret && getRuntimeEnvironment() === "production") {
+    return NextResponse.json(
+      { error: "Public intake is not configured for production." },
+      { status: 503 }
+    );
+  }
+
+  if (intakeSecret && !isAuthorizedBearerRequest(request, intakeSecret)) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+
   const envPresence = getIntakeEnvPresence();
   let traceId = readTraceIdFromHeaders(request.headers) ?? createTraceId("intake-api");
   let requestId: string | null = null;
@@ -309,6 +338,12 @@ export async function POST(request: Request) {
       }
     });
 
-    return NextResponse.json(maybeAddTraceDebug({ error: errorMessage }, traceId), { status: 500 });
+    return NextResponse.json(
+      maybeAddTraceDebug(
+        { error: "Intake request could not be forwarded. Please retry shortly." },
+        traceId
+      ),
+      { status: 500 }
+    );
   }
 }

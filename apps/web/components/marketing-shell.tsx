@@ -14,7 +14,7 @@ const navItems = [
   { href: "/pricing", label: "Pricing" },
   { href: "/intake", label: "Intake" },
   { href: "/contact", label: "Contact" },
-  { href: "/dashboard", label: "Dashboard" }
+  { href: "/sign-in", label: "Sign In" }
 ];
 
 export function MarketingShell({

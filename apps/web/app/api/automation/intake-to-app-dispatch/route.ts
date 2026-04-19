@@ -15,6 +15,7 @@ import {
   readTraceIdFromHeaders,
   readTraceIdFromPayload
 } from "../../../../lib/intake-observability";
+import { getOptionalEnv, getRuntimeEnvironment } from "../../../../lib/runtime-config";
 import {
   computeAndPersistRoutingSnapshot,
   normalizeCommercialPlanCode,
@@ -25,6 +26,8 @@ import {
   transitionDeliveryState
 } from "../../../../lib/delivery-state";
 import { logServerEvent, sendOperationalAlert } from "../../../../lib/monitoring";
+import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
+import { isAuthorizedBearerRequest } from "../../../../lib/security-auth";
 import {
   expectObject,
   parseJsonRequestBody,
@@ -414,26 +417,30 @@ function normalizeInputJsonValue(
 }
 
 function buildIntakeStatusReason(payload: PublicIntakePayload) {
-  return {
+  const metadata: Prisma.InputJsonObject = {
     requestId: payload.request_id,
     customerEmail: payload.customer_email,
     purchasedTier: payload.purchased_tier,
     purchasedPlanCode: payload.purchased_plan_code,
-    amountPaid: toOptional(payload.amount_paid),
-    currency: toOptional(payload.currency),
-    stripeSessionId: toOptional(payload.stripe_session_id),
-    stripePaymentIntent: toOptional(payload.stripe_payment_intent),
-    stripeCustomerId: toOptional(payload.stripe_customer_id),
-    orderId: toOptional(payload.order_id),
+    amountPaid: payload.amount_paid ?? undefined,
+    currency: payload.currency ?? undefined,
+    stripeSessionId: payload.stripe_session_id ?? undefined,
+    stripePaymentIntent: payload.stripe_payment_intent ?? undefined,
+    stripeCustomerId: payload.stripe_customer_id ?? undefined,
+    orderId: payload.order_id ?? undefined,
     topConcerns: payload.top_concerns,
-    usesAiTools: toOptional(payload.uses_ai_tools),
-    companySize: toOptional(payload.company_size),
-    industry: toOptional(payload.industry),
-    additionalNotes: toOptional(payload.additional_notes),
-    website: toOptional(payload.website),
-    intakeAnswers: normalizeInputJsonValue(payload.intake_answers),
-    purchaseTimestamp: toOptional(payload.purchase_timestamp)
-  } satisfies Prisma.JsonObject;
+    usesAiTools: payload.uses_ai_tools ?? undefined,
+    companySize: payload.company_size ?? undefined,
+    industry: payload.industry ?? undefined,
+    additionalNotes: payload.additional_notes ?? undefined,
+    website: payload.website ?? undefined,
+    purchaseTimestamp: payload.purchase_timestamp ?? undefined,
+    ...(payload.intake_answers != null
+      ? { intakeAnswers: payload.intake_answers as Prisma.InputJsonValue }
+      : {})
+  };
+
+  return metadata;
 }
 
 export async function GET() {
@@ -441,6 +448,28 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const rateLimited = applyRouteRateLimit(request, {
+    key: "automation-intake-to-app-dispatch",
+    category: "api"
+  });
+  if (rateLimited) {
+    return rateLimited;
+  }
+
+  const intakeSecret =
+    getOptionalEnv("PUBLIC_INTAKE_SHARED_SECRET") ??
+    getOptionalEnv("OUTBOUND_DISPATCH_SECRET");
+  if (!intakeSecret && getRuntimeEnvironment() === "production") {
+    return NextResponse.json(
+      { error: "Public intake is not configured for production." },
+      { status: 503 }
+    );
+  }
+
+  if (intakeSecret && !isAuthorizedBearerRequest(request, intakeSecret)) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+
   const envPresence = getIntakeEnvPresence();
   let traceId =
     readTraceIdFromHeaders(request.headers) ?? createTraceId("app-owned-intake");
@@ -579,15 +608,7 @@ export async function POST(request: Request) {
         {
           ok: true,
           accepted: true,
-          request_id: requestId,
-          app_org_id: result.context.organization.id,
-          app_customer_id: result.context.user.id,
-          delivery_state_id: result.deliveryState.id,
-          routing_snapshot_id: result.routingSnapshot.id,
-          workflow_dispatch_id: result.dispatch.id,
-          dispatch_status: result.dispatch.status,
-          delivered: delivery.delivered,
-          skipped: delivery.skipped
+          request_id: requestId
         },
         traceId
       )
@@ -631,7 +652,10 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      maybeAddTraceDebug({ error: message }, traceId),
+      maybeAddTraceDebug(
+        { error: "Intake request could not be processed. Please retry shortly." },
+        traceId
+      ),
       { status: 500 }
     );
   }

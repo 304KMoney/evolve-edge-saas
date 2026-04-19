@@ -47,7 +47,7 @@ function readLeadEntryFromRedirect(redirectTo: string) {
 
 export async function signInAction(formData: FormData) {
   if (!isPasswordAuthEnabled()) {
-    redirect("/dashboard");
+    redirect("/sign-in?error=config");
   }
 
   const email = String(formData.get("email") ?? "");
