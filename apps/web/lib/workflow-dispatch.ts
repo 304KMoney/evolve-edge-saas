@@ -13,7 +13,12 @@ import { publishDomainEvent } from "./domain-events";
 import { RoutingSnapshotStatus, WorkflowDispatchStatus } from "@evolve-edge/db";
 import { writeAuditLog } from "./audit";
 import { transitionDeliveryState } from "./delivery-state";
-import { buildAuditRequestedPayload, buildN8nSignedHeaders, getN8nWorkflowDestinationByName } from "./n8n";
+import {
+  backfillAuditRequestedExecutionTargets,
+  buildAuditRequestedPayload,
+  buildN8nSignedHeaders,
+  getN8nWorkflowDestinationByName
+} from "./n8n";
 import { logServerEvent, sendOperationalAlert } from "./monitoring";
 import { appendOperatorWorkflowEventRecord } from "./operator-workflow-event-records";
 import { recordOperationalFinding } from "./operations-queues";
@@ -45,6 +50,26 @@ function readJsonObject(
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function repairAuditRequestedRequestPayload(dispatch: {
+  requestPayload: Prisma.JsonValue | null;
+  routingSnapshot: {
+    normalizedHintsJson: Prisma.JsonValue | null;
+  };
+}) {
+  const currentPayload = readJsonObject(dispatch.requestPayload);
+  if (!currentPayload) {
+    return {
+      repaired: false,
+      payload: dispatch.requestPayload
+    };
+  }
+
+  return backfillAuditRequestedExecutionTargets(
+    currentPayload,
+    dispatch.routingSnapshot.normalizedHintsJson
+  );
 }
 
 function readOptionalStringField(
@@ -307,7 +332,17 @@ async function dispatchWorkflow(dispatchId: string, db: WorkflowDispatchDbClient
     }
   });
 
-  const body = JSON.stringify(refreshed.requestPayload);
+  const repairedPayload = repairAuditRequestedRequestPayload(refreshed);
+  if (repairedPayload.repaired) {
+    await db.workflowDispatch.update({
+      where: { id: refreshed.id },
+      data: {
+        requestPayload: repairedPayload.payload as Prisma.InputJsonValue
+      }
+    });
+  }
+
+  const body = JSON.stringify(repairedPayload.payload);
   const headers = buildN8nSignedHeaders(body, destination.secret);
   try {
     const response = await fetch(destination.url, {

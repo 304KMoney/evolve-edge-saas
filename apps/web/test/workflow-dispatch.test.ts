@@ -4,7 +4,10 @@ import {
   CommercialPlanCode,
   RoutingSnapshotStatus
 } from "@evolve-edge/db";
-import { buildAuditRequestedPayload } from "../lib/n8n";
+import {
+  backfillAuditRequestedExecutionTargets,
+  buildAuditRequestedPayload
+} from "../lib/n8n";
 
 function runWorkflowDispatchTests() {
   const payload = buildAuditRequestedPayload({
@@ -59,6 +62,19 @@ function runWorkflowDispatchTests() {
   });
   assert.equal(payload.analysisProvider, "dify");
   assert.equal(payload.analysisModel, "dify-workflow");
+
+  const repairedPayload = backfillAuditRequestedExecutionTargets(
+    {
+      workflowDispatchId: "wd_123",
+      analysisProvider: " ",
+      analysisModel: ""
+    },
+    {}
+  );
+
+  assert.equal(repairedPayload.repaired, true);
+  assert.equal(repairedPayload.payload.analysisProvider, "dify");
+  assert.equal(repairedPayload.payload.analysisModel, "dify-workflow");
 
   console.log("workflow-dispatch tests passed");
 }

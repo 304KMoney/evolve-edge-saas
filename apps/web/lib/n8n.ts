@@ -436,6 +436,48 @@ function getAuditExecutionModelFallback() {
   );
 }
 
+function readNormalizedHintRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+export function resolveAuditExecutionTargets(normalizedHints: unknown) {
+  const normalizedHintRecord = readNormalizedHintRecord(normalizedHints);
+
+  return {
+    analysisProvider:
+      normalizeOptionalString(normalizedHintRecord.analysis_provider) ?? "dify",
+    analysisModel:
+      normalizeOptionalString(normalizedHintRecord.analysis_model) ??
+      getAuditExecutionModelFallback()
+  };
+}
+
+export function backfillAuditRequestedExecutionTargets(
+  payload: Record<string, unknown>,
+  normalizedHints: unknown
+) {
+  const fallbackTargets = resolveAuditExecutionTargets(normalizedHints);
+  const analysisProvider = normalizeOptionalString(payload.analysisProvider);
+  const analysisModel = normalizeOptionalString(payload.analysisModel);
+  const missingAnalysisProvider = analysisProvider === null;
+  const missingAnalysisModel = analysisModel === null;
+  const repaired = missingAnalysisProvider || missingAnalysisModel;
+
+  return {
+    repaired,
+    payload: repaired
+      ? {
+          ...payload,
+          analysisProvider:
+            analysisProvider ?? fallbackTargets.analysisProvider,
+          analysisModel: analysisModel ?? fallbackTargets.analysisModel
+        }
+      : payload
+  };
+}
+
 function normalizeOptionalStringArray(value: unknown) {
   if (!Array.isArray(value)) {
     return [];
@@ -514,10 +556,7 @@ export function buildAuditRequestedPayload(input: {
     !Array.isArray(input.routingSnapshot.routingReasonJson)
       ? input.routingSnapshot.routingReasonJson
       : {};
-  const normalizedHintRecord =
-    typeof normalizedHints === "object" && !Array.isArray(normalizedHints)
-      ? (normalizedHints as Record<string, unknown>)
-      : {};
+  const normalizedHintRecord = readNormalizedHintRecord(normalizedHints);
   const rawPlanCode = String(input.routingSnapshot.planCode).toLowerCase();
   const canonicalPlanCode = resolveCanonicalPlanCode(rawPlanCode) ?? "starter";
   const normalizedPlanCode = resolveCanonicalPlanCode(rawPlanCode) ?? rawPlanCode;
@@ -576,11 +615,8 @@ export function buildAuditRequestedPayload(input: {
   const intakeSummary = readJsonObject(
     normalizedHintRecord.intake_summary
   ) as Prisma.JsonObject;
-  const analysisProvider =
-    normalizeOptionalString(normalizedHintRecord.analysis_provider) ?? "dify";
-  const analysisModel =
-    normalizeOptionalString(normalizedHintRecord.analysis_model) ??
-    getAuditExecutionModelFallback();
+  const { analysisProvider, analysisModel } =
+    resolveAuditExecutionTargets(normalizedHintRecord);
   const synthesisProvider =
     typeof normalizedHintRecord.synthesis_provider === "string"
       ? normalizedHintRecord.synthesis_provider.trim()
