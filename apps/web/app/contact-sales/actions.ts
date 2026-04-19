@@ -188,8 +188,7 @@ async function dispatchContactSubmissionToN8n(input: {
       canonicalTier,
       selectedDestination: "api.automation.intake-to-app-dispatch",
       selectedDestinationPath: intakeDispatchPath,
-      selectedDestinationPath: intakeDispatchPath
-      selectedDestinationUrl: intakeDispatchUrl
+      selectedDestinationUrl: intakeDispatchUrl,
     }
   });
 
