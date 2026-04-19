@@ -1,4 +1,3 @@
-
 type EnvCategory =
   | "database"
   | "auth/session"
@@ -55,7 +54,6 @@ function readEnvWithAliases(name: string, aliases: string[] = []) {
 
   return "";
 }
-
 
 function getRuntimeEnvironment(): AppRuntimeEnvironment {
   const rawValue = readEnv("VERCEL_ENV") || readEnv("NODE_ENV") || "development";
