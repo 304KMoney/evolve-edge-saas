@@ -39,6 +39,26 @@ function getRetryDelayMinutes(attemptCount: number) {
   return RETRY_DELAY_MINUTES[Math.min(attemptCount - 1, RETRY_DELAY_MINUTES.length - 1)];
 }
 
+function readJsonObject(
+  value: Prisma.InputJsonValue | Prisma.JsonValue | null | undefined
+) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readOptionalStringField(
+  value: Prisma.InputJsonValue | Prisma.JsonValue | null | undefined,
+  field: string
+) {
+  const record = readJsonObject(value);
+  const candidate = record?.[field];
+
+  return typeof candidate === "string" && candidate.trim().length > 0
+    ? candidate.trim()
+    : null;
+}
+
 export function requireWorkflowCallbackSecret() {
   return (
     getOptionalEnv("N8N_CALLBACK_SHARED_SECRET") ??
@@ -346,6 +366,20 @@ async function dispatchWorkflow(dispatchId: string, db: WorkflowDispatchDbClient
         destination: destination.name,
         responseStatus: response.status
       }
+    });
+
+    await recordWorkflowStatusCallback({
+      dispatchId: refreshed.id,
+      status: "acknowledged",
+      externalExecutionId:
+        readOptionalStringField(responsePayload, "externalExecutionId") ??
+        readOptionalStringField(responsePayload, "executionId") ??
+        readOptionalStringField(responsePayload, "id"),
+      message:
+        readOptionalStringField(responsePayload, "message") ??
+        "Workflow dispatch accepted by orchestration.",
+      metadata: responsePayload,
+      db
     });
 
     return { delivered: true as const, skipped: false as const, dispatch: updated };
