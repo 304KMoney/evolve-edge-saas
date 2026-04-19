@@ -8,13 +8,16 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const readinessSecret = getOptionalEnv("OPS_READINESS_SECRET");
+
   if (readinessSecret && !isAuthorizedBearerRequest(request, readinessSecret)) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
   const parity = getEnvironmentParityStatus();
   const required = parity.filter((entry) => entry.required);
-  const missingRequired = required.filter((entry) => !entry.configured).map((entry) => entry.key);
+  const missingRequired = required
+    .filter((entry) => !entry.configured)
+    .map((entry) => entry.key);
 
   let databaseOk = false;
   try {
@@ -39,6 +42,13 @@ export async function GET(request: Request) {
     },
     {
       status: ok ? 200 : 503
+      databaseOk,
+      missingRequired,
+      parity,
+      timestamp: new Date().toISOString(),
+    },
+    {
+      status: ok ? 200 : 503,
     }
   );
 }

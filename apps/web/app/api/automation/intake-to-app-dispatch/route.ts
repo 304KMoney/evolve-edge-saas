@@ -385,6 +385,37 @@ function buildSourceRecordMetadata(payload: PublicIntakePayload) {
   };
 }
 
+function toOptional<T>(value: T | null) {
+  return value ?? undefined;
+}
+
+function normalizeInputJsonValue(
+  value: Prisma.InputJsonValue | null
+): Prisma.JsonValue | undefined {
+  if (value == null) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeInputJsonValue(item) ?? null) as Prisma.JsonArray;
+  }
+
+  if (typeof value === "object") {
+    const normalized: Prisma.JsonObject = {};
+    for (const [key, nestedValue] of Object.entries(
+      value as Record<string, Prisma.InputJsonValue | null>
+    )) {
+      const normalizedValue = normalizeInputJsonValue(nestedValue);
+      if (normalizedValue !== undefined) {
+        normalized[key] = normalizedValue;
+      }
+    }
+    return normalized;
+  }
+
+  return value;
+}
+
 function buildIntakeStatusReason(payload: PublicIntakePayload) {
   const metadata: Prisma.InputJsonObject = {
     requestId: payload.request_id,

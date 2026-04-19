@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { headers } from "next/headers";
 import { getServerAuditRequestContext } from "../../lib/audit";
 import {
   buildTraceRequestContext,
@@ -16,6 +17,7 @@ import {
 } from "../../lib/lead-pipeline";
 import { logServerEvent } from "../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../lib/product-analytics";
+import { getAppUrl, getOptionalEnv } from "../../lib/runtime-config";
 import { dispatchWebhookDeliveriesForEvent } from "../../lib/webhook-dispatcher";
 
 const CONTACT_ROUTE = "contact-sales.action";
@@ -117,6 +119,19 @@ function resolveCanonicalContactTier(input: {
   );
 }
 
+async function buildIntakeDispatchUrl() {
+  const headerStore = await headers();
+  const forwardedHost = headerStore.get("x-forwarded-host");
+  const host = forwardedHost ?? headerStore.get("host");
+  const protocol = headerStore.get("x-forwarded-proto") ?? "https";
+
+  if (host) {
+    return `${protocol}://${host}/api/automation/intake-to-app-dispatch`;
+  }
+
+  return `${getAppUrl()}/api/automation/intake-to-app-dispatch`;
+}
+
 async function dispatchContactSubmissionToN8n(input: {
   traceId: string;
   leadId: string;
@@ -148,6 +163,14 @@ async function dispatchContactSubmissionToN8n(input: {
   const dispatchSecret = process.env.PUBLIC_INTAKE_SHARED_SECRET?.trim() ?? "";
   if (!dispatchSecret) {
     throw new Error("PUBLIC_INTAKE_SHARED_SECRET is required.");
+  const dispatchSecret = process.env.PUBLIC_INTAKE_SHARED_SECRET?.trim() ?? "";
+  if (!dispatchSecret) {
+    throw new Error("PUBLIC_INTAKE_SHARED_SECRET is required.");
+  const intakeDispatchUrl = await buildIntakeDispatchUrl();
+  const dispatchSecret =
+    getOptionalEnv("PUBLIC_INTAKE_SHARED_SECRET") ?? getOptionalEnv("OUTBOUND_DISPATCH_SECRET");
+  if (!dispatchSecret) {
+    throw new Error("PUBLIC_INTAKE_SHARED_SECRET or OUTBOUND_DISPATCH_SECRET is required.");
   }
   const requestId = `contact_${input.traceId}_${Date.now()}`;
   const customerName = `${input.firstName} ${input.lastName}`.trim();
@@ -165,6 +188,7 @@ async function dispatchContactSubmissionToN8n(input: {
       canonicalTier,
       selectedDestination: "api.automation.intake-to-app-dispatch",
       selectedDestinationPath: intakeDispatchPath,
+      selectedDestinationPath: intakeDispatchPath
       selectedDestinationUrl: intakeDispatchUrl
     }
   });
@@ -204,6 +228,7 @@ async function dispatchContactSubmissionToN8n(input: {
     metadata: {
       destinationUrl: intakeDispatchPath,
       destinationPath: intakeDispatchPath,
+      destinationUrl: intakeDispatchUrl,
       destination: "api.automation.intake-to-app-dispatch",
       canonicalTier,
       timeoutMs
@@ -215,6 +240,8 @@ async function dispatchContactSubmissionToN8n(input: {
   });
 
   const response = await fetch(intakeDispatchPath, {
+
+  const response = await fetch(intakeDispatchUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -237,6 +264,7 @@ async function dispatchContactSubmissionToN8n(input: {
     metadata: {
       destinationUrl: intakeDispatchPath,
       destinationPath: intakeDispatchPath,
+      destinationUrl: intakeDispatchUrl,
       destination: "api.automation.intake-to-app-dispatch",
       canonicalTier,
       rawIntent,
