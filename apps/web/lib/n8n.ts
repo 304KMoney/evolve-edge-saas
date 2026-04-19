@@ -84,6 +84,9 @@ export type AuditRequestedN8nPayload = {
   event_type: "audit.requested";
   routing_snapshot_id: string;
   dispatch_id: string;
+  workflow_dispatch_id: string;
+  organization_id: string;
+  delivery_state_record_id: string | null;
   correlation_id: string;
   execution_context: {
     organization_id: string;
@@ -110,7 +113,7 @@ export type AuditRequestedN8nPayload = {
   workflowDispatchId: string;
   dispatchId: string;
   organizationId: string;
-  deliveryStateRecordId: string;
+  deliveryStateRecordId: string | null;
   routingSnapshotId: string;
   callbackToken: string;
   callback_token: string;
@@ -488,6 +491,7 @@ export function buildAuditRequestedPayload(input: {
   user?: Pick<User, "email" | "firstName" | "lastName"> | null;
   billingEventLog?: Pick<BillingEventLog, "amountCents" | "currency"> | null;
   dispatchId?: string | null;
+  deliveryStateRecordId?: string | null;
   correlationId?: string | null;
 }): AuditRequestedN8nPayload {
   const normalizedHints =
@@ -596,6 +600,9 @@ export function buildAuditRequestedPayload(input: {
     event_type: "audit.requested",
     routing_snapshot_id: input.routingSnapshot.id,
     dispatch_id: input.dispatchId ?? "",
+    workflow_dispatch_id: input.dispatchId ?? "",
+    organization_id: input.routingSnapshot.organizationId,
+    delivery_state_record_id: input.deliveryStateRecordId ?? null,
     correlation_id: input.correlationId ?? "",
     request_id: input.dispatchId ?? "",
     app_customer_id: input.routingSnapshot.userId ?? null,
@@ -629,7 +636,7 @@ export function buildAuditRequestedPayload(input: {
     workflowDispatchId: input.dispatchId ?? "",
     dispatchId: input.dispatchId ?? "",
     organizationId: input.routingSnapshot.organizationId,
-    deliveryStateRecordId: input.routingSnapshot.sourceRecordId ?? "",
+    deliveryStateRecordId: input.deliveryStateRecordId ?? null,
     routingSnapshotId: input.routingSnapshot.id,
     callbackToken,
     callback_token: callbackToken,

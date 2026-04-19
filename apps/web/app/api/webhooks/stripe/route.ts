@@ -139,7 +139,8 @@ export async function POST(request: Request) {
     });
 
     const workflowDispatch = await queueAuditRequestedDispatch({
-      routingSnapshotId: routingSnapshot.id
+      routingSnapshotId: routingSnapshot.id,
+      deliveryStateRecordId: deliveryState.id
     });
 
     logServerEvent("info", "stripe.webhook_v2.checkout_completed", {

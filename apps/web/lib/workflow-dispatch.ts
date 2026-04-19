@@ -78,6 +78,7 @@ export function isAuthorizedWorkflowWritebackRequest(request: Request) {
 
 export async function queueAuditRequestedDispatch(input: {
   routingSnapshotId: string;
+  deliveryStateRecordId?: string | null;
   db?: WorkflowDispatchDbClient;
 }) {
   const db = input.db ?? prisma;
@@ -137,6 +138,7 @@ export async function queueAuditRequestedDispatch(input: {
     user: snapshot.user,
     billingEventLog,
     dispatchId: created.id,
+    deliveryStateRecordId: input.deliveryStateRecordId ?? null,
     correlationId
   });
 

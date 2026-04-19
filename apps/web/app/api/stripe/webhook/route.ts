@@ -425,7 +425,8 @@ async function handleCheckoutCompleted(
   });
 
   await queueAuditRequestedDispatch({
-    routingSnapshotId: routingSnapshot.id
+    routingSnapshotId: routingSnapshot.id,
+    deliveryStateRecordId: paidDeliveryState.id
   });
 
   logServerEvent("info", "stripe.webhook.payment_reconciled", {

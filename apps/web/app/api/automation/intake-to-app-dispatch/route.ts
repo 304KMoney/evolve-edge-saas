@@ -550,7 +550,8 @@ export async function POST(request: Request) {
 
       const dispatch = await queueAuditRequestedDispatch({
         db: tx,
-        routingSnapshotId: routingSnapshot.id
+        routingSnapshotId: routingSnapshot.id,
+        deliveryStateRecordId: deliveryState.id
       });
 
       await transitionDeliveryState({
