@@ -226,9 +226,8 @@ async function dispatchContactSubmissionToN8n(input: {
     status: "begin",
     source: CONTACT_SOURCE,
     metadata: {
-      destinationUrl: intakeDispatchPath,
-      destinationPath: intakeDispatchPath,
       destinationUrl: intakeDispatchUrl,
+      destinationPath: intakeDispatchPath,
       destination: "api.automation.intake-to-app-dispatch",
       canonicalTier,
       timeoutMs
@@ -262,9 +261,8 @@ async function dispatchContactSubmissionToN8n(input: {
     status: response.ok ? "accepted" : "failed",
     source: CONTACT_SOURCE,
     metadata: {
-      destinationUrl: intakeDispatchPath,
-      destinationPath: intakeDispatchPath,
       destinationUrl: intakeDispatchUrl,
+      destinationPath: intakeDispatchPath,
       destination: "api.automation.intake-to-app-dispatch",
       canonicalTier,
       rawIntent,
