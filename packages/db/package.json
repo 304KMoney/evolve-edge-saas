@@ -4,15 +4,19 @@
   "version": "0.0.1",
   "main": "src/index.ts",
   "scripts": {
+    "build": "prisma generate",
     "postinstall": "prisma generate",
     "prisma": "prisma",
     "generate": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts",
     "seed:demo": "tsx prisma/demo-seed.ts",
     "reset:demo": "prisma migrate reset --force --skip-seed && tsx prisma/demo-seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",
+    "dotenv": "^16.6.1",
     "pg": "^8.16.3"
   },
   "devDependencies": {

@@ -32,7 +32,7 @@ import {
   type DifyRunResponse,
   type NormalizedDifyContract
 } from "./dify-adapter";
-import { getAppUrl, getOptionalEnv, requireEnv } from "./runtime-config";
+import { getAppUrl, getDifyBaseUrl, getOptionalEnv, requireEnv } from "./runtime-config";
 import { listOrganizationWorkflowRoutingDecisions, type NormalizedWorkflowHints } from "./workflow-routing";
 
 const DIFY_ANALYSIS_CONTRACT_VERSION = "assessment-analysis.v1";
@@ -52,7 +52,12 @@ export function getDifyWorkflowVersion() {
 }
 
 function getDifyApiBaseUrl() {
-  return requireEnv("DIFY_API_BASE_URL");
+  const configured = getDifyBaseUrl();
+  if (!configured) {
+    throw new Error("Missing required environment variable: DIFY_API_BASE_URL (or DIFY_BASE_URL alias)");
+  }
+
+  return configured;
 }
 
 function getDifyApiKey() {

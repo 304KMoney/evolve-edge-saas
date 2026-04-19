@@ -39,10 +39,10 @@ export default function HomePage() {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
               <Link
-                href="/dashboard"
+                href="/sign-in"
                 className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/15 bg-white/[0.05] px-6 py-3.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.08]"
               >
-                Open Workspace
+                Sign In
               </Link>
             </div>
           </div>
