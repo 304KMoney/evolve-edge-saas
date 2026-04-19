@@ -159,6 +159,10 @@ async function dispatchContactSubmissionToN8n(input: {
     requestedPlanCode: input.requestedPlanCode
   });
   const intakeDispatchPath = "/api/automation/intake-to-app-dispatch";
+  const intakeDispatchUrl = intakeDispatchPath;
+  const dispatchSecret = process.env.PUBLIC_INTAKE_SHARED_SECRET?.trim() ?? "";
+  if (!dispatchSecret) {
+    throw new Error("PUBLIC_INTAKE_SHARED_SECRET is required.");
   const dispatchSecret = process.env.PUBLIC_INTAKE_SHARED_SECRET?.trim() ?? "";
   if (!dispatchSecret) {
     throw new Error("PUBLIC_INTAKE_SHARED_SECRET is required.");
@@ -183,6 +187,7 @@ async function dispatchContactSubmissionToN8n(input: {
       rawIntent,
       canonicalTier,
       selectedDestination: "api.automation.intake-to-app-dispatch",
+      selectedDestinationPath: intakeDispatchPath,
       selectedDestinationPath: intakeDispatchPath
       selectedDestinationUrl: intakeDispatchUrl
     }
@@ -229,6 +234,12 @@ async function dispatchContactSubmissionToN8n(input: {
       timeoutMs
     }
   });
+  console.info("[contact_sales.submit] intake dispatch request", {
+    path: intakeDispatchPath,
+    hasAuthorizationHeader: dispatchSecret.length > 0
+  });
+
+  const response = await fetch(intakeDispatchPath, {
 
   const response = await fetch(intakeDispatchUrl, {
     method: "POST",

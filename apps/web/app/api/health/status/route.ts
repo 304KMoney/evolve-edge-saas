@@ -33,6 +33,15 @@ export async function GET(request: Request) {
     {
       ok,
       runtime: getRuntimeEnvironment(),
+      checks: {
+        database: databaseOk,
+        envParity: missingRequired.length === 0
+      },
+      missingRequired,
+      timestamp: new Date().toISOString()
+    },
+    {
+      status: ok ? 200 : 503
       databaseOk,
       missingRequired,
       parity,
