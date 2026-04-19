@@ -239,7 +239,6 @@ async function dispatchContactSubmissionToN8n(input: {
 
   const response = await fetch(intakeDispatchPath, {
 
-  const response = await fetch(intakeDispatchUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
