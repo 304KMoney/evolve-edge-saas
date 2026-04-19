@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import {
   STRIPE_SIGNATURE_TOLERANCE_SECONDS,
-  verifyStripeWebhookSignature
+  verifyStripeWebhookSignature,
+  verifySvixWebhookSignature
 } from "../lib/security-webhooks";
 
 function buildStripeSignature(payload: string, secret: string, timestamp: number) {
@@ -11,6 +12,23 @@ function buildStripeSignature(payload: string, secret: string, timestamp: number
     .digest("hex");
 
   return `t=${timestamp},v1=${signature}`;
+}
+
+
+function buildSvixSignature(input: {
+  payload: string;
+  secret: string;
+  messageId: string;
+  timestamp: number;
+}) {
+  const normalizedSecret = input.secret.startsWith("whsec_")
+    ? input.secret.slice("whsec_".length)
+    : input.secret;
+  const key = Buffer.from(normalizedSecret, "base64");
+  const signedPayload = `${input.messageId}.${input.timestamp}.${input.payload}`;
+  const signature = createHmac("sha256", key).update(signedPayload).digest("base64");
+
+  return `v1,${signature}`;
 }
 
 function runSecurityWebhookTests() {
@@ -69,6 +87,40 @@ function runSecurityWebhookTests() {
       }),
     /not valid JSON/
   );
+
+
+  const svixSecret = "whsec_" + Buffer.from("svix_test_secret").toString("base64");
+  const svixMessageId = "msg_123";
+  const svixTimestamp = Math.floor(Date.now() / 1000);
+  const svixSignature = buildSvixSignature({
+    payload,
+    secret: svixSecret,
+    messageId: svixMessageId,
+    timestamp: svixTimestamp
+  });
+
+  assert.doesNotThrow(() =>
+    verifySvixWebhookSignature({
+      payload,
+      webhookSecret: svixSecret,
+      messageId: svixMessageId,
+      timestamp: String(svixTimestamp),
+      signatureHeader: svixSignature
+    })
+  );
+
+  assert.throws(
+    () =>
+      verifySvixWebhookSignature({
+        payload,
+        webhookSecret: svixSecret,
+        messageId: svixMessageId,
+        timestamp: String(svixTimestamp),
+        signatureHeader: "v1,invalid"
+      }),
+    /Invalid webhook signature/
+  );
+
 
   console.log("security-webhooks tests passed");
 }

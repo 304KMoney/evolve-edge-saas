@@ -1,4 +1,5 @@
 import {
+  getOptionalCurrentSession,
   getPasswordAuthConfig,
   getSignInErrorMessage,
   isPasswordAuthEnabled
@@ -15,7 +16,8 @@ export default async function SignInPage({
 }: {
   searchParams: Promise<{ error?: string; redirectTo?: string }>;
 }) {
-  if (!isPasswordAuthEnabled()) {
+  const existingSession = await getOptionalCurrentSession();
+  if (existingSession?.authMode === "password") {
     redirect("/dashboard");
   }
 
@@ -59,6 +61,13 @@ export default async function SignInPage({
           compliance, assessment, and reporting workflows.
         </p>
 
+        {!isPasswordAuthEnabled() ? (
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-danger">
+            Password auth is currently disabled. Set <code>AUTH_MODE=password</code> and provide
+            bootstrap credentials before signing in.
+          </div>
+        ) : null}
+
         {!isComplete ? (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-danger">
             Password auth is enabled, but the bootstrap credential environment
@@ -72,38 +81,40 @@ export default async function SignInPage({
           </div>
         ) : null}
 
-        <form action={signInAction} className="mt-6 space-y-4">
-          <input type="hidden" name="redirectTo" value={redirectTo} />
-          <label className="block">
-            <span className="text-sm font-medium text-ink">Email</span>
-            <input
-              name="email"
-              type="email"
-              defaultValue={email}
-              autoComplete="email"
-              className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-accent"
-              required
-            />
-          </label>
+        {isPasswordAuthEnabled() ? (
+          <form action={signInAction} className="mt-6 space-y-4">
+            <input type="hidden" name="redirectTo" value={redirectTo} />
+            <label className="block">
+              <span className="text-sm font-medium text-ink">Email</span>
+              <input
+                name="email"
+                type="email"
+                defaultValue={email}
+                autoComplete="email"
+                className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-accent"
+                required
+              />
+            </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-ink">Password</span>
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-accent"
-              required
-            />
-          </label>
+            <label className="block">
+              <span className="text-sm font-medium text-ink">Password</span>
+              <input
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-accent"
+                required
+              />
+            </label>
 
-          <button
-            type="submit"
-            className="w-full rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
-          >
-            Sign In
-          </button>
-        </form>
+            <button
+              type="submit"
+              className="w-full rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
+            >
+              Sign In
+            </button>
+          </form>
+        ) : null}
 
         <div className="mt-6 text-sm text-steel">
           <Link href="/" className="font-semibold text-accent">
