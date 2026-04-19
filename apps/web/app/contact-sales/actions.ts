@@ -159,13 +159,6 @@ async function dispatchContactSubmissionToN8n(input: {
     requestedPlanCode: input.requestedPlanCode
   });
   const intakeDispatchPath = "/api/automation/intake-to-app-dispatch";
-  const intakeDispatchUrl = intakeDispatchPath;
-  const dispatchSecret = process.env.PUBLIC_INTAKE_SHARED_SECRET?.trim() ?? "";
-  if (!dispatchSecret) {
-    throw new Error("PUBLIC_INTAKE_SHARED_SECRET is required.");
-  const dispatchSecret = process.env.PUBLIC_INTAKE_SHARED_SECRET?.trim() ?? "";
-  if (!dispatchSecret) {
-    throw new Error("PUBLIC_INTAKE_SHARED_SECRET is required.");
   const intakeDispatchUrl = await buildIntakeDispatchUrl();
   const dispatchSecret =
     getOptionalEnv("PUBLIC_INTAKE_SHARED_SECRET") ?? getOptionalEnv("OUTBOUND_DISPATCH_SECRET");
@@ -237,8 +230,7 @@ async function dispatchContactSubmissionToN8n(input: {
     hasAuthorizationHeader: dispatchSecret.length > 0
   });
 
-  const response = await fetch(intakeDispatchPath, {
-
+  const response = await fetch(intakeDispatchUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

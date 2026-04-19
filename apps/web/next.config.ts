@@ -1,7 +1,6 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 import { PrismaPlugin } from "@prisma/nextjs-monorepo-workaround-plugin";
-import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   typedRoutes: true,
@@ -26,9 +25,29 @@ const nextConfig: NextConfig = {
 
 const sentryEnabled = Boolean(process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN);
 
-export default sentryEnabled
-  ? withSentryConfig(nextConfig, {
+function withOptionalSentryConfig(config: NextConfig) {
+  if (!sentryEnabled) {
+    return config;
+  }
+
+  try {
+    const { withSentryConfig } = require("@sentry/nextjs") as {
+      withSentryConfig: (
+        nextConfig: NextConfig,
+        sentryOptions: {
+          silent: boolean;
+          disableLogger: boolean;
+        }
+      ) => NextConfig;
+    };
+
+    return withSentryConfig(config, {
       silent: true,
       disableLogger: true
-    })
-  : nextConfig;
+    });
+  } catch {
+    return config;
+  }
+}
+
+export default withOptionalSentryConfig(nextConfig);
