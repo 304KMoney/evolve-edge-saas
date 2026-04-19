@@ -57,6 +57,8 @@ function runWorkflowDispatchTests() {
   assert.deepEqual(payload.routing.quota_state, {
     audits_remaining: 9
   });
+  assert.equal(payload.analysisProvider, "dify");
+  assert.equal(payload.analysisModel, "dify-workflow");
 
   console.log("workflow-dispatch tests passed");
 }

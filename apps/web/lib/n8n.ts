@@ -428,6 +428,14 @@ function normalizeOptionalString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+function getAuditExecutionModelFallback() {
+  return (
+    getOptionalEnv("DIFY_WORKFLOW_ID") ??
+    getOptionalEnv("DIFY_WORKFLOW_VERSION") ??
+    "dify-workflow"
+  );
+}
+
 function normalizeOptionalStringArray(value: unknown) {
   if (!Array.isArray(value)) {
     return [];
@@ -569,13 +577,10 @@ export function buildAuditRequestedPayload(input: {
     normalizedHintRecord.intake_summary
   ) as Prisma.JsonObject;
   const analysisProvider =
-    typeof normalizedHintRecord.analysis_provider === "string"
-      ? normalizedHintRecord.analysis_provider.trim()
-      : null;
+    normalizeOptionalString(normalizedHintRecord.analysis_provider) ?? "dify";
   const analysisModel =
-    typeof normalizedHintRecord.analysis_model === "string"
-      ? normalizedHintRecord.analysis_model.trim()
-      : null;
+    normalizeOptionalString(normalizedHintRecord.analysis_model) ??
+    getAuditExecutionModelFallback();
   const synthesisProvider =
     typeof normalizedHintRecord.synthesis_provider === "string"
       ? normalizedHintRecord.synthesis_provider.trim()
