@@ -158,20 +158,19 @@ async function dispatchContactSubmissionToN8n(input: {
     workflowType: input.workflowType,
     requestedPlanCode: input.requestedPlanCode
   });
+
   const intakeDispatchPath = "/api/automation/intake-to-app-dispatch";
-  const intakeDispatchUrl = intakeDispatchPath;
-  const dispatchSecret = process.env.PUBLIC_INTAKE_SHARED_SECRET?.trim() ?? "";
-  if (!dispatchSecret) {
-    throw new Error("PUBLIC_INTAKE_SHARED_SECRET is required.");
-  const dispatchSecret = process.env.PUBLIC_INTAKE_SHARED_SECRET?.trim() ?? "";
-  if (!dispatchSecret) {
-    throw new Error("PUBLIC_INTAKE_SHARED_SECRET is required.");
   const intakeDispatchUrl = await buildIntakeDispatchUrl();
   const dispatchSecret =
-    getOptionalEnv("PUBLIC_INTAKE_SHARED_SECRET") ?? getOptionalEnv("OUTBOUND_DISPATCH_SECRET");
+    getOptionalEnv("PUBLIC_INTAKE_SHARED_SECRET") ??
+    getOptionalEnv("OUTBOUND_DISPATCH_SECRET");
+
   if (!dispatchSecret) {
-    throw new Error("PUBLIC_INTAKE_SHARED_SECRET or OUTBOUND_DISPATCH_SECRET is required.");
+    throw new Error(
+      "PUBLIC_INTAKE_SHARED_SECRET or OUTBOUND_DISPATCH_SECRET is required."
+    );
   }
+
   const requestId = `contact_${input.traceId}_${Date.now()}`;
   const customerName = `${input.firstName} ${input.lastName}`.trim();
 
@@ -188,7 +187,6 @@ async function dispatchContactSubmissionToN8n(input: {
       canonicalTier,
       selectedDestination: "api.automation.intake-to-app-dispatch",
       selectedDestinationPath: intakeDispatchPath,
-      selectedDestinationPath: intakeDispatchPath
       selectedDestinationUrl: intakeDispatchUrl
     }
   });
@@ -233,12 +231,11 @@ async function dispatchContactSubmissionToN8n(input: {
       timeoutMs
     }
   });
+
   console.info("[contact_sales.submit] intake dispatch request", {
     path: intakeDispatchPath,
     hasAuthorizationHeader: dispatchSecret.length > 0
   });
-
-  const response = await fetch(intakeDispatchPath, {
 
   const response = await fetch(intakeDispatchUrl, {
     method: "POST",
@@ -250,6 +247,7 @@ async function dispatchContactSubmissionToN8n(input: {
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(timeoutMs)
   });
+
   const responseText = (await response.text()).slice(0, MAX_RESPONSE_SNIPPET_LENGTH);
 
   logServerEvent("info", "contact_sales.submit.outbound_fetch_status", {
@@ -315,6 +313,7 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       ...envPresence
     }
   });
+
   logServerEvent("info", "contact_sales.submit.live_path_entered", {
     traceId,
     route: CONTACT_ROUTE,
@@ -339,7 +338,16 @@ export async function submitContactSalesLeadAction(formData: FormData) {
         emailPresent: Boolean(email)
       }
     });
-    redirect(buildContactRedirect({ intent, source, error: "missing-required", status: "failed", traceId }));
+
+    redirect(
+      buildContactRedirect({
+        intent,
+        source,
+        error: "missing-required",
+        status: "failed",
+        traceId
+      })
+    );
   }
 
   let attribution = null;
@@ -349,11 +357,13 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       getServerAuditRequestContext(),
       readLeadAttributionFromCookies()
     ]);
+
     const tracedRequestContext = buildTraceRequestContext(
       requestContext as Record<string, unknown>,
       traceId,
       "contact-sales.action"
     );
+
     const requestId =
       typeof (tracedRequestContext as Record<string, unknown>).requestId === "string"
         ? ((tracedRequestContext as Record<string, unknown>).requestId as string)
@@ -486,6 +496,7 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       : deliveryDispatchFailed
         ? "failed"
         : summarizeDelivery(deliverySummary.results, "hubspot");
+
     if (leadCapture.eventId === null) {
       try {
         await dispatchContactSubmissionToN8n({
@@ -532,7 +543,10 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       : deliveryDispatchFailed
         ? "failed"
         : summarizeDelivery(deliverySummary.results, "n8n");
-    const workflowSummaryStatus = workflowStatus === "dispatched" ? "dispatched" : inboundWorkflowStatus;
+
+    const workflowSummaryStatus =
+      workflowStatus === "dispatched" ? "dispatched" : inboundWorkflowStatus;
+
     const overallStatus =
       hubspotStatus === "failed" || workflowStatus === "failed"
         ? "failed"
@@ -635,6 +649,14 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       }
     });
 
-    redirect(buildContactRedirect({ intent, source, error: "submission-failed", status: "failed", traceId }));
+    redirect(
+      buildContactRedirect({
+        intent,
+        source,
+        error: "submission-failed",
+        status: "failed",
+        traceId
+      })
+    );
   }
 }
