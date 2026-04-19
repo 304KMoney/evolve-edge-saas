@@ -29,26 +29,21 @@ export async function GET(request: Request) {
 
   const ok = databaseOk && missingRequired.length === 0;
 
-  return NextResponse.json(
-    {
-      ok,
-      runtime: getRuntimeEnvironment(),
-      checks: {
-        database: databaseOk,
-        envParity: missingRequired.length === 0
-      },
-      missingRequired,
-      timestamp: new Date().toISOString()
+return NextResponse.json(
+  {
+    ok,
+    runtime: getRuntimeEnvironment(),
+    checks: {
+      database: databaseOk,
+      envParity: missingRequired.length === 0,
     },
-    {
-      status: ok ? 200 : 503
-      databaseOk,
-      missingRequired,
-      parity,
-      timestamp: new Date().toISOString(),
-    },
-    {
-      status: ok ? 200 : 503,
-    }
-  );
+    databaseOk,
+    missingRequired,
+    parity,
+    timestamp: new Date().toISOString(),
+  },
+  {
+    status: ok ? 200 : 503,
+  }
+);
 }
