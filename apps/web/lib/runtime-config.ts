@@ -51,7 +51,11 @@ export function getContactSalesUrl() {
 
 export function getFoundingRiskAuditUrl() {
   const configured = readEnv(CANONICAL_ENV_KEYS.foundingRiskAuditUrl);
-  if (configured && configured !== "PASTE_YOUR_REAL_STRIPE_LINK_HERE") {
+  if (
+    configured &&
+    configured !== "PASTE_YOUR_REAL_STRIPE_LINK_HERE" &&
+    configured !== "PASTE_YOUR_REAL_HUBSPOT_MEETINGS_LINK_HERE"
+  ) {
     return configured;
   }
 

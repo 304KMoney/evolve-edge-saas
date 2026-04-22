@@ -17,7 +17,11 @@ import {
 } from "../../lib/lead-pipeline";
 import { logServerEvent } from "../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../lib/product-analytics";
-import { getAppUrl, getOptionalEnv } from "../../lib/runtime-config";
+import {
+  getAppUrl,
+  getFoundingRiskAuditUrl,
+  getOptionalEnv
+} from "../../lib/runtime-config";
 import { dispatchWebhookDeliveriesForEvent } from "../../lib/webhook-dispatcher";
 
 const CONTACT_ROUTE = "contact-sales.action";
@@ -62,6 +66,22 @@ function buildContactRedirect(input: {
   }
 
   return `/contact?${params.toString()}` as never;
+}
+
+function buildBookingRedirectUrl() {
+  const bookingUrl = getFoundingRiskAuditUrl();
+  return /^https?:\/\//.test(bookingUrl) ? bookingUrl : null;
+}
+
+function shouldRedirectToBooking(input: { intent: string; sourcePath: string }) {
+  const normalizedIntent = normalizeLookupKey(input.intent);
+  const normalizedSourcePath = input.sourcePath.trim().toLowerCase();
+
+  return (
+    normalizedIntent === "demo-request" ||
+    normalizedIntent === "founding-risk-audit" ||
+    normalizedSourcePath === "/contact"
+  );
 }
 
 function summarizeDelivery(results: Array<{ provider: string; status: string }>, provider: string) {
@@ -574,6 +594,12 @@ export async function submitContactSalesLeadAction(formData: FormData) {
           }
         });
       }
+    }
+
+    const bookingRedirectUrl = buildBookingRedirectUrl();
+
+    if (bookingRedirectUrl && shouldRedirectToBooking({ intent, sourcePath })) {
+      redirect(bookingRedirectUrl);
     }
 
     if (overallStatus === "failed") {

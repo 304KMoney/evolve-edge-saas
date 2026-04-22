@@ -273,7 +273,7 @@ export async function getPricingPageData(): Promise<PricingPageData> {
     salesEmail: getSalesContactEmail(),
     marketingLinks: {
       foundingRiskAuditHref: getFoundingRiskAuditUrl(),
-      foundingRiskAuditCallHref: "/contact?intent=founding-risk-audit&source=pricing-page-secondary"
+      foundingRiskAuditCallHref: getFoundingRiskAuditUrl()
     }
   };
 }

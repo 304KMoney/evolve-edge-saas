@@ -18,6 +18,7 @@ import {
 export function PricingPageClient({ data }: { data: PricingPageData }) {
   const foundingOfferHref = data.marketingLinks.foundingRiskAuditHref;
   const foundingCallHref = data.marketingLinks.foundingRiskAuditCallHref;
+  const foundingCallIsExternal = /^https?:\/\//.test(foundingCallHref);
 
   return (
     <main className="grid gap-6">
@@ -50,12 +51,23 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
             >
               {FOUNDING_RISK_AUDIT.ctas.primary}
             </Link>
-            <Link
-              href={foundingCallHref as never}
-              className="inline-flex items-center rounded-full border border-white/14 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white"
-            >
-              {FOUNDING_RISK_AUDIT.ctas.secondary}
-            </Link>
+            {foundingCallIsExternal ? (
+              <a
+                href={foundingCallHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center rounded-full border border-white/14 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white"
+              >
+                {FOUNDING_RISK_AUDIT.ctas.secondary}
+              </a>
+            ) : (
+              <Link
+                href={foundingCallHref as never}
+                className="inline-flex items-center rounded-full border border-white/14 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white"
+              >
+                {FOUNDING_RISK_AUDIT.ctas.secondary}
+              </Link>
+            )}
           </div>
           <p className="mt-4 text-sm font-medium text-[#8debf4]">{FOUNDING_RISK_AUDIT.availability}</p>
         </div>
@@ -218,7 +230,9 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
               Start Your Founding Risk Audit
             </Link>
             <a
-              href={foundingCallHref as never}
+              href={foundingCallHref}
+              target={foundingCallIsExternal ? "_blank" : undefined}
+              rel={foundingCallIsExternal ? "noopener noreferrer" : undefined}
               className="inline-flex w-full items-center justify-center rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-white"
             >
               Book a Call
