@@ -599,7 +599,7 @@ export async function submitContactSalesLeadAction(formData: FormData) {
     const bookingRedirectUrl = buildBookingRedirectUrl();
 
     if (bookingRedirectUrl && shouldRedirectToBooking({ intent, sourcePath })) {
-      redirect(bookingRedirectUrl);
+      redirect(bookingRedirectUrl as never);
     }
 
     if (overallStatus === "failed") {
