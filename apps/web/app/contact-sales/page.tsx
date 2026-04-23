@@ -3,11 +3,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
 import { MarketingShell } from "../../components/marketing-shell";
 import { getOptionalCurrentSession } from "../../lib/auth";
-import {
-  getFoundingRiskAuditCallUrl,
-  getRuntimeEnvironment,
-  getSalesContactEmail
-} from "../../lib/runtime-config";
+import { getFoundingRiskAuditCallUrl, getSalesContactEmail } from "../../lib/runtime-config";
 import { FOUNDING_RISK_AUDIT } from "../../lib/pricing-content";
 import { submitContactSalesLeadAction } from "./actions";
 
@@ -70,23 +66,6 @@ const foundingNextSteps = [
   "We recommend the fastest path to a high-trust executive-ready assessment"
 ] as const;
 
-function formatDeliveryStatus(value: string, provider: "hubspot" | "workflow") {
-  switch (value) {
-    case "captured":
-      return "captured";
-    case "dispatched":
-      return "dispatched";
-    case "failed":
-      return "failed";
-    case "not_configured":
-      return "not configured";
-    case "not_repeated":
-      return provider === "hubspot" ? "already captured" : "already dispatched";
-    default:
-      return "not configured";
-  }
-}
-
 export default async function ContactSalesPage({
   searchParams
 }: {
@@ -100,9 +79,6 @@ export default async function ContactSalesPage({
   const error = readFirstParam(rawParams.error);
   const submission = readFirstParam(rawParams.submission, submitted);
   const status = readFirstParam(rawParams.status, submitted ? "success" : "");
-  const hubspot = readFirstParam(rawParams.hubspot);
-  const workflow = readFirstParam(rawParams.workflow);
-  const trace = readFirstParam(rawParams.trace);
   const salesEmail = getSalesContactEmail();
   const bookingUrl = getFoundingRiskAuditCallUrl();
   const hasExternalBookingUrl = /^https?:\/\//.test(bookingUrl);
@@ -236,15 +212,7 @@ export default async function ContactSalesPage({
                   : "border border-amber-200 bg-amber-50 text-[#92400e]"
               }`}
             >
-              <p>{status === "success" ? successMessage : "Your request was received, but one or more follow-up handoff steps did not complete yet."}</p>
-              {getRuntimeEnvironment() !== "production" ? (
-                <p className="mt-3">
-                  Submission: received. HubSpot: {formatDeliveryStatus(hubspot, "hubspot")}. Workflow: {formatDeliveryStatus(workflow, "workflow")}.
-                </p>
-              ) : null}
-              {getRuntimeEnvironment() !== "production" && trace ? (
-                <p className="mt-2 font-mono text-xs text-current/80">Trace: {trace}</p>
-              ) : null}
+              <p>{successMessage}</p>
             </div>
           ) : null}
           {error === "missing-required" ? (

@@ -606,11 +606,8 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       buildContactRedirect({
         intent,
         source,
-        status: overallStatus,
-        submission: "received",
-        hubspot: hubspotStatus,
-        workflow: workflowSummaryStatus,
-        traceId
+        status: "success",
+        submission: "received"
       })
     );
   } catch (error) {
