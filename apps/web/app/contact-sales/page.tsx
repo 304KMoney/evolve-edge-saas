@@ -82,6 +82,9 @@ export default async function ContactSalesPage({
   const salesEmail = getSalesContactEmail();
   const bookingUrl = getFoundingRiskAuditCallUrl();
   const hasExternalBookingUrl = /^https?:\/\//.test(bookingUrl);
+  const bookingHref = hasExternalBookingUrl
+    ? bookingUrl
+    : `mailto:${salesEmail}?subject=${encodeURIComponent("Book Executive Call")}`;
   const isFoundingAuditIntent = intent.includes("founding-risk-audit");
   const primaryHref = session
     ? session.onboardingRequired
@@ -190,15 +193,15 @@ export default async function ContactSalesPage({
             </a>
           </div>
 
-          {isFoundingAuditIntent && hasExternalBookingUrl ? (
+          {isFoundingAuditIntent ? (
             <div className="mt-4">
               <a
-                href={bookingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={bookingHref}
+                target={hasExternalBookingUrl ? "_blank" : undefined}
+                rel={hasExternalBookingUrl ? "noopener noreferrer" : undefined}
                 className="inline-flex items-center rounded-full border border-accent/20 bg-accent/5 px-5 py-3 text-sm font-semibold text-accent transition hover:border-accent/40 hover:bg-accent/10"
               >
-                Book an Executive Call
+                {hasExternalBookingUrl ? "Book an Executive Call" : "Book an Executive Call by Email"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </a>
             </div>
@@ -213,6 +216,21 @@ export default async function ContactSalesPage({
               }`}
             >
               <p>{successMessage}</p>
+              {isFoundingAuditIntent ? (
+                <div className="mt-4">
+                  <a
+                    href={bookingHref}
+                    target={hasExternalBookingUrl ? "_blank" : undefined}
+                    rel={hasExternalBookingUrl ? "noopener noreferrer" : undefined}
+                    className="inline-flex items-center rounded-full border border-current/20 bg-white px-5 py-3 text-sm font-semibold transition hover:opacity-90"
+                  >
+                    {hasExternalBookingUrl
+                      ? "Book your executive call"
+                      : "Book your executive call by email"}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </a>
+                </div>
+              ) : null}
             </div>
           ) : null}
           {error === "missing-required" ? (
