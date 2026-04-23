@@ -5,6 +5,8 @@ import {
   getApiRateLimitWindowMs,
   getAuthMode,
   getDifyBaseUrl,
+  getFoundingRiskAuditCallUrl,
+  getFoundingRiskAuditOfferUrl,
   getLogLevel,
   getOptionalJsonEnv,
   getReportDownloadSigningSecret,
@@ -74,6 +76,14 @@ function runRuntimeConfigTests() {
   assert.equal(getAuthMode(), "password");
   assert.equal(getRuntimeEnvironment(), "development");
   assert.equal(isSignedReportAuthEnforced(), false);
+  assert.equal(
+    getFoundingRiskAuditOfferUrl(),
+    "/contact?intent=founding-risk-audit&source=marketing-site"
+  );
+  assert.equal(
+    getFoundingRiskAuditCallUrl(),
+    "/contact?intent=founding-risk-audit&source=marketing-site"
+  );
 
   process.env.API_RATE_LIMIT_WINDOW_MS = "120000";
   process.env.API_RATE_LIMIT_MAX_REQUESTS = "12";
@@ -103,6 +113,12 @@ function runRuntimeConfigTests() {
   process.env.DIFY_BASE_URL = "https://dify.alias.example";
   assert.equal(getDifyBaseUrl(), "https://dify.alias.example");
 
+  process.env.NEXT_PUBLIC_FOUNDING_RISK_AUDIT_URL = "https://meetings.example.com/founding-risk-audit";
+  assert.equal(
+    getFoundingRiskAuditCallUrl(),
+    "https://meetings.example.com/founding-risk-audit"
+  );
+
   delete process.env.DATABASE_URL;
   delete process.env.STRIPE_SECRET_KEY;
   delete process.env.STRIPE_WEBHOOK_SECRET;
@@ -115,6 +131,7 @@ function runRuntimeConfigTests() {
   delete process.env.DIFY_BASE_URL;
   delete process.env.DIFY_WORKFLOW_ID;
   delete process.env.EMAIL_PROVIDER;
+  delete process.env.NEXT_PUBLIC_FOUNDING_RISK_AUDIT_URL;
   delete process.env.NEXT_PUBLIC_APP_URL;
   delete process.env.APP_BASE_URL;
   delete process.env.N8N_CALLBACK_SECRET;

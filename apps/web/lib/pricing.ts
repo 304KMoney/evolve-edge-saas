@@ -8,7 +8,11 @@ import {
   resolveCanonicalPlanCodeFromRevenuePlanCode
 } from "./commercial-catalog";
 import { canManageBilling } from "./roles";
-import { getFoundingRiskAuditUrl, getSalesContactEmail } from "./runtime-config";
+import {
+  getFoundingRiskAuditCallUrl,
+  getFoundingRiskAuditOfferUrl,
+  getSalesContactEmail
+} from "./runtime-config";
 
 export type PricingPlanCard = {
   code: CanonicalPlanCode;
@@ -266,8 +270,8 @@ export async function getPricingPageData(): Promise<PricingPageData> {
     ctasByPlanCode,
     salesEmail: getSalesContactEmail(),
     marketingLinks: {
-      foundingRiskAuditHref: getFoundingRiskAuditUrl(),
-      foundingRiskAuditCallHref: getFoundingRiskAuditUrl()
+      foundingRiskAuditHref: getFoundingRiskAuditOfferUrl(),
+      foundingRiskAuditCallHref: getFoundingRiskAuditCallUrl()
     }
   };
 }

@@ -3,7 +3,11 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
 import { MarketingShell } from "../../components/marketing-shell";
 import { getOptionalCurrentSession } from "../../lib/auth";
-import { getRuntimeEnvironment, getSalesContactEmail } from "../../lib/runtime-config";
+import {
+  getFoundingRiskAuditCallUrl,
+  getRuntimeEnvironment,
+  getSalesContactEmail
+} from "../../lib/runtime-config";
 import { FOUNDING_RISK_AUDIT } from "../../lib/pricing-content";
 import { submitContactSalesLeadAction } from "./actions";
 
@@ -100,6 +104,8 @@ export default async function ContactSalesPage({
   const workflow = readFirstParam(rawParams.workflow);
   const trace = readFirstParam(rawParams.trace);
   const salesEmail = getSalesContactEmail();
+  const bookingUrl = getFoundingRiskAuditCallUrl();
+  const hasExternalBookingUrl = /^https?:\/\//.test(bookingUrl);
   const isFoundingAuditIntent = intent.includes("founding-risk-audit");
   const primaryHref = session
     ? session.onboardingRequired
@@ -207,6 +213,20 @@ export default async function ContactSalesPage({
               Email {salesEmail}
             </a>
           </div>
+
+          {isFoundingAuditIntent && hasExternalBookingUrl ? (
+            <div className="mt-4">
+              <a
+                href={bookingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center rounded-full border border-accent/20 bg-accent/5 px-5 py-3 text-sm font-semibold text-accent transition hover:border-accent/40 hover:bg-accent/10"
+              >
+                Book an Executive Call
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </a>
+            </div>
+          ) : null}
 
           {submission === "received" ? (
             <div

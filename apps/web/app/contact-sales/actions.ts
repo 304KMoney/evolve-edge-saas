@@ -19,7 +19,7 @@ import { logServerEvent } from "../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../lib/product-analytics";
 import {
   getAppUrl,
-  getFoundingRiskAuditUrl,
+  getFoundingRiskAuditCallUrl,
   getOptionalEnv
 } from "../../lib/runtime-config";
 import { dispatchWebhookDeliveriesForEvent } from "../../lib/webhook-dispatcher";
@@ -69,7 +69,7 @@ function buildContactRedirect(input: {
 }
 
 function buildBookingRedirectUrl() {
-  const bookingUrl = getFoundingRiskAuditUrl();
+  const bookingUrl = getFoundingRiskAuditCallUrl();
   return /^https?:\/\//.test(bookingUrl) ? bookingUrl : null;
 }
 
