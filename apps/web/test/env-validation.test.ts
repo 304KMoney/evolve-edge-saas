@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import {
   assertCriticalEnvironmentParity,
-  getEnvironmentParityStatus
+  getEnvironmentParityStatus,
+  shouldEnforceCriticalEnvironmentParity
 } from "../lib/env-validation";
 
 function runEnvValidationTests() {
@@ -66,6 +67,12 @@ function runEnvValidationTests() {
   assert.equal(enabledHubSpotKey?.required, true);
   assert.equal(enabledHubSpotKey?.configured, true);
 
+  delete process.env.NEXT_PHASE;
+  assert.equal(shouldEnforceCriticalEnvironmentParity(), true);
+
+  process.env.NEXT_PHASE = "phase-production-build";
+  assert.equal(shouldEnforceCriticalEnvironmentParity(), false);
+
   delete process.env.DATABASE_URL;
   delete process.env.AUTH_MODE;
   delete process.env.NEXT_PUBLIC_APP_URL;
@@ -77,6 +84,7 @@ function runEnvValidationTests() {
   delete process.env.DIFY_API_BASE_URL;
   delete process.env.DIFY_API_KEY;
   delete process.env.DIFY_WORKFLOW_ID;
+  delete process.env.NEXT_PHASE;
 
   if (originalNodeEnv) {
     env.NODE_ENV = originalNodeEnv;

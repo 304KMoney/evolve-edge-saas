@@ -68,6 +68,10 @@ function getRuntimeEnvironment(): AppRuntimeEnvironment {
   }
 }
 
+function getNextPhase() {
+  return readEnv("NEXT_PHASE");
+}
+
 function isEnabledViaFlag(name: string) {
   return readEnv(name).toLowerCase() === "true";
 }
@@ -274,6 +278,10 @@ export function assertCriticalEnvironmentParity() {
         "Run env parity audit and update Vercel/local/Codex envs before continuing."
     );
   }
+}
+
+export function shouldEnforceCriticalEnvironmentParity() {
+  return getNextPhase() !== "phase-production-build";
 }
 
 export function logEnvironmentParityStatus() {
