@@ -49,7 +49,11 @@ export function getContactSalesUrl() {
   );
 }
 
-export function getFoundingRiskAuditUrl() {
+export function getFoundingRiskAuditOfferUrl() {
+  return "/contact?intent=founding-risk-audit&source=marketing-site";
+}
+
+export function getFoundingRiskAuditCallUrl() {
   const configured = readEnv(CANONICAL_ENV_KEYS.foundingRiskAuditUrl);
   if (
     configured &&
@@ -59,7 +63,7 @@ export function getFoundingRiskAuditUrl() {
     return configured;
   }
 
-  return "/contact?intent=founding-risk-audit&source=marketing-site";
+  return getFoundingRiskAuditOfferUrl();
 }
 
 export function getHostingerReferenceUrl() {
@@ -244,7 +248,7 @@ export function getCanonicalCommercialRuntimeConfig() {
     environment: getRuntimeEnvironment(),
     appUrl: getAppUrl(),
     contactSalesUrl: getContactSalesUrl(),
-    foundingRiskAuditUrl: getFoundingRiskAuditUrl(),
+    foundingRiskAuditUrl: getFoundingRiskAuditCallUrl(),
     salesContactEmail: getSalesContactEmail(),
     hostingerReferenceUrl: getHostingerReferenceUrl(),
     authMode: getAuthMode(),
