@@ -7,7 +7,6 @@ import {
   resolveCanonicalPlanCode,
   resolveCanonicalPlanCodeFromRevenuePlanCode
 } from "./commercial-catalog";
-import { EntitlementSnapshot, getOrganizationEntitlements } from "./entitlements";
 import { canManageBilling } from "./roles";
 import { getFoundingRiskAuditUrl, getSalesContactEmail } from "./runtime-config";
 
@@ -60,7 +59,6 @@ export type PricingPageData = {
     currentPlanCode: CanonicalPlanCode | null;
     currentPlanName: string | null;
   };
-  currentEntitlements: EntitlementSnapshot | null;
   ctasByPlanCode: Record<CanonicalPlanCode, PricingCta>;
   salesEmail: string;
   marketingLinks: {
@@ -215,9 +213,6 @@ export async function getPricingPageData(): Promise<PricingPageData> {
   const currentSubscription = workspaceOrganization
     ? await getCurrentSubscription(workspaceOrganization.id)
     : null;
-  const currentEntitlements = workspaceOrganization
-    ? await getOrganizationEntitlements(workspaceOrganization.id)
-    : null;
   const currentPlanCode =
     resolveCanonicalPlanCode(currentSubscription?.plan.code ?? null) ??
     resolveCanonicalPlanCodeFromRevenuePlanCode(currentSubscription?.plan.code ?? null);
@@ -268,7 +263,6 @@ export async function getPricingPageData(): Promise<PricingPageData> {
           ? getCanonicalCommercialPlanDefinition(currentPlanCode)?.displayName ?? null
           : null
     },
-    currentEntitlements,
     ctasByPlanCode,
     salesEmail: getSalesContactEmail(),
     marketingLinks: {
