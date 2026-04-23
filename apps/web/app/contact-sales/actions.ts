@@ -545,7 +545,7 @@ export async function submitContactSalesLeadAction(formData: FormData) {
     const workflowSummaryStatus = workflowStatus === "dispatched" ? "dispatched" : inboundWorkflowStatus;
     const overallStatus =
       hubspotStatus === "failed" || workflowStatus === "failed"
-        ? "failed"
+        ? "partial"
         : "success";
 
     logServerEvent("info", "contact_sales.submit.final_response", {
@@ -602,25 +602,11 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       redirect(bookingRedirectUrl as never);
     }
 
-    if (overallStatus === "failed") {
-      redirect(
-        buildContactRedirect({
-          intent,
-          source,
-          status: "failed",
-          error: "submission-failed",
-          hubspot: hubspotStatus,
-          workflow: workflowSummaryStatus,
-          traceId
-        })
-      );
-    }
-
     redirect(
       buildContactRedirect({
         intent,
         source,
-        status: "success",
+        status: overallStatus,
         submission: "received",
         hubspot: hubspotStatus,
         workflow: workflowSummaryStatus,

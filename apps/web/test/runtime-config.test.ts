@@ -11,6 +11,7 @@ import {
   getOptionalJsonEnv,
   getReportDownloadSigningSecret,
   getRuntimeConfigStatus,
+  getSalesContactEmail,
   getRuntimeEnvironment,
   getWebhookRateLimitMaxRequests,
   getWebhookRateLimitWindowMs,
@@ -76,6 +77,7 @@ function runRuntimeConfigTests() {
   assert.equal(getAuthMode(), "password");
   assert.equal(getRuntimeEnvironment(), "development");
   assert.equal(isSignedReportAuthEnforced(), false);
+  assert.equal(getSalesContactEmail(), "info@evolveedgeai.com");
   assert.equal(
     getFoundingRiskAuditOfferUrl(),
     "/contact?intent=founding-risk-audit&source=marketing-site"

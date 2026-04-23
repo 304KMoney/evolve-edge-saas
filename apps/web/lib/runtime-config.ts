@@ -39,7 +39,7 @@ export function getDifyBaseUrl() {
 }
 
 export function getSalesContactEmail() {
-  return readEnv(CANONICAL_ENV_KEYS.salesContactEmail) || "sales@evolveedge.ai";
+  return readEnv(CANONICAL_ENV_KEYS.salesContactEmail) || "info@evolveedgeai.com";
 }
 
 export function getContactSalesUrl() {
