@@ -192,6 +192,19 @@ export function applyReportGeneratedToSteps(currentSteps: CustomerRunSteps) {
   return steps;
 }
 
+export function applyReportGenerationFailureToSteps(
+  currentSteps: CustomerRunSteps,
+  errorMessage: string
+) {
+  const steps = cloneSteps(currentSteps);
+  if (steps.analysis.status !== "completed") {
+    markStepCompleted(steps, "analysis");
+  }
+  markStepFailed(steps, "reportGeneration", errorMessage);
+  clearFutureSteps(steps, "reportGeneration");
+  return steps;
+}
+
 export function applyCrmSyncResultToSteps(
   currentSteps: CustomerRunSteps,
   delivered: boolean,
@@ -473,6 +486,22 @@ export async function markCustomerRunReportGenerated(input: {
     {
       reportId: input.reportId
     }
+  );
+}
+
+export async function markCustomerRunReportGenerationFailed(input: {
+  assessmentId: string;
+  errorMessage: string;
+  db?: CustomerRunDbClient;
+}) {
+  const db = input.db ?? prisma;
+  const run = await findRunByAssessmentId(db, input.assessmentId);
+  if (!run) {
+    return null;
+  }
+
+  return updateRunSteps(db, run.id, (currentSteps) =>
+    applyReportGenerationFailureToSteps(currentSteps, input.errorMessage)
   );
 }
 

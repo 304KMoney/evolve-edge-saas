@@ -69,12 +69,30 @@ function getHubSpotAccessToken() {
   return token && token.length > 0 ? token : null;
 }
 
+function isHubSpotSyncEnabled() {
+  const configured = getOptionalEnv("HUBSPOT_SYNC_ENABLED")?.toLowerCase();
+
+  if (configured === "false") {
+    return false;
+  }
+
+  if (configured === "true") {
+    return true;
+  }
+
+  return Boolean(getHubSpotAccessToken());
+}
+
 function getHubSpotApiBaseUrl() {
   return getOptionalEnv("HUBSPOT_API_BASE_URL") ?? "https://api.hubapi.com";
 }
 
 export function getHubSpotDestinations(): HubSpotDestination[] {
   if (shouldBlockDemoExternalSideEffects()) {
+    return [];
+  }
+
+  if (!isHubSpotSyncEnabled()) {
     return [];
   }
 

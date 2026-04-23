@@ -5,6 +5,7 @@ import {
   applyCrmSyncResultToSteps,
   applyDeliveryCompletedToSteps,
   applyQueuedForAnalysisToSteps,
+  applyReportGenerationFailureToSteps,
   applyReportGeneratedToSteps,
   createInitialCustomerRunSteps,
   retryCustomerRun,
@@ -45,6 +46,20 @@ async function runCustomerRunTests() {
     assert.equal(steps.reportGeneration.status, "completed");
     assert.equal(steps.crmSync.status, "running");
     assert.equal(summary.currentStep, "CRM_SYNC");
+  }
+
+  {
+    const steps = applyReportGenerationFailureToSteps(
+      applyQueuedForAnalysisToSteps(createInitialCustomerRunSteps()),
+      "Workflow report generation failed"
+    );
+    const summary = summarizeCustomerRun(steps);
+
+    assert.equal(steps.analysis.status, "completed");
+    assert.equal(steps.reportGeneration.status, "failed");
+    assert.equal(summary.status, "ACTION_REQUIRED");
+    assert.equal(summary.currentStep, "REPORT_GENERATION");
+    assert.equal(summary.lastError, "Workflow report generation failed");
   }
 
   {

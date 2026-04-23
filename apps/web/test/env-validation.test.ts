@@ -25,6 +25,8 @@ function runEnvValidationTests() {
   delete process.env.N8N_CALLBACK_SHARED_SECRET;
   delete process.env.OUTBOUND_DISPATCH_SECRET;
   process.env.N8N_DISPATCH_ENABLED = "false";
+  delete process.env.HUBSPOT_SYNC_ENABLED;
+  delete process.env.HUBSPOT_ACCESS_TOKEN;
   delete process.env.DIFY_API_KEY;
   delete process.env.DIFY_API_BASE_URL;
   delete process.env.DIFY_BASE_URL;
@@ -47,10 +49,29 @@ function runEnvValidationTests() {
   assert.equal(difyKey?.required, true);
   assert.equal(difyKey?.configured, true);
 
+  process.env.HUBSPOT_ACCESS_TOKEN = "hubspot_token";
+  process.env.HUBSPOT_SYNC_ENABLED = "false";
+  const disabledHubSpotStatus = getEnvironmentParityStatus();
+  const disabledHubSpotKey = disabledHubSpotStatus.find(
+    (entry) => entry.key === "HUBSPOT_ACCESS_TOKEN"
+  );
+  assert.equal(disabledHubSpotKey?.required, false);
+  assert.equal(disabledHubSpotKey?.configured, true);
+
+  process.env.HUBSPOT_SYNC_ENABLED = "true";
+  const enabledHubSpotStatus = getEnvironmentParityStatus();
+  const enabledHubSpotKey = enabledHubSpotStatus.find(
+    (entry) => entry.key === "HUBSPOT_ACCESS_TOKEN"
+  );
+  assert.equal(enabledHubSpotKey?.required, true);
+  assert.equal(enabledHubSpotKey?.configured, true);
+
   delete process.env.DATABASE_URL;
   delete process.env.AUTH_MODE;
   delete process.env.NEXT_PUBLIC_APP_URL;
   delete process.env.EMAIL_PROVIDER;
+  delete process.env.HUBSPOT_SYNC_ENABLED;
+  delete process.env.HUBSPOT_ACCESS_TOKEN;
   delete process.env.DIFY_EXECUTION_ENABLED;
   delete process.env.N8N_DISPATCH_ENABLED;
   delete process.env.DIFY_API_BASE_URL;

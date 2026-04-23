@@ -499,6 +499,61 @@ export async function updateReportRecordSnapshot(input: {
   });
 }
 
+export async function ensurePendingAssessmentReport(input: {
+  db?: ReportRecordsDbClient;
+  organizationId: string;
+  assessmentId: string;
+  assessmentName: string;
+  createdByUserId?: string | null;
+  organizationNameSnapshot?: string | null;
+  customerEmailSnapshot?: string | null;
+  selectedPlan?: "starter" | "scale" | "enterprise" | null;
+  customerAccountId?: string | null;
+  engagementProgramId?: string | null;
+}) {
+  const db = input.db ?? prisma;
+  const existing = await db.report.findFirst({
+    where: {
+      assessmentId: input.assessmentId,
+      status: {
+        in: [ReportStatus.PENDING, ReportStatus.PROCESSING]
+      }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  const existingReportCount = await db.report.count({
+    where: { assessmentId: input.assessmentId }
+  });
+
+  return db.report.create({
+    data: {
+      organizationId: input.organizationId,
+      assessmentId: input.assessmentId,
+      engagementProgramId: input.engagementProgramId ?? null,
+      customerAccountId: input.customerAccountId ?? null,
+      createdByUserId: input.createdByUserId ?? null,
+      title: `${input.assessmentName} Executive Audit Report`,
+      versionLabel: `v${existingReportCount + 1}`,
+      organizationNameSnapshot: input.organizationNameSnapshot ?? null,
+      customerEmailSnapshot: input.customerEmailSnapshot ?? null,
+      selectedPlan:
+        input.selectedPlan === undefined
+          ? undefined
+          : toCommercialPlanCode(input.selectedPlan),
+      status: ReportStatus.PENDING,
+      reportJson: {},
+      artifactMetadataJson: {
+        downloadStatus: "not_ready"
+      }
+    }
+  });
+}
+
 export async function getReportRecordForWriteback(input: {
   db?: ReportRecordsDbClient;
   reportId?: string | null;

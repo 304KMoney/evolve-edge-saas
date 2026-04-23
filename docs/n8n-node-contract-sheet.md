@@ -47,6 +47,16 @@ The outbound handoff includes both callback shapes:
     "status_update_url": "https://your-app.com/api/internal/workflows/status",
     "report_ready_url": "https://your-app.com/api/internal/workflows/report-ready",
     "failure_url": "https://your-app.com/api/internal/workflows/failed"
+  },
+  "callbackAuth": {
+    "scheme": "bearer",
+    "token": "shared-secret",
+    "authorizationHeader": "Bearer shared-secret"
+  },
+  "callback_auth": {
+    "scheme": "bearer",
+    "token": "shared-secret",
+    "authorization_header": "Bearer shared-secret"
   }
 }
 ```
@@ -58,6 +68,19 @@ Use either:
 
 and the equivalent `report_ready_url` and `failure_url` fields.
 
+For workflows that are easier to wire with flat fields, the app also sends:
+
+- `statusCallbackUrl`
+- `reportReadyCallbackUrl`
+- `failureCallbackUrl`
+- `reportWritebackUrl`
+- `status_callback_url`
+- `report_ready_callback_url`
+- `failure_callback_url`
+- `report_writeback_url`
+- `callbackAuth.authorizationHeader`
+- `callback_auth.authorization_header`
+
 ## Node 1: Webhook - App Intake
 
 Recommended n8n node type:
@@ -67,6 +90,8 @@ Recommended n8n node type:
 Expected inbound source:
 
 - Evolve Edge app dispatches `audit.requested`
+- The same n8n destination can also receive `assessment.submitted` when a user
+  clicks the in-app submit button and the app queues the audit/report flow
 
 Recommended path:
 
@@ -110,6 +135,15 @@ Primary fields available in the inbound JSON:
   "company_name": "Example Health",
   "purchased_tier": "scale",
   "purchased_plan_code": "scale",
+  "workflow_code": "audit_scale",
+  "routeKey": "report.scale_enhanced",
+  "routeDisposition": "upgraded",
+  "processingTier": "enhanced",
+  "route_key": "report.scale_enhanced",
+  "route_disposition": "upgraded",
+  "processing_tier": "enhanced",
+  "report_template": "scale_operating_report",
+  "processing_depth": "scale",
   "stripe_session_id": "cs_test_123",
   "amount_paid": 500000,
   "currency": "usd",
@@ -139,6 +173,67 @@ Primary fields available in the inbound JSON:
 }
 ```
 
+For in-app assessment submission, the generic envelope also includes:
+
+```json
+{
+  "request_id": "whd_123",
+  "dispatchId": "whd_123",
+  "callbacks": {
+    "status_url": "https://your-app.com/api/internal/workflows/status",
+    "report_ready_url": "https://your-app.com/api/internal/workflows/report-ready",
+    "failure_url": "https://your-app.com/api/internal/workflows/failed",
+    "report_writeback_url": "https://your-app.com/api/internal/workflows/report-writeback",
+    "auth_scheme": "bearer"
+  },
+  "callbackAuth": {
+    "scheme": "bearer",
+    "token": "shared-secret",
+    "authorizationHeader": "Bearer shared-secret"
+  },
+  "reportTarget": {
+    "reportId": "rep_123",
+    "dashboardUrl": "https://your-app.com/dashboard/reports/rep_123",
+    "exportUrl": "https://your-app.com/api/reports/rep_123/export"
+  },
+  "assessment": {
+    "assessmentId": "asm_123",
+    "intakeUrl": "https://your-app.com/dashboard/assessments/asm_123",
+    "reportId": "rep_123"
+  },
+  "event": {
+    "type": "assessment.submitted",
+    "payload": {
+      "workflowRoutingDecisionId": "wrd_123",
+      "workflowRouting": {
+        "processingTier": "enhanced",
+        "routeKey": "assessment_analysis.scale",
+        "routeDisposition": "standard"
+      },
+      "sections": [
+        {
+          "key": "company-profile",
+          "title": "Company Profile",
+          "status": "completed",
+          "responses": {
+            "notes": "Customer intake answers"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+Recommended branch logic in n8n:
+
+- if `event.type === "assessment.submitted"`, use
+  `event.payload.workflowRouting.processingTier` to choose the tiered report
+  workflow path
+- use `event.payload.sections` as the canonical intake payload
+- write the generated PDF/result back through
+  `callbacks.report_writeback_url` using `reportTarget.reportId`
+
 Recommended fields to carry forward inside n8n:
 
 - `request_id`
@@ -148,10 +243,15 @@ Recommended fields to carry forward inside n8n:
 - `company_name`
 - `purchased_tier`
 - `purchased_plan_code`
+- `workflow_code`
+- `route_key`
+- `route_disposition`
+- `processing_tier`
 - `top_concerns`
 - `callbacks.status_url`
 - `callbacks.report_ready_url`
 - `callbacks.failure_url`
+- `callback_auth.authorization_header`
 
 ## Node 2: HTTP Request - Status Callback
 
@@ -173,7 +273,7 @@ Headers:
 
 ```text
 Content-Type: application/json
-Authorization: Bearer {{$env.N8N_CALLBACK_SHARED_SECRET}}
+Authorization: {{$json.callback_auth.authorization_header || ('Bearer ' + $env.N8N_CALLBACK_SHARED_SECRET)}}
 ```
 
 Compact body to send:
@@ -238,7 +338,7 @@ Headers:
 
 ```text
 Content-Type: application/json
-Authorization: Bearer {{$env.N8N_CALLBACK_SHARED_SECRET}}
+Authorization: {{$json.callback_auth.authorization_header || ('Bearer ' + $env.N8N_CALLBACK_SHARED_SECRET)}}
 ```
 
 Compact body to send:
@@ -300,7 +400,7 @@ Headers:
 
 ```text
 Content-Type: application/json
-Authorization: Bearer {{$env.N8N_CALLBACK_SHARED_SECRET}}
+Authorization: {{$json.callback_auth.authorization_header || ('Bearer ' + $env.N8N_CALLBACK_SHARED_SECRET)}}
 ```
 
 Compact body to send:

@@ -1,11 +1,9 @@
 import assert from "node:assert/strict";
 import { CanonicalPlanKey } from "@evolve-edge/db";
 import { buildN8nEnvelope } from "../lib/n8n";
-import {
-  computeWorkflowRoutingDecision,
-  extractNormalizedWorkflowHints,
-  type WorkflowCommercialState
-} from "../lib/workflow-routing";
+import type { WorkflowCommercialState } from "../lib/workflow-routing-decision";
+import { computeWorkflowRoutingDecision } from "../lib/workflow-routing-decision";
+import { extractNormalizedWorkflowHints } from "../lib/workflow-routing-hints";
 
 function buildCommercialState(
   overrides?: Partial<WorkflowCommercialState>

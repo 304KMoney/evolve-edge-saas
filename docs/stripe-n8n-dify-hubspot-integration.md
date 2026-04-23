@@ -22,8 +22,14 @@ Important:
 - n8n is orchestration only.
 - Dify is execution only.
 - HubSpot is CRM visibility only.
+- Apollo, if used, is sales enrichment only.
 
 This means the app does **not** delegate report persistence, subscription truth, or billing access control to n8n or Dify.
+
+If Apollo is added for prospecting or enrichment, it should sit alongside the
+lead-pipeline workflow as an optional outbound enrichment dependency and must
+not become the owner of leads, lifecycle state, routing policy, or customer
+status.
 
 For the plan-aware routing snapshot layer that now feeds execution hints into n8n and Dify, see:
 
@@ -49,6 +55,7 @@ Stripe webhook lifecycle safety notes:
 - a Stripe event is claimed into a canonical `BillingEvent` receipt before processing continues
 - duplicate deliveries do not rewrite already-claimed receipts unless the event is actively reclaimed for processing
 - terminal `BillingEvent` transitions only apply from `PROCESSING`, which prevents a stale retry path from overwriting a newer terminal state
+- duplicate failure replays stop at the receipt boundary and do not emit a second round of queue findings, operator events, or alerts after the event is already terminal
 - `processingStartedAt` is an in-flight marker only and is cleared when the receipt reaches `PROCESSED` or `FAILED`
 
 Primary handler:
@@ -109,6 +116,20 @@ Primary service:
 
 - [hubspot.ts](/Users/kielg/OneDrive/Desktop/Evolve%20Edge/apps/web/lib/hubspot.ts)
 
+### Resend
+
+Implemented:
+
+- Svix signature verification
+- provider-message-aware `EmailNotification` lookup
+- duplicate no-op handling for repeated delivered and failure notifications
+- terminal provider webhook updates that clear local retry scheduling
+
+Delivery safety notes:
+
+- repeated `email.delivered` or identical failure events become no-ops once the stored notification already reflects that provider state
+- provider-terminal failure events clear `nextRetryAt` so local retry workers do not resend an email that Resend already reported as bounced, complained, or delivery-delayed
+
 ## Integration gaps found during inspection
 
 These were the main risk areas before this hardening pass:
@@ -160,6 +181,18 @@ The signed n8n envelope now includes:
 - `environment`
 - `correlationId`
 - `event.occurredAt`
+
+The dedicated `audit.requested` payload also includes flat callback-auth and
+route-selection aliases so n8n workflows can branch on pass-through data
+without depending on nested object lookups:
+
+- `callbackAuth.authorizationHeader`
+- `callback_auth.authorization_header`
+- `workflow_code`
+- `route_key`
+- `route_disposition`
+- `processing_tier`
+- flat callback URL aliases for status, report-ready, failure, and writeback
 
 ### HubSpot projection boundary
 
@@ -256,9 +289,16 @@ Those should not be used as the canonical first-customer configuration path.
 
 ### HubSpot
 
+- `HUBSPOT_SYNC_ENABLED`
 - `HUBSPOT_ACCESS_TOKEN`
 - `HUBSPOT_API_BASE_URL`
 - `HUBSPOT_TIMEOUT_MS`
+
+Operational note:
+
+- set `HUBSPOT_SYNC_ENABLED=true` to explicitly turn CRM projection on
+- set `HUBSPOT_SYNC_ENABLED=false` to suppress HubSpot deliveries even if a token is present
+- if `HUBSPOT_SYNC_ENABLED` is omitted, the app falls back to token-based auto-enable for backward compatibility
 
 ## Required Stripe metadata
 

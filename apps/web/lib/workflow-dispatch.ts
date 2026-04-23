@@ -22,15 +22,26 @@ import {
 import { logServerEvent, sendOperationalAlert } from "./monitoring";
 import { appendOperatorWorkflowEventRecord } from "./operator-workflow-event-records";
 import { recordOperationalFinding } from "./operations-queues";
-import { buildCorrelationId, clampTimeoutMs, normalizeExternalError } from "./reliability";
+import {
+  buildCorrelationId,
+  clampTimeoutMs,
+  isProcessingClaimStale,
+  normalizeExternalError
+} from "./reliability";
 import { isAuthorizedBearerRequest } from "./security-auth";
 import { getOptionalEnv, requireEnv } from "./runtime-config";
+import {
+  shouldSkipWorkflowReportReady,
+  shouldSkipWorkflowStatusCallback
+} from "./workflow-callback-policy";
+import { resolveRecoveredWorkflowDispatchState } from "./workflow-dispatch-policy";
 
 type WorkflowDispatchDbClient = Prisma.TransactionClient | typeof prisma;
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_DISPATCH_ATTEMPTS = 5;
 const RETRY_DELAY_MINUTES = [1, 5, 15, 60];
+const DEFAULT_STALE_DISPATCH_MINUTES = 15;
 
 function getWorkflowDispatchTimeoutMs() {
   const parsed = Number(getOptionalEnv("WORKFLOW_DISPATCH_TIMEOUT_MS") ?? "");
@@ -42,6 +53,13 @@ function getWorkflowDispatchTimeoutMs() {
 
 function getRetryDelayMinutes(attemptCount: number) {
   return RETRY_DELAY_MINUTES[Math.min(attemptCount - 1, RETRY_DELAY_MINUTES.length - 1)];
+}
+
+function getStaleDispatchMinutes() {
+  const parsed = Number(
+    getOptionalEnv("WORKFLOW_DISPATCH_STALE_MINUTES") ?? DEFAULT_STALE_DISPATCH_MINUTES
+  );
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_STALE_DISPATCH_MINUTES;
 }
 
 function readJsonObject(
@@ -279,6 +297,90 @@ async function markDispatchFailure(
   return updated;
 }
 
+async function recoverStaleWorkflowDispatches(
+  limit: number,
+  db: WorkflowDispatchDbClient = prisma
+) {
+  const staleMinutes = getStaleDispatchMinutes();
+  const staleBefore = new Date(Date.now() - staleMinutes * 60 * 1000);
+  const staleDispatches = await db.workflowDispatch.findMany({
+    where: {
+      status: WorkflowDispatchStatus.DISPATCHING,
+      OR: [{ lastAttemptAt: { lt: staleBefore } }, { updatedAt: { lt: staleBefore } }]
+    },
+    include: {
+      routingSnapshot: true
+    },
+    orderBy: { updatedAt: "asc" },
+    take: limit
+  });
+
+  let recovered = 0;
+  let reviewRequired = 0;
+
+  for (const dispatch of staleDispatches) {
+    if (
+      !isProcessingClaimStale({
+        processingStartedAt: dispatch.updatedAt,
+        lastAttemptAt: dispatch.lastAttemptAt,
+        staleAfterMs: staleMinutes * 60 * 1000
+      })
+    ) {
+      continue;
+    }
+
+    const recoveryState = resolveRecoveredWorkflowDispatchState({
+      attemptCount: dispatch.attemptCount
+    });
+
+    await db.workflowDispatch.update({
+      where: { id: dispatch.id },
+      data: recoveryState
+    });
+
+    if (recoveryState.status === WorkflowDispatchStatus.FAILED) {
+      await db.routingSnapshot.update({
+        where: { id: dispatch.routingSnapshotId },
+        data: { status: RoutingSnapshotStatus.FAILED }
+      });
+
+      await recordOperationalFinding(
+        {
+          organizationId: dispatch.routingSnapshot.organizationId,
+          queueType: OperationsQueueType.SUCCESS_RISK,
+          ruleCode: "success.workflow_dispatch_stale",
+          severity: OperationsQueueSeverity.HIGH,
+          sourceSystem: OperationsQueueSourceSystem.APP,
+          sourceRecordType: "workflowDispatch",
+          sourceRecordId: dispatch.id,
+          title: "Workflow dispatch stalled before orchestration acknowledgement",
+          summary:
+            "A workflow handoff remained in dispatching state past the stale timeout and exhausted retry recovery.",
+          recommendedAction:
+            "Review workflow destination reachability, dispatch logs, and retry history before replaying the handoff.",
+          metadata: {
+            routingSnapshotId: dispatch.routingSnapshotId,
+            eventType: dispatch.eventType,
+            destination: dispatch.destination,
+            attemptCount: dispatch.attemptCount,
+            message: recoveryState.lastError
+          }
+        },
+        db
+      );
+
+      reviewRequired += 1;
+    }
+
+    recovered += 1;
+  }
+
+  return {
+    recovered,
+    reviewRequired
+  };
+}
+
 async function dispatchWorkflow(dispatchId: string, db: WorkflowDispatchDbClient = prisma) {
   const dispatch = await db.workflowDispatch.findUnique({
     where: { id: dispatchId },
@@ -465,6 +567,7 @@ export async function dispatchWorkflowById(
 
 export async function dispatchPendingWorkflowDispatches(options?: { limit?: number }) {
   const limit = options?.limit ?? 20;
+  const recoveredStale = await recoverStaleWorkflowDispatches(limit);
   const pending = await prisma.workflowDispatch.findMany({
     where: {
       status: {
@@ -492,9 +595,11 @@ export async function dispatchPendingWorkflowDispatches(options?: { limit?: numb
   }
 
   return {
+    recoveredStale: recoveredStale.recovered,
     processed: pending.length,
     delivered,
-    failed
+    failed,
+    reviewRequired: failed + recoveredStale.reviewRequired
   };
 }
 
@@ -512,6 +617,22 @@ export async function recordWorkflowStatusCallback(input: {
     where: { id: input.dispatchId },
     include: { routingSnapshot: true }
   });
+
+  if (
+    shouldSkipWorkflowStatusCallback({
+      currentStatus: dispatch.status,
+      currentExternalExecutionId: dispatch.externalExecutionId,
+      currentLastError: dispatch.lastError,
+      incomingStatus: input.status,
+      incomingExternalExecutionId: input.externalExecutionId,
+      incomingMessage: input.message
+    })
+  ) {
+    return {
+      ...dispatch,
+      deduplicated: true as const
+    };
+  }
 
   const nextStatus =
     input.status === "acknowledged"
@@ -680,7 +801,10 @@ export async function recordWorkflowStatusCallback(input: {
     });
   }
 
-  return updatedDispatch;
+  return {
+    ...updatedDispatch,
+    deduplicated: false as const
+  };
 }
 
 export async function recordWorkflowReportReady(input: {
@@ -700,6 +824,25 @@ export async function recordWorkflowReportReady(input: {
     where: { id: input.dispatchId },
     include: { routingSnapshot: true }
   });
+
+  if (
+    shouldSkipWorkflowReportReady({
+      currentStatus: dispatch.status,
+      currentExternalExecutionId: dispatch.externalExecutionId,
+      currentResponsePayload: dispatch.responsePayload,
+      incomingExternalExecutionId: input.externalExecutionId,
+      reportReference: input.reportReference,
+      reportUrl: input.reportUrl,
+      executiveSummary: input.executiveSummary,
+      riskLevel: input.riskLevel,
+      topConcerns: input.topConcerns
+    })
+  ) {
+    return {
+      ...dispatch,
+      deduplicated: true as const
+    };
+  }
 
   const reportPayload = {
     reportReference: input.reportReference ?? null,
@@ -813,5 +956,8 @@ export async function recordWorkflowReportReady(input: {
     }
   });
 
-  return updatedDispatch;
+  return {
+    ...updatedDispatch,
+    deduplicated: false as const
+  };
 }

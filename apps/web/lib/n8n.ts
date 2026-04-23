@@ -15,7 +15,7 @@ import {
 } from "./commercial-catalog";
 import { getIntegrationEnvironmentLabel } from "./integration-contracts";
 import { getAppUrl, getOptionalEnv, getOptionalJsonEnv } from "./runtime-config";
-import { extractNormalizedWorkflowHints } from "./workflow-routing";
+import { extractNormalizedWorkflowHints } from "./workflow-routing-hints";
 
 export type N8nWorkflowName =
   | "auditRequested"
@@ -75,6 +75,31 @@ export type N8nEnvelope = {
     featureFlags: unknown;
     reasonCodes: string[];
   };
+  request_id?: string;
+  dispatchId?: string;
+  reportWritebackUrl?: string;
+  report_writeback_url?: string;
+  callbacks?: ReturnType<typeof buildWorkflowCallbackUrls>;
+  callbackAuth?: {
+    scheme: "bearer";
+    token: string;
+    authorizationHeader: string;
+  };
+  callback_auth?: {
+    scheme: "bearer";
+    token: string;
+    authorization_header: string;
+  };
+  reportTarget?: {
+    reportId: string;
+    dashboardUrl: string;
+    exportUrl: string;
+  };
+  assessment?: {
+    assessmentId: string;
+    intakeUrl: string;
+    reportId: string | null;
+  };
 };
 
 export type AuditRequestedN8nPayload = {
@@ -105,11 +130,29 @@ export type AuditRequestedN8nPayload = {
     report_writeback_url: string;
     auth_scheme: "bearer";
   };
+  callbackAuth: {
+    scheme: "bearer";
+    token: string;
+    authorizationHeader: string;
+  };
+  callback_auth: {
+    scheme: "bearer";
+    token: string;
+    authorization_header: string;
+  };
   callback_urls: {
     status_update_url: string;
     report_ready_url: string;
     failure_url: string;
   };
+  statusCallbackUrl: string;
+  reportReadyCallbackUrl: string;
+  failureCallbackUrl: string;
+  reportWritebackUrl: string;
+  status_callback_url: string;
+  report_ready_callback_url: string;
+  failure_callback_url: string;
+  report_writeback_url: string;
   workflowDispatchId: string;
   dispatchId: string;
   organizationId: string;
@@ -123,6 +166,15 @@ export type AuditRequestedN8nPayload = {
   correlationId: string;
   tier: string;
   workflowType: string;
+  workflow_code: string;
+  routeKey: string;
+  routeDisposition: string;
+  processingTier: string;
+  route_key: string;
+  route_disposition: string;
+  processing_tier: string;
+  report_template: string;
+  processing_depth: string;
   analysisProvider: string | null;
   analysisModel: string | null;
   synthesisProvider: string | null;
@@ -230,7 +282,7 @@ export type N8nDestination = {
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_WORKFLOW_EVENT_MAP: Record<N8nWorkflowName, string[]> = {
-  auditRequested: ["audit.requested"],
+  auditRequested: ["audit.requested", "assessment.submitted"],
   leadPipeline: ["lead.captured", "lead.converted", "customer_account.stage_changed"],
   customerOnboarding: ["org.created", "onboarding.completed"],
   onboardingVisibility: ["onboarding.started"],
@@ -382,6 +434,19 @@ export function buildN8nEnvelope(input: {
   correlationId: string;
 }): N8nEnvelope {
   const routing = extractNormalizedWorkflowHints(input.event.payload);
+  const payload = readEventPayload(input.event.payload);
+  const callbackToken =
+    getOptionalEnv("N8N_CALLBACK_SHARED_SECRET") ??
+    getOptionalEnv("N8N_CALLBACK_SECRET") ??
+    "";
+  const callbackAuthorizationHeader = callbackToken
+    ? `Bearer ${callbackToken}`
+    : "";
+  const callbacks =
+    input.event.type === "assessment.submitted" ? buildWorkflowCallbackUrls() : undefined;
+  const reportId = normalizeOptionalString(payload.reportId);
+  const assessmentId = normalizeOptionalString(payload.assessmentId);
+  const appUrl = getAppUrl();
 
   return {
     source: "evolve-edge",
@@ -408,6 +473,8 @@ export function buildN8nEnvelope(input: {
       occurredAt: input.event.occurredAt.toISOString(),
       payload: input.event.payload
     },
+    request_id: input.delivery.id,
+    dispatchId: input.delivery.id,
     routing: routing.workflowHints
       ? {
           decisionId: routing.decisionId,
@@ -419,6 +486,37 @@ export function buildN8nEnvelope(input: {
           quotaState: routing.workflowHints.quotaState,
           featureFlags: routing.workflowHints.featureFlags,
           reasonCodes: routing.reasonCodes
+        }
+      : undefined,
+    callbacks,
+    callbackAuth: callbacks
+      ? {
+          scheme: "bearer",
+          token: callbackToken,
+          authorizationHeader: callbackAuthorizationHeader
+        }
+      : undefined,
+    callback_auth: callbacks
+      ? {
+          scheme: "bearer",
+          token: callbackToken,
+          authorization_header: callbackAuthorizationHeader
+        }
+      : undefined,
+    reportWritebackUrl: callbacks?.report_writeback_url,
+    report_writeback_url: callbacks?.report_writeback_url,
+    reportTarget: reportId
+      ? {
+          reportId,
+          dashboardUrl: `${appUrl}/dashboard/reports/${reportId}`,
+          exportUrl: `${appUrl}/api/reports/${reportId}/export`
+        }
+      : undefined,
+    assessment: assessmentId
+      ? {
+          assessmentId,
+          intakeUrl: `${appUrl}/dashboard/assessments/${assessmentId}`,
+          reportId
         }
       : undefined
   };
@@ -584,6 +682,9 @@ export function buildAuditRequestedPayload(input: {
     getOptionalEnv("N8N_CALLBACK_SHARED_SECRET") ??
     getOptionalEnv("N8N_CALLBACK_SECRET") ??
     "";
+  const callbackAuthorizationHeader = callbackToken
+    ? `Bearer ${callbackToken}`
+    : "";
   const routingReasonRecord = readJsonObject(routingReason);
   const hintedTopConcerns = normalizeOptionalStringArray(normalizedHintRecord.top_concerns);
   const topConcerns =
@@ -609,6 +710,18 @@ export function buildAuditRequestedPayload(input: {
     typeof normalizedHintRecord.workflow_type === "string"
       ? normalizedHintRecord.workflow_type.trim()
       : "";
+  const routeKey =
+    normalizeOptionalString(normalizedHintRecord.route_key) ??
+    normalizeOptionalString(normalizedHintRecord.routeKey) ??
+    String(input.routingSnapshot.workflowCode).toLowerCase();
+  const routeDisposition =
+    normalizeOptionalString(normalizedHintRecord.route_disposition) ??
+    normalizeOptionalString(normalizedHintRecord.routeDisposition) ??
+    String(input.routingSnapshot.status).toLowerCase();
+  const processingTier =
+    normalizeOptionalString(normalizedHintRecord.processing_tier) ??
+    normalizeOptionalString(normalizedHintRecord.processingTier) ??
+    processingDepth;
   const businessContext = readJsonObject(
     normalizedHintRecord.business_context
   ) as Prisma.JsonObject;
@@ -673,7 +786,25 @@ export function buildAuditRequestedPayload(input: {
       environment: getIntegrationEnvironmentLabel()
     },
     callbacks,
+    callbackAuth: {
+      scheme: "bearer",
+      token: callbackToken,
+      authorizationHeader: callbackAuthorizationHeader
+    },
+    callback_auth: {
+      scheme: "bearer",
+      token: callbackToken,
+      authorization_header: callbackAuthorizationHeader
+    },
     callback_urls: callbackUrls,
+    statusCallbackUrl: callbacks.status_url,
+    reportReadyCallbackUrl: callbacks.report_ready_url,
+    failureCallbackUrl: callbacks.failure_url,
+    reportWritebackUrl: callbacks.report_writeback_url,
+    status_callback_url: callbacks.status_url,
+    report_ready_callback_url: callbacks.report_ready_url,
+    failure_callback_url: callbacks.failure_url,
+    report_writeback_url: callbacks.report_writeback_url,
     workflowDispatchId: input.dispatchId ?? "",
     dispatchId: input.dispatchId ?? "",
     organizationId: input.routingSnapshot.organizationId,
@@ -687,6 +818,15 @@ export function buildAuditRequestedPayload(input: {
     correlationId: input.correlationId ?? "",
     tier: normalizedPlanCode,
     workflowType,
+    workflow_code: String(input.routingSnapshot.workflowCode).toLowerCase(),
+    routeKey,
+    routeDisposition,
+    processingTier,
+    route_key: routeKey,
+    route_disposition: routeDisposition,
+    processing_tier: processingTier,
+    report_template: reportTemplate,
+    processing_depth: processingDepth,
     analysisProvider,
     analysisModel,
     synthesisProvider,

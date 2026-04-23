@@ -1,5 +1,3 @@
-import "server-only";
-
 import {
   CANONICAL_PLAN_CODES,
   CANONICAL_ENV_GROUPS,

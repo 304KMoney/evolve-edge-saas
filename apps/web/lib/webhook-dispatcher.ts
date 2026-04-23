@@ -9,6 +9,10 @@ import {
   isProcessingClaimStale,
   normalizeExternalError
 } from "./reliability";
+import {
+  canReplayWebhookDelivery,
+  resolveRecoveredWebhookDeliveryState
+} from "./webhook-delivery-policy";
 import { maskEmail, readTraceIdFromPayload } from "./intake-observability";
 import { markCustomerRunCrmSyncResult } from "./customer-runs";
 import { logServerEvent, sendOperationalAlert } from "./monitoring";
@@ -35,7 +39,6 @@ type OutboundWebhookDestination = {
   provider?: "generic" | "n8n" | "hubspot";
   timeoutMs?: number;
 };
-
 const MAX_DELIVERY_ATTEMPTS = 5;
 const RETRY_DELAYS_MINUTES = [1, 5, 15, 60];
 const DEFAULT_DELIVERY_TIMEOUT_MS = 10_000;
@@ -218,20 +221,13 @@ async function recoverStaleWebhookDeliveries(limit: number) {
       continue;
     }
 
+    const recoveryState = resolveRecoveredWebhookDeliveryState({
+      attemptCount: delivery.attemptCount
+    });
+
     await prisma.webhookDelivery.update({
       where: { id: delivery.id },
-      data: {
-        status:
-          delivery.attemptCount >= MAX_DELIVERY_ATTEMPTS
-            ? WebhookDeliveryStatus.FAILED
-            : WebhookDeliveryStatus.RETRYING,
-        nextRetryAt:
-          delivery.attemptCount >= MAX_DELIVERY_ATTEMPTS ? null : new Date(),
-        lastError:
-          delivery.attemptCount >= MAX_DELIVERY_ATTEMPTS
-            ? "Webhook delivery exhausted retries after becoming stale in processing."
-            : "Webhook delivery was recovered after exceeding the processing timeout."
-      }
+      data: recoveryState
     });
 
     await reconcileEventStatus(delivery.eventId);
@@ -814,6 +810,14 @@ export async function replayWebhookDeliveryById(deliveryId: string) {
 
   if (!destination) {
     throw new Error(`Missing destination configuration: ${delivery.destination}`);
+  }
+
+  if (!canReplayWebhookDelivery(delivery.status)) {
+    throw new Error(
+      delivery.status === WebhookDeliveryStatus.DELIVERED
+        ? "Webhook delivery was already delivered and cannot be replayed."
+        : "Webhook delivery is currently processing and cannot be replayed."
+    );
   }
 
   await prisma.webhookDelivery.update({

@@ -63,6 +63,18 @@ function runEventReplayTests() {
   }
 
   {
+    const eligibility = getWebhookDeliveryReplayEligibility({
+      status: WebhookDeliveryStatus.PROCESSING,
+      lastError: "Still running",
+      destinationConfigured: true,
+      replayCount24h: 0
+    });
+
+    assert.equal(eligibility.eligible, false);
+    assert.equal(eligibility.code, "in_flight");
+  }
+
+  {
     const originalDestinations = process.env.OUTBOUND_WEBHOOK_DESTINATIONS;
     const originalDemoMode = process.env.DEMO_MODE_ENABLED;
     const originalDemoSideEffects = process.env.DEMO_EXTERNAL_SIDE_EFFECTS;

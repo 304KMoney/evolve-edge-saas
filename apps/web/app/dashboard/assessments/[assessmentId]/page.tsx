@@ -90,13 +90,13 @@ export default async function AssessmentDetailPage({
 
         {query.saved ? (
           <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-accent">
-            Intake section saved successfully.
+            Intake section saved successfully. Sections with notes now count as an active draft, so this assessment can move toward analysis once the team is ready.
           </div>
         ) : null}
 
         {query.submitted ? (
           <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-accent">
-            Assessment submitted. An analysis job has been queued for downstream report generation.
+            Assessment submitted. The app queued analysis for this assessment and the downstream workflow can now generate findings and reports.
           </div>
         ) : null}
 
@@ -222,7 +222,7 @@ export default async function AssessmentDetailPage({
               </p>
               {!intakeProgress.isReadyForSubmission ? (
                 <p className="mt-2 text-sm text-warning">
-                  Complete at least one section before this assessment can move into analysis.
+                  Save at least one section as in progress or completed before this assessment can move into analysis.
                 </p>
               ) : null}
             </div>
@@ -233,7 +233,7 @@ export default async function AssessmentDetailPage({
                 disabled={!intakeProgress.isReadyForSubmission}
                 className="rounded-full bg-[#0f172a] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Submit assessment
+                Queue analysis
               </button>
             </form>
           </div>

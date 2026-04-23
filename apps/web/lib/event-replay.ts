@@ -12,10 +12,6 @@ import {
   WebhookDeliveryStatus,
   prisma
 } from "@evolve-edge/db";
-import {
-  REPLAYABLE_STRIPE_EVENT_TYPES,
-  replayStoredStripeBillingEvent
-} from "./stripe-billing-replay";
 import { buildCorrelationId, normalizeExternalError } from "./reliability";
 import { getOutboundWebhookDestinations, replayDomainEventDeliveries, replayWebhookDeliveryById } from "./webhook-dispatcher";
 import {
@@ -30,6 +26,18 @@ type ReplayDbClient = Prisma.TransactionClient | typeof prisma;
 
 const MAX_REPLAY_ATTEMPTS_PER_24H = 3;
 const REPLAY_WINDOW_HOURS = 24;
+const REPLAYABLE_STRIPE_EVENT_TYPES = [
+  "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
+  "checkout.session.async_payment_failed",
+  "customer.subscription.created",
+  "customer.subscription.updated",
+  "customer.subscription.deleted",
+  "invoice.paid",
+  "invoice.payment_failed",
+  "invoice.payment_action_required",
+  "customer.subscription.trial_will_end"
+] as const;
 
 export const EVENT_REPLAY_TARGET_TYPES = Object.values(
   EventReplayTargetType
@@ -120,6 +128,16 @@ function buildRateLimitedEligibility(replayCount: number): ReplayEligibility | n
     retryable: false,
     normalizedState: "failed_terminal"
   };
+}
+
+async function replayStoredStripeBillingEventLazy(input: {
+  billingEventId: string;
+  actorEmail: string;
+  requestContext: Prisma.InputJsonValue;
+}) {
+  const moduleName = "./stripe-billing-replay";
+  const { replayStoredStripeBillingEvent } = await import(moduleName);
+  return replayStoredStripeBillingEvent(input);
 }
 
 export function getBillingEventReplayEligibility(input: {
@@ -444,7 +462,7 @@ export async function requestEventReplay(
     });
 
     try {
-      const result = await replayStoredStripeBillingEvent({
+      const result = await replayStoredStripeBillingEventLazy({
         billingEventId: event.id,
         actorEmail: input.userEmail,
         requestContext: {

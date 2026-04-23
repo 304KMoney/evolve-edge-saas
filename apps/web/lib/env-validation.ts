@@ -72,12 +72,25 @@ function isEnabledViaFlag(name: string) {
   return readEnv(name).toLowerCase() === "true";
 }
 
+function isHubSpotFeatureEnabled() {
+  const configured = readEnv("HUBSPOT_SYNC_ENABLED").toLowerCase();
+
+  if (configured === "false") {
+    return false;
+  }
+
+  if (configured === "true") {
+    return true;
+  }
+
+  return Boolean(readEnv("HUBSPOT_ACCESS_TOKEN"));
+}
+
 function getValidationContext(): EnvValidationContext {
   const runtime = getRuntimeEnvironment();
 
   const hasStripeEnv =
     Boolean(readEnv("STRIPE_SECRET_KEY")) || Boolean(readEnv("STRIPE_WEBHOOK_SECRET"));
-  const hasHubSpotEnv = Boolean(readEnv("HUBSPOT_ACCESS_TOKEN"));
   const hasDifyEnv =
     Boolean(readEnvWithAliases("DIFY_API_BASE_URL", ["DIFY_BASE_URL"])) ||
     Boolean(readEnv("DIFY_API_KEY")) ||
@@ -95,7 +108,7 @@ function getValidationContext(): EnvValidationContext {
     runtime,
     features: {
       stripe: isEnabledViaFlag("STRIPE_FLOW_ENABLED") || runtime === "production" || hasStripeEnv,
-      hubspot: isEnabledViaFlag("HUBSPOT_SYNC_ENABLED") || hasHubSpotEnv,
+      hubspot: isHubSpotFeatureEnabled(),
       dify: isEnabledViaFlag("DIFY_EXECUTION_ENABLED") || hasDifyEnv,
       n8n: isEnabledViaFlag("N8N_DISPATCH_ENABLED") || runtime === "production" || hasN8nEnv,
       resendEmail: hasResendEnv,

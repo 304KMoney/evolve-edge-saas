@@ -3,6 +3,10 @@ import {
   WorkflowDispatchStatus,
   prisma
 } from "@evolve-edge/db";
+import {
+  buildFulfillmentVisibilitySummary,
+  listFulfillmentVisibilityEntries
+} from "./fulfillment-visibility";
 import { getN8nWorkflowDestinationByName } from "./n8n";
 import { requireEnv } from "./runtime-config";
 
@@ -20,7 +24,8 @@ export async function getFulfillmentHealthSnapshot() {
     actionRequiredCustomerRuns,
     failedCustomerRuns,
     pendingWorkflowDispatches,
-    latestWorkflowDispatch
+    latestWorkflowDispatch,
+    fulfillmentVisibilityEntries
   ] = await Promise.all([
     prisma.customerRun.count({
       where: {
@@ -51,15 +56,24 @@ export async function getFulfillmentHealthSnapshot() {
         updatedAt: true,
         lastError: true
       }
+    }),
+    listFulfillmentVisibilityEntries({
+      db: prisma,
+      limit: 12
     })
   ]);
+  const visibilitySummary = buildFulfillmentVisibilitySummary(
+    fulfillmentVisibilityEntries
+  );
 
   return {
     ok: true as const,
     route: "/api/fulfillment/health",
     checkedAt: new Date().toISOString(),
     status:
-      actionRequiredCustomerRuns > 0 || failedCustomerRuns > 0
+      actionRequiredCustomerRuns > 0 ||
+      failedCustomerRuns > 0 ||
+      visibilitySummary.counts.attention > 0
         ? "attention"
         : "live",
     pipeline: {
@@ -80,6 +94,11 @@ export async function getFulfillmentHealthSnapshot() {
             }
           : null
       }
+    },
+    reconciliation: {
+      counts: visibilitySummary.counts,
+      recentAttention: visibilitySummary.recentAttention,
+      recentRecovered: visibilitySummary.recentRecovered
     }
   };
 }

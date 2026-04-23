@@ -1,5 +1,3 @@
-import "server-only";
-
 import { getOptionalEnv } from "./runtime-config";
 export {
   buildTopConcernsFromFindings,

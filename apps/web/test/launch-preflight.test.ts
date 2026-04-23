@@ -29,6 +29,7 @@ function clearRelevantEnv() {
   delete env.HUBSPOT_ACCESS_TOKEN;
   delete env.DIFY_API_BASE_URL;
   delete env.DIFY_API_KEY;
+  delete env.PUBLIC_INTAKE_SHARED_SECRET;
 }
 
 function runLaunchPreflightTests() {
@@ -47,7 +48,7 @@ function runLaunchPreflightTests() {
   process.env.AUTH_ACCESS_EMAIL = "ops@example.com";
   process.env.AUTH_ACCESS_PASSWORD = "password";
   process.env.DATABASE_URL = "postgres://example";
-  process.env.STRIPE_SECRET_KEY = "sk_test_123";
+  process.env.STRIPE_SECRET_KEY = "sk_live_123";
   process.env.STRIPE_WEBHOOK_SECRET = "whsec_123";
   process.env.OUTBOUND_DISPATCH_SECRET = "dispatch_secret";
   process.env.N8N_CALLBACK_SECRET = "callback_secret";
@@ -60,6 +61,7 @@ function runLaunchPreflightTests() {
   process.env.STRIPE_PRODUCT_STARTER = "prod_starter";
   process.env.STRIPE_PRODUCT_SCALE = "prod_scale";
   process.env.STRIPE_PRODUCT_ENTERPRISE = "prod_enterprise";
+  process.env.PUBLIC_INTAKE_SHARED_SECRET = "public_intake_secret";
 
   const passed = runFirstCustomerLaunchPreflight();
   assert.equal(passed.status, "pass");

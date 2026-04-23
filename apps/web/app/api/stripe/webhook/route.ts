@@ -50,6 +50,7 @@ import {
   classifyStripeWebhookVerificationFailure,
   classifyUnsupportedStripeWebhookEvent
 } from "../../../../lib/stripe-webhook-errors";
+import { shouldEmitStripeWebhookFailureArtifacts } from "../../../../lib/stripe-webhook-failure";
 import {
   claimStripeWebhookEventProcessing,
   markStripeWebhookEventFailed,
@@ -233,6 +234,19 @@ async function handleFailedBillingEvent(
   }
 
   const organizationId = await findOrganizationIdForStripeObject(event.data.object);
+
+  if (
+    !shouldEmitStripeWebhookFailureArtifacts({
+      transitioned: failedResult.transitioned,
+      billingEventId: billingEvent.id,
+      organizationId
+    })
+  ) {
+    return {
+      transitioned: failedResult.transitioned,
+      billingEvent
+    };
+  }
 
   if (!organizationId) {
     return {

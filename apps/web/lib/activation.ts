@@ -130,7 +130,7 @@ export async function getOrganizationActivationSnapshot(
       label: "First assessment started",
       description: "Create the first live assessment so the product has real operating context.",
       completed: assessmentsCount > 0,
-      href: "/dashboard/assessments",
+      href: "/dashboard/assessments/start",
       ctaLabel: "Start first assessment"
     },
     {
@@ -138,8 +138,10 @@ export async function getOrganizationActivationSnapshot(
       label: "Assessment submitted for analysis",
       description: "Complete enough intake to queue analysis and move from setup into actual governance work.",
       completed: submittedAssessmentsCount > 0,
-      href: latestAssessment ? `/dashboard/assessments/${latestAssessment.id}` : "/dashboard/assessments",
-      ctaLabel: latestAssessment ? "Complete intake" : "Open assessments"
+      href: latestAssessment
+        ? `/dashboard/assessments/${latestAssessment.id}`
+        : "/dashboard/assessments/start",
+      ctaLabel: latestAssessment ? "Complete intake" : "Start intake"
     },
     {
       key: "firstReportGenerated",

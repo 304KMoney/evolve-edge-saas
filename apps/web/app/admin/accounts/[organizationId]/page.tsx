@@ -682,6 +682,88 @@ export default async function AdminAccountDetailPage({
         </section>
 
         <section className="mt-10 rounded-2xl border border-line p-5">
+          <h2 className="text-lg font-semibold text-ink">Fulfillment drift and recovery</h2>
+          <p className="mt-2 text-sm text-steel">
+            Operator-focused alignment between delivery state, workflow dispatch, customer runs, and outbound delivery for this workspace.
+          </p>
+          <div className="mt-5 grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm text-steel">Attention</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {billingAdminSnapshot.fulfillmentVisibility.counts.attention}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm text-steel">Recovered</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {billingAdminSnapshot.fulfillmentVisibility.counts.recovered}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm text-steel">Critical</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {billingAdminSnapshot.fulfillmentVisibility.counts.critical}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm text-steel">Aligned</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {billingAdminSnapshot.fulfillmentVisibility.counts.aligned}
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            {billingAdminSnapshot.fulfillmentVisibility.recentAttention.length > 0 ? (
+              billingAdminSnapshot.fulfillmentVisibility.recentAttention.map((finding) => (
+                <div key={`${finding.linkage.deliveryStateId}:${finding.code}`} className="rounded-2xl bg-mist p-4">
+                  <p className="font-medium text-ink">
+                    {finding.title} Â· {formatStatus(finding.severity)}
+                  </p>
+                  <p className="mt-1 text-sm text-steel">{finding.summary}</p>
+                  <p className="mt-2 text-xs text-steel">
+                    Delivery {finding.linkage.deliveryStateId} Â· Dispatch {finding.linkage.workflowDispatchId ?? "n/a"} Â·
+                    Run {finding.linkage.customerRunId ?? "n/a"} Â· Report {finding.linkage.reportId ?? "n/a"}
+                  </p>
+                  <p className="mt-2 text-xs text-steel">
+                    Delivery {formatStatus(finding.state.deliveryStatus)} Â· Customer run{" "}
+                    {finding.state.customerRunStatus ? formatStatus(finding.state.customerRunStatus) : "None"} Â·
+                    Step {finding.state.customerRunStep ? formatStatus(finding.state.customerRunStep) : "None"}
+                  </p>
+                  {finding.state.failedDestinations.length > 0 ? (
+                    <p className="mt-2 text-xs text-steel">
+                      Failed outbound: {finding.state.failedDestinations.join(", ")}
+                    </p>
+                  ) : null}
+                  {finding.recommendedAction ? (
+                    <p className="mt-2 text-xs text-steel">
+                      Action: {finding.recommendedAction}
+                    </p>
+                  ) : null}
+                </div>
+              ))
+            ) : billingAdminSnapshot.fulfillmentVisibility.recentRecovered.length > 0 ? (
+              billingAdminSnapshot.fulfillmentVisibility.recentRecovered.map((finding) => (
+                <div key={`${finding.linkage.deliveryStateId}:${finding.code}`} className="rounded-2xl bg-mist p-4">
+                  <p className="font-medium text-ink">
+                    {finding.title} Â· {formatStatus(finding.status)}
+                  </p>
+                  <p className="mt-1 text-sm text-steel">{finding.summary}</p>
+                  <p className="mt-2 text-xs text-steel">
+                    Delivery {formatStatus(finding.state.deliveryStatus)} Â· Dispatch{" "}
+                    {finding.state.workflowDispatchStatus ? formatStatus(finding.state.workflowDispatchStatus) : "None"} Â·
+                    Recovered {formatDate(finding.state.recoveryAt ? new Date(finding.state.recoveryAt) : null)}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl bg-mist p-4 text-sm text-steel">
+                No fulfillment drift or recovery signals are currently open for this workspace.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-2xl border border-line p-5">
           <h2 className="text-lg font-semibold text-ink">Delivery reconciliation findings</h2>
           <p className="mt-2 text-sm text-steel">
             Backend-detected mismatches between payment, routing, execution, and delivery records for this workspace.

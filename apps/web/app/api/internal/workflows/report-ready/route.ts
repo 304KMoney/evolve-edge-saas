@@ -20,6 +20,8 @@ import {
   readOptionalStringArray,
   ValidationError
 } from "../../../../../lib/security-validation";
+import { buildWorkflowCallbackErrorBody } from "../../../../../lib/workflow-callback-route-error";
+import { buildWorkflowCallbackSuccessBody } from "../../../../../lib/workflow-callback-route-response";
 import {
   isAuthorizedWorkflowWritebackRequest,
   recordWorkflowReportReady,
@@ -100,7 +102,19 @@ export async function POST(request: Request) {
         metadata: envPresence,
         requestContext
       });
-      return new NextResponse("Unauthorized", { status: 401 });
+      return NextResponse.json(
+        maybeAddTraceDebug(
+          buildWorkflowCallbackErrorBody({
+            code: "unauthorized_callback",
+            errorClass: "non_retryable_validation",
+            retryable: false,
+            operatorVisible: false,
+            message: "Unauthorized workflow callback request."
+          }),
+          traceId
+        ),
+        { status: 401 }
+      );
     }
 
     logServerEvent("info", "workflow.callback.report_ready.auth_passed", {
@@ -162,6 +176,28 @@ export async function POST(request: Request) {
       requestContext
     });
 
+    if (result.deduplicated) {
+      logServerEvent("info", "workflow.callback.report_ready.deduplicated", {
+        traceId,
+        route,
+        dispatch_id: result.id,
+        status: result.status,
+        source: "n8n.callback",
+        requestContext
+      });
+
+      return NextResponse.json(
+        maybeAddTraceDebug(
+          buildWorkflowCallbackSuccessBody({
+            dispatchId: result.id,
+            status: result.status,
+            deduplicated: true
+          }),
+          traceId
+        )
+      );
+    }
+
     logServerEvent("info", "workflow.callback.report_ready.completed", {
       traceId,
       route,
@@ -182,11 +218,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       maybeAddTraceDebug(
-        {
-          ok: true,
+        buildWorkflowCallbackSuccessBody({
           dispatchId: result.id,
           status: result.status
-        },
+        }),
         traceId
       )
     );
@@ -202,7 +237,19 @@ export async function POST(request: Request) {
           message: error.message
         }
       });
-      return NextResponse.json(maybeAddTraceDebug({ error: error.message }, traceId), { status: 400 });
+      return NextResponse.json(
+        maybeAddTraceDebug(
+          buildWorkflowCallbackErrorBody({
+            code: "malformed_payload",
+            errorClass: "non_retryable_validation",
+            retryable: false,
+            operatorVisible: false,
+            message: error.message
+          }),
+          traceId
+        ),
+        { status: 400 }
+      );
     }
 
     logServerEvent("error", "workflow.callback.report_ready.failed", {
@@ -226,9 +273,13 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(
       maybeAddTraceDebug(
-        {
-          error: error instanceof Error ? error.message : "Unknown error"
-        },
+        buildWorkflowCallbackErrorBody({
+          code: "callback_processing_failed",
+          errorClass: "retryable",
+          retryable: true,
+          operatorVisible: true,
+          message: error instanceof Error ? error.message : "Unknown error"
+        }),
         traceId
       ),
       { status: 500 }

@@ -816,7 +816,7 @@ export default async function AdminPage({
           <p className="mt-2 text-sm text-steel">
             Cross-org visibility into reconciliation mismatches and report or delivery risks that already have backend-owned findings.
           </p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-line p-4">
               <p className="text-sm text-steel">Recent reconciliation mismatches</p>
               <p className="mt-2 text-2xl font-semibold text-ink">
@@ -829,8 +829,17 @@ export default async function AdminPage({
                 {scaleSnapshot.globalOpsDashboard.counts.recentDeliveryOpsFindings}
               </p>
             </div>
+            <div className="rounded-2xl border border-line p-4">
+              <p className="text-sm text-steel">Fulfillment drift or recovery</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {scaleSnapshot.globalOpsDashboard.counts.recentFulfillmentAttentionFindings}
+              </p>
+              <p className="mt-2 text-sm text-steel">
+                Recovered: {scaleSnapshot.globalOpsDashboard.counts.recentFulfillmentRecovered}
+              </p>
+            </div>
           </div>
-          <div className="mt-4 grid gap-6 lg:grid-cols-2">
+          <div className="mt-4 grid gap-6 lg:grid-cols-3">
             <div>
               <h3 className="text-base font-semibold text-ink">
                 Reconciliation mismatches
@@ -885,6 +894,117 @@ export default async function AdminPage({
                 ) : (
                   <div className="rounded-2xl border border-line p-4 text-sm text-steel">
                     No recent cross-org reconciliation mismatches matched this view.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-base font-semibold text-ink">
+                Fulfillment drift and recovery
+              </h3>
+              <div className="mt-3 space-y-3">
+                {scaleSnapshot.globalOpsDashboard.recentFulfillmentAttentionFindings.length > 0 ? (
+                  scaleSnapshot.globalOpsDashboard.recentFulfillmentAttentionFindings.map((finding) => {
+                    const accountHref = `/admin/accounts/${finding.organization.id}` as Route;
+
+                    return (
+                      <div key={`${finding.linkage.deliveryStateId}-${finding.code}`} className="rounded-2xl border border-line p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <Link
+                              href={accountHref}
+                              className="font-medium text-ink transition hover:text-accent"
+                            >
+                              {finding.organization.name}
+                            </Link>
+                            <p className="mt-1 text-sm text-steel">
+                              {finding.organization.slug}
+                            </p>
+                          </div>
+                          <div className="text-right text-sm text-steel">
+                            <p>{formatStatus(finding.severity)}</p>
+                            <p className="mt-1">{formatStatus(finding.state.deliveryStatus)}</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 font-medium text-ink">{finding.title}</p>
+                        <p className="mt-2 text-sm text-steel">{finding.summary}</p>
+                        <div className="mt-3 space-y-1 text-sm text-steel">
+                          <p>
+                            Delivery: {finding.linkage.deliveryStateId} Â· Dispatch{" "}
+                            {finding.linkage.workflowDispatchId ?? "Not linked"}
+                          </p>
+                          <p>
+                            Run: {finding.linkage.customerRunId ?? "Not linked"} Â· Report{" "}
+                            {finding.linkage.reportId ?? "Not linked"}
+                          </p>
+                          <p>
+                            Customer run: {finding.state.customerRunStatus ?? "None"} Â· Step{" "}
+                            {finding.state.customerRunStep ?? "None"}
+                          </p>
+                          {finding.state.failedDestinations.length > 0 ? (
+                            <p>
+                              Failed outbound: {finding.state.failedDestinations.join(", ")}
+                            </p>
+                          ) : null}
+                          {finding.recommendedAction ? (
+                            <p>Recommended action: {finding.recommendedAction}</p>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-3 text-sm font-medium">
+                          <Link
+                            href={accountHref}
+                            className="text-accent transition hover:text-ink"
+                          >
+                            Open organization account
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : scaleSnapshot.globalOpsDashboard.recentFulfillmentRecovered.length > 0 ? (
+                  scaleSnapshot.globalOpsDashboard.recentFulfillmentRecovered.map((finding) => {
+                    const accountHref = `/admin/accounts/${finding.organization.id}` as Route;
+
+                    return (
+                      <div key={`${finding.linkage.deliveryStateId}-${finding.code}`} className="rounded-2xl border border-line p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <Link
+                              href={accountHref}
+                              className="font-medium text-ink transition hover:text-accent"
+                            >
+                              {finding.organization.name}
+                            </Link>
+                            <p className="mt-1 text-sm text-steel">
+                              {finding.organization.slug}
+                            </p>
+                          </div>
+                          <div className="text-right text-sm text-steel">
+                            <p>{formatStatus(finding.status)}</p>
+                            <p className="mt-1">{formatDateTime(new Date(finding.observedAt))}</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 font-medium text-ink">{finding.title}</p>
+                        <p className="mt-2 text-sm text-steel">{finding.summary}</p>
+                        <div className="mt-3 space-y-1 text-sm text-steel">
+                          <p>
+                            Delivery: {finding.state.deliveryStatus} Â· Dispatch{" "}
+                            {finding.state.workflowDispatchStatus ?? "Not linked"}
+                          </p>
+                          <p>
+                            Recovery at:{" "}
+                            {formatDateTime(
+                              finding.state.recoveryAt ? new Date(finding.state.recoveryAt) : null
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-line p-4 text-sm text-steel">
+                    No recent fulfillment drift or recovery records matched this view.
                   </div>
                 )}
               </div>

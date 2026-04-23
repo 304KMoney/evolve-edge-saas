@@ -137,7 +137,16 @@ function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
-export function DashboardShell({ data }: { data: DashboardData }) {
+export function DashboardShell({
+  data,
+  flashMessage
+}: {
+  data: DashboardData;
+  flashMessage?: {
+    title: string;
+    body: string;
+  } | null;
+}) {
   const pathname = usePathname();
   const resolvedNavigation = data.isDemoMode
     ? [
@@ -248,13 +257,24 @@ export function DashboardShell({ data }: { data: DashboardData }) {
                 Notifications
               </Link>
               <Link
-                href="/dashboard/assessments"
+                href="/dashboard/assessments/start"
                 className="rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-4 py-2 text-sm font-semibold text-[#05111d]"
               >
                 Start Reassessment
               </Link>
             </div>
           </header>
+
+          {flashMessage ? (
+            <section className="mt-6 rounded-[24px] border border-emerald-200 bg-emerald-50 p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
+                {flashMessage.title}
+              </p>
+              <p className="mt-2 text-sm leading-7 text-ink">
+                {flashMessage.body}
+              </p>
+            </section>
+          ) : null}
 
           <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {data.metrics.map((metric) => (

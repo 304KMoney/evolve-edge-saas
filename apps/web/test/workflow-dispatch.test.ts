@@ -24,6 +24,9 @@ function runWorkflowDispatchTests() {
       workflowCode: CanonicalWorkflowCode.AUDIT_SCALE,
       status: RoutingSnapshotStatus.DISPATCH_QUEUED,
       normalizedHintsJson: {
+        route_key: "report.scale_enhanced",
+        route_disposition: "upgraded",
+        processing_tier: "enhanced",
         report_template: "scale_operating_report_from_snapshot",
         processing_depth: "scale",
         entitlement_summary: {
@@ -57,6 +60,18 @@ function runWorkflowDispatchTests() {
   assert.deepEqual(payload.routing.reason, {
     codes: ["plan.scale"]
   });
+  assert.equal(payload.callbackAuth.scheme, "bearer");
+  assert.equal(payload.callback_auth.scheme, "bearer");
+  assert.equal(payload.statusCallbackUrl, payload.callbacks.status_url);
+  assert.equal(payload.reportWritebackUrl, payload.callbacks.report_writeback_url);
+  assert.equal(payload.workflow_code, "audit_scale");
+  assert.equal(payload.routeKey, "report.scale_enhanced");
+  assert.equal(payload.route_key, "report.scale_enhanced");
+  assert.equal(payload.routeDisposition, "upgraded");
+  assert.equal(payload.processingTier, "enhanced");
+  assert.equal(payload.processing_tier, "enhanced");
+  assert.equal(payload.report_template, "scale_operating_report_from_snapshot");
+  assert.equal(payload.processing_depth, "scale");
   assert.deepEqual(payload.routing.quota_state, {
     audits_remaining: 9
   });
