@@ -15,6 +15,33 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+type ContactSalesSearchParams = {
+  intent?: string | string[];
+  source?: string | string[];
+  submitted?: string | string[];
+  submission?: string | string[];
+  status?: string | string[];
+  hubspot?: string | string[];
+  workflow?: string | string[];
+  trace?: string | string[];
+  error?: string | string[];
+};
+
+function readFirstParam(
+  value: string | string[] | undefined,
+  fallback = ""
+) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value[0] ?? fallback;
+  }
+
+  return fallback;
+}
+
 const defaultTrustBullets = [
   "Executive-ready risk reporting",
   "Built for regulated and high-trust teams",
@@ -59,76 +86,19 @@ function formatDeliveryStatus(value: string, provider: "hubspot" | "workflow") {
 export default async function ContactSalesPage({
   searchParams
 }: {
-  searchParams: Promise<{
-    intent?: string | string[];
-    source?: string | string[];
-    submitted?: string | string[];
-    submission?: string | string[];
-    status?: string | string[];
-    hubspot?: string | string[];
-    workflow?: string | string[];
-    trace?: string | string[];
-    error?: string | string[];
-  }>;
+  searchParams?: Promise<ContactSalesSearchParams> | ContactSalesSearchParams;
 }) {
   const session = await getOptionalCurrentSession();
-  const rawParams = await searchParams;
-  const intent =
-    typeof rawParams.intent === "string"
-      ? rawParams.intent
-      : Array.isArray(rawParams.intent)
-        ? rawParams.intent[0] ?? ""
-        : "";
-  const source =
-    typeof rawParams.source === "string"
-      ? rawParams.source
-      : Array.isArray(rawParams.source)
-        ? rawParams.source[0] ?? ""
-        : "";
-  const submitted =
-    typeof rawParams.submitted === "string"
-      ? rawParams.submitted
-      : Array.isArray(rawParams.submitted)
-        ? rawParams.submitted[0] ?? ""
-        : "";
-  const error =
-    typeof rawParams.error === "string"
-      ? rawParams.error
-      : Array.isArray(rawParams.error)
-        ? rawParams.error[0] ?? ""
-        : "";
-  const submission =
-    typeof rawParams.submission === "string"
-      ? rawParams.submission
-      : Array.isArray(rawParams.submission)
-        ? rawParams.submission[0] ?? ""
-        : submitted;
-  const status =
-    typeof rawParams.status === "string"
-      ? rawParams.status
-      : Array.isArray(rawParams.status)
-        ? rawParams.status[0] ?? ""
-        : submitted
-          ? "success"
-          : "";
-  const hubspot =
-    typeof rawParams.hubspot === "string"
-      ? rawParams.hubspot
-      : Array.isArray(rawParams.hubspot)
-        ? rawParams.hubspot[0] ?? ""
-        : "";
-  const workflow =
-    typeof rawParams.workflow === "string"
-      ? rawParams.workflow
-      : Array.isArray(rawParams.workflow)
-        ? rawParams.workflow[0] ?? ""
-        : "";
-  const trace =
-    typeof rawParams.trace === "string"
-      ? rawParams.trace
-      : Array.isArray(rawParams.trace)
-        ? rawParams.trace[0] ?? ""
-        : "";
+  const rawParams = (searchParams ? await searchParams : undefined) ?? {};
+  const intent = readFirstParam(rawParams.intent);
+  const source = readFirstParam(rawParams.source);
+  const submitted = readFirstParam(rawParams.submitted);
+  const error = readFirstParam(rawParams.error);
+  const submission = readFirstParam(rawParams.submission, submitted);
+  const status = readFirstParam(rawParams.status, submitted ? "success" : "");
+  const hubspot = readFirstParam(rawParams.hubspot);
+  const workflow = readFirstParam(rawParams.workflow);
+  const trace = readFirstParam(rawParams.trace);
   const salesEmail = getSalesContactEmail();
   const isFoundingAuditIntent = intent.includes("founding-risk-audit");
   const primaryHref = session
