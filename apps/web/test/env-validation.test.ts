@@ -68,6 +68,9 @@ function runEnvValidationTests() {
   assert.equal(enabledHubSpotKey?.configured, true);
 
   delete process.env.NEXT_PHASE;
+  assert.equal(shouldEnforceCriticalEnvironmentParity(), false);
+
+  env.VERCEL_ENV = "production";
   assert.equal(shouldEnforceCriticalEnvironmentParity(), true);
 
   process.env.NEXT_PHASE = "phase-production-build";
@@ -85,6 +88,7 @@ function runEnvValidationTests() {
   delete process.env.DIFY_API_KEY;
   delete process.env.DIFY_WORKFLOW_ID;
   delete process.env.NEXT_PHASE;
+  delete env.VERCEL_ENV;
 
   if (originalNodeEnv) {
     env.NODE_ENV = originalNodeEnv;

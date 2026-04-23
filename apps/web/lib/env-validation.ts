@@ -281,7 +281,10 @@ export function assertCriticalEnvironmentParity() {
 }
 
 export function shouldEnforceCriticalEnvironmentParity() {
-  return getNextPhase() !== "phase-production-build";
+  return (
+    getRuntimeEnvironment() === "production" &&
+    getNextPhase() !== "phase-production-build"
+  );
 }
 
 export function logEnvironmentParityStatus() {
