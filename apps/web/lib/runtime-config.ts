@@ -63,7 +63,7 @@ export function getFoundingRiskAuditCallUrl() {
     return configured;
   }
 
-  return getFoundingRiskAuditOfferUrl();
+  return "https://meetings-na2.hubspot.com/kiel-green";
 }
 
 export function getHostingerReferenceUrl() {

@@ -84,7 +84,7 @@ function runRuntimeConfigTests() {
   );
   assert.equal(
     getFoundingRiskAuditCallUrl(),
-    "/contact?intent=founding-risk-audit&source=marketing-site"
+    "https://meetings-na2.hubspot.com/kiel-green"
   );
 
   process.env.API_RATE_LIMIT_WINDOW_MS = "120000";
