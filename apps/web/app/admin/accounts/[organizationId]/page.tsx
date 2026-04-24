@@ -25,6 +25,7 @@ import {
 } from "../../../../lib/engagement-programs";
 import { getOrganizationReportPackages } from "../../../../lib/executive-delivery";
 import { getOrganizationBillingManagementSnapshot } from "../../../../lib/billing-admin";
+import { getOrganizationDeliveryOperationsSnapshot } from "../../../../lib/report-delivery-operations";
 import { formatWorkflowRoutingDisposition } from "../../../../lib/workflow-routing";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,7 @@ function formatStatus(value: string | null | undefined) {
 
   return value
     .toLowerCase()
+    .replaceAll("-", " ")
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
@@ -90,10 +92,11 @@ export default async function AdminAccountDetailPage({
   );
   const { organizationId } = await params;
   const query = await searchParams;
-  const [lifecycle, customerRuns, reportPackages] = await Promise.all([
+  const [lifecycle, customerRuns, reportPackages, deliveryOperations] = await Promise.all([
     getCustomerLifecycleSnapshot(organizationId),
     getOrganizationCustomerRuns(organizationId, { limit: 8 }),
-    getOrganizationReportPackages(organizationId, { limit: 6 })
+    getOrganizationReportPackages(organizationId, { limit: 6 }),
+    getOrganizationDeliveryOperationsSnapshot({ organizationId })
   ]);
   const billingAdminSnapshot = await getOrganizationBillingManagementSnapshot(
     organizationId
@@ -795,6 +798,106 @@ export default async function AdminAccountDetailPage({
             ) : (
               <div className="rounded-2xl bg-mist p-4 text-sm text-steel">
                 No active reconciliation mismatches have been detected for this workspace.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-2xl border border-line p-5">
+          <h2 className="text-lg font-semibold text-ink">Delivery automation health</h2>
+          <p className="mt-2 text-sm text-steel">
+            App-owned billing gating and queued delivery email visibility for this workspace.
+          </p>
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="font-medium text-ink">
+                Billing {deliveryOperations.billing.eligible ? "eligible" : "blocked"}
+              </p>
+              <p className="mt-1 text-sm text-steel">
+                {deliveryOperations.billing.accessStateLabel}
+              </p>
+              <p className="mt-2 text-sm text-steel">
+                {deliveryOperations.billing.message}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="font-medium text-ink">
+                Dispatch {deliveryOperations.dispatch.configured ? "configured" : "needs setup"}
+              </p>
+              <p className="mt-2 text-sm text-steel">
+                {deliveryOperations.dispatch.message}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {deliveryOperations.dispatch.requiredEnv.map((entry) => (
+                  <span
+                    key={entry.key}
+                    className="rounded-full bg-white px-3 py-1 text-xs font-medium text-steel"
+                  >
+                    {entry.key}: {entry.configured ? "ready" : "missing"}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm text-steel">Pending</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {deliveryOperations.emailQueue.counts.pending}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm text-steel">Processing</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {deliveryOperations.emailQueue.counts.processing}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm text-steel">Sent</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {deliveryOperations.emailQueue.counts.sent}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm text-steel">Failed</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {deliveryOperations.emailQueue.counts.failed}
+              </p>
+            </div>
+          </div>
+          <p className="mt-5 text-sm text-steel">
+            Due now: {deliveryOperations.emailQueue.dueCount} | Scheduled later:{" "}
+            {deliveryOperations.emailQueue.scheduledCount} | Latest activity:{" "}
+            {formatDate(deliveryOperations.emailQueue.latestActivityAt)}
+          </p>
+          <div className="mt-5 space-y-3">
+            {deliveryOperations.emailQueue.notifications.length > 0 ? (
+              deliveryOperations.emailQueue.notifications.map((notification) => (
+                <div key={notification.id} className="rounded-2xl bg-mist p-4">
+                  <p className="font-medium text-ink">
+                    {formatStatus(notification.templateKey)}
+                  </p>
+                  <p className="mt-1 text-sm text-steel">
+                    {formatStatus(notification.status)} | Created{" "}
+                    {formatDate(notification.createdAt)}
+                  </p>
+                  <p className="mt-2 text-sm text-steel">
+                    {notification.sentAt
+                      ? `Sent ${formatDate(notification.sentAt)}`
+                      : notification.scheduledFor
+                        ? `Scheduled ${formatDate(notification.scheduledFor)}`
+                        : "Awaiting dispatch"}
+                  </p>
+                  {notification.lastError ? (
+                    <p className="mt-2 text-sm text-danger">
+                      Last error: {notification.lastError}
+                    </p>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl bg-mist p-4 text-sm text-steel">
+                No delivery emails or follow-ups have been queued for this workspace yet.
               </div>
             )}
           </div>

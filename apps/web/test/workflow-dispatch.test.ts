@@ -29,6 +29,15 @@ function runWorkflowDispatchTests() {
         processing_tier: "enhanced",
         report_template: "scale_operating_report_from_snapshot",
         processing_depth: "scale",
+        entitlement_source: "subscription",
+        capability_profile: {
+          report_depth: "enhanced",
+          max_findings: 10,
+          roadmap_detail: "detailed",
+          executive_briefing_eligible: true,
+          monitoring_add_on_eligible: true,
+          add_on_eligible: true
+        },
         entitlement_summary: {
           workspace_access: true
         },
@@ -72,11 +81,15 @@ function runWorkflowDispatchTests() {
   assert.equal(payload.processing_tier, "enhanced");
   assert.equal(payload.report_template, "scale_operating_report_from_snapshot");
   assert.equal(payload.processing_depth, "scale");
+  assert.equal(payload.commercial_routing.plan_tier, "scale");
+  assert.equal(payload.commercial_routing.max_findings, 10);
+  assert.equal(payload.commercial_routing.executive_briefing_eligible, true);
+  assert.equal(payload.routing.entitlement_source, "subscription");
   assert.deepEqual(payload.routing.quota_state, {
     audits_remaining: 9
   });
-  assert.equal(payload.analysisProvider, "dify");
-  assert.equal(payload.analysisModel, "dify-workflow");
+  assert.equal(payload.analysisProvider, "openai_langgraph");
+  assert.equal(payload.analysisModel, "gpt-4o-2024-08-06");
 
   const repairedPayload = backfillAuditRequestedExecutionTargets(
     {
@@ -88,8 +101,8 @@ function runWorkflowDispatchTests() {
   );
 
   assert.equal(repairedPayload.repaired, true);
-  assert.equal(repairedPayload.payload.analysisProvider, "dify");
-  assert.equal(repairedPayload.payload.analysisModel, "dify-workflow");
+  assert.equal(repairedPayload.payload.analysisProvider, "openai_langgraph");
+  assert.equal(repairedPayload.payload.analysisModel, "gpt-4o-2024-08-06");
 
   console.log("workflow-dispatch tests passed");
 }

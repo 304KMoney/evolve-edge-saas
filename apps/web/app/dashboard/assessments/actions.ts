@@ -17,12 +17,13 @@ import {
   markCustomerRunQueuedForAnalysis
 } from "../../../lib/customer-runs";
 import { publishDomainEvent } from "../../../lib/domain-events";
-import { getDifyWorkflowVersion } from "../../../lib/dify";
+import { getAiExecutionWorkflowVersion } from "../../../lib/ai-execution";
 import { requireAssessmentCreationAccess } from "../../../lib/entitlement-guards";
 import { getOrganizationEntitlements, requireEntitlement } from "../../../lib/entitlements";
 import { sendOperationalAlert } from "../../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../../lib/product-analytics";
 import { ensurePendingAssessmentReport } from "../../../lib/report-records";
+import { getAiExecutionProvider } from "../../../lib/runtime-config";
 import { buildUsageThresholdEvents } from "../../../lib/usage";
 import {
   getOrganizationUsageMeteringSnapshot,
@@ -270,11 +271,11 @@ export async function submitAssessmentAction(formData: FormData) {
       const analysisJob = await tx.analysisJob.create({
         data: {
           assessmentId: assessment.id,
-          provider: "dify",
+          provider: getAiExecutionProvider(),
           status: JobStatus.QUEUED,
           jobType: "assessment_analysis",
-          contractVersion: "assessment-analysis.v1",
-          workflowVersion: getDifyWorkflowVersion(),
+          contractVersion: "assessment-analysis.v2",
+          workflowVersion: getAiExecutionWorkflowVersion(),
           inputPayload: {
             assessmentId: assessment.id,
             organizationId: session.organization!.id,

@@ -1,8 +1,16 @@
-import "server-only";
-
-import { CommercialPlanCode, Prisma, prisma, ReportStatus } from "@evolve-edge/db";
+import {
+  CommercialPlanCode,
+  CustomerAccessGrantScopeType,
+  Prisma,
+  prisma,
+  ReportStatus
+} from "@evolve-edge/db";
+import type { AuditWorkflowOutput } from "../src/server/ai/providers/types";
 import { createPlaceholderCustomerAccessGrant } from "./customer-access-grants";
-import { findLatestCustomerAccessGrant } from "./customer-access-grant-records";
+import {
+  listActiveCustomerAccessGrantRecords,
+  mapCustomerAccessGrantRecordToGrant
+} from "./customer-access-grant-records";
 import type { CustomerAccessSession } from "./customer-access-session";
 import { getReportArtifactAvailability } from "./report-artifacts";
 import { evaluateCustomerReportAccess } from "./report-access-control";
@@ -150,10 +158,11 @@ function toReportStatus(
     case "received":
       return ReportStatus.PENDING;
     case "processing":
-    case "awaiting_review":
       return ReportStatus.PROCESSING;
+    case "awaiting_review":
+      return ReportStatus.PENDING_REVIEW;
     case "ready":
-      return ReportStatus.READY;
+      return ReportStatus.APPROVED;
     case "delivered":
       return ReportStatus.DELIVERED;
     case "failed":
@@ -439,8 +448,11 @@ function mapDashboardReportDetailView(
   };
 }
 
-export async function getReportAccessCandidateById(reportId: string) {
-  return prisma.report.findUnique({
+export async function getReportAccessCandidateById(
+  reportId: string,
+  db: ReportRecordsDbClient = prisma
+) {
+  return db.report.findUnique({
     where: {
       id: reportId
     },
@@ -560,24 +572,51 @@ export async function getReportRecordForWriteback(input: {
   reportReference?: string | null;
 }) {
   const db = input.db ?? prisma;
-  const resolvedId = input.reportId ?? input.reportReference;
-  if (!resolvedId) {
+  const reportId = input.reportId?.trim() || null;
+  const reportReference = input.reportReference?.trim() || null;
+
+  const findReportById = (id: string) =>
+    db.report.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        organizationId: true,
+        customerAccountId: true,
+        reportJson: true,
+        artifactMetadataJson: true,
+        status: true
+      }
+    });
+
+  if (reportId) {
+    return findReportById(reportId);
+  }
+
+  if (!reportReference) {
     return null;
   }
 
-  // TODO: Introduce a dedicated durable external report reference field once n8n
-  // writeback identifiers diverge from the canonical app-owned report id.
-  return db.report.findUnique({
-    where: { id: resolvedId },
+  const directReport = await findReportById(reportReference);
+  if (directReport) {
+    return directReport;
+  }
+
+  const linkedDeliveryState = await db.deliveryStateRecord.findFirst({
+    where: {
+      externalResultReference: reportReference,
+      reportId: { not: null }
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     select: {
-      id: true,
-      organizationId: true,
-      customerAccountId: true,
-      reportJson: true,
-      artifactMetadataJson: true,
-      status: true
+      reportId: true
     }
   });
+
+  if (!linkedDeliveryState?.reportId) {
+    return null;
+  }
+
+  return findReportById(linkedDeliveryState.reportId);
 }
 
 export async function persistNormalizedReportWriteback(input: {
@@ -635,6 +674,10 @@ export async function persistNormalizedReportWriteback(input: {
             input.deliveryUpdate?.deliveryStatus === "briefing_booked" ||
             input.deliveryUpdate?.deliveryStatus === "briefing_completed"
           ? ReportStatus.DELIVERED
+          : input.deliveryUpdate?.deliveryStatus === "generated"
+            ? ReportStatus.PENDING_REVIEW
+            : input.deliveryUpdate?.deliveryStatus === "reviewed"
+              ? ReportStatus.APPROVED
           : undefined;
 
   return db.report.update({
@@ -668,7 +711,12 @@ export async function persistNormalizedReportWriteback(input: {
         roadmap: input.roadmap,
         deliveryUpdate: input.deliveryUpdate
       }),
-      publishedAt: input.reportStatus === "ready" ? new Date() : undefined,
+      publishedAt:
+        input.reportStatus === "ready" ||
+        derivedStatus === ReportStatus.APPROVED ||
+        derivedStatus === ReportStatus.PENDING_REVIEW
+          ? new Date()
+          : undefined,
       deliveredAt:
         input.reportStatus === "delivered" ||
         input.deliveryUpdate?.deliveryStatus === "sent" ||
@@ -680,9 +728,147 @@ export async function persistNormalizedReportWriteback(input: {
   });
 }
 
+export async function updateReportReviewStatus(input: {
+  db?: ReportRecordsDbClient;
+  reportId: string;
+  status: ReportStatus;
+  deliveredByUserId?: string | null;
+  deliveredAt?: Date | null;
+}) {
+  const db = input.db ?? prisma;
+
+  return db.report.update({
+    where: { id: input.reportId },
+    data: {
+      status: input.status,
+      deliveredByUserId:
+        input.deliveredByUserId === undefined ? undefined : input.deliveredByUserId,
+      deliveredAt: input.deliveredAt === undefined ? undefined : input.deliveredAt,
+    }
+  });
+}
+
+function buildWorkflowReportJson(input: {
+  result: AuditWorkflowOutput;
+  existingReportJson: Prisma.JsonValue;
+}) {
+  const existing = readJsonObject(input.existingReportJson) ?? {};
+  const nextReportJson: Record<string, Prisma.InputJsonValue | null> = {
+    ...Object.fromEntries(
+      Object.entries(existing).map(([key, value]) => [
+        key,
+        value as Prisma.InputJsonValue | null
+      ])
+    ),
+    assessmentName: input.result.finalReport.reportTitle,
+    postureScore: input.result.postureScore,
+    riskLevel: input.result.riskLevel,
+    riskSummary: input.result.riskAnalysis.summary,
+    executiveSummary: input.result.executiveSummary,
+    finalReportText: input.result.finalReportText,
+    findingCount: input.result.findings.length,
+    recommendationCount: input.result.recommendations.length,
+    findings: input.result.findings.map((finding) => ({
+      title: finding.title,
+      severity: finding.severity,
+      summary: finding.summary,
+      riskDomain: finding.riskDomain,
+      impactedFrameworks: finding.impactedFrameworks
+    })),
+    roadmap: input.result.roadmap.map((item) => ({
+      title: item.title,
+      priority: item.priority,
+      description: item.description,
+      ownerRole: item.ownerRole,
+      timeline: item.targetTimeline,
+      effort: item.effort
+    })),
+    topConcerns: input.result.topConcerns,
+    gaps: input.result.riskAnalysis.systemicThemes,
+    frameworkMapping: {
+      prioritizedFrameworks: input.result.frameworkMapping.prioritizedFrameworks,
+      coverageSummary: input.result.frameworkMapping.coverageSummary
+    },
+    workflowMetadata: {
+      provider: input.result.provider,
+      workflowDispatchId: input.result.workflowDispatchId,
+      status: input.result.status,
+      contractVersion: input.result.metadata.contractVersion
+    }
+  };
+
+  return nextReportJson;
+}
+
+export async function persistValidatedWorkflowReport(input: {
+  db?: ReportRecordsDbClient;
+  reportId: string;
+  result: AuditWorkflowOutput;
+  organizationNameSnapshot?: string | null;
+  customerEmailSnapshot?: string | null;
+  selectedPlan?: "starter" | "scale" | "enterprise" | null;
+  customerAccountId?: string | null;
+}) {
+  const db = input.db ?? prisma;
+  const existing = await db.report.findUnique({
+    where: { id: input.reportId },
+    select: {
+      reportJson: true
+    }
+  });
+
+  if (!existing) {
+    throw new Error("Report not found for validated workflow persistence.");
+  }
+
+  return db.report.update({
+    where: { id: input.reportId },
+    data: {
+      organizationNameSnapshot:
+        input.organizationNameSnapshot === undefined
+          ? undefined
+          : input.organizationNameSnapshot,
+      customerEmailSnapshot:
+        input.customerEmailSnapshot === undefined
+          ? undefined
+          : input.customerEmailSnapshot,
+      selectedPlan:
+        input.selectedPlan === undefined
+          ? undefined
+          : toCommercialPlanCode(input.selectedPlan),
+      customerAccountId:
+        input.customerAccountId === undefined ? undefined : input.customerAccountId,
+      title: input.result.finalReport.reportTitle,
+      executiveSummary: input.result.finalReport.executiveSummary,
+      overallRiskPostureJson: {
+        score: input.result.postureScore,
+        level: input.result.riskLevel,
+        summary: input.result.riskAnalysis.summary
+      },
+      status: ReportStatus.GENERATED,
+      reportJson: buildWorkflowReportJson({
+        result: input.result,
+        existingReportJson: existing.reportJson
+      }),
+      artifactMetadataJson: {
+        downloadStatus: "ready",
+        source: "validated_workflow_report",
+        availableAt: new Date().toISOString(),
+        downloadRoute: `/api/reports/${input.reportId}/export`
+      },
+      publishedAt: new Date(),
+      deliveredAt: null,
+      deliveredByUserId: null
+    }
+  });
+}
+
 export async function listDashboardReportsForAccessSession(input: {
   accessSession: CustomerAccessSession;
+  db?: ReportRecordsDbClient;
 }) {
+  const db = input.db ?? prisma;
+
   if (
     !input.accessSession.isAuthenticated ||
     !input.accessSession.organizationId ||
@@ -691,12 +877,38 @@ export async function listDashboardReportsForAccessSession(input: {
     return [];
   }
 
-  // TODO: Replace organization-level filtering with a dedicated customer/report
-  // binding query once first-customer report grants move beyond workspace scope.
-  return prisma.report.findMany({
-    where: {
-      organizationId: input.accessSession.organizationId
-    },
+  const activeGrantRecords = await listActiveCustomerAccessGrantRecords({
+    db,
+    organizationId: input.accessSession.organizationId,
+    userId: input.accessSession.customerId
+  });
+
+  const hasOrganizationWideGrant = activeGrantRecords.some(
+    (record) =>
+      !record.reportId &&
+      record.scopeType === CustomerAccessGrantScopeType.ORGANIZATION_REPORTS
+  );
+
+  const grantedReportIds = Array.from(
+    new Set(
+      activeGrantRecords
+        .map((record) => record.reportId)
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+    )
+  );
+
+  return db.report.findMany({
+    where:
+      activeGrantRecords.length === 0 || hasOrganizationWideGrant
+        ? {
+            organizationId: input.accessSession.organizationId
+          }
+        : {
+            organizationId: input.accessSession.organizationId,
+            id: {
+              in: grantedReportIds.length > 0 ? grantedReportIds : ["__no_granted_reports__"]
+            }
+          },
     include: {
       assessment: true,
       customerAccount: true,
@@ -716,18 +928,35 @@ export async function listDashboardReportSummaryViewsForAccessSession(input: {
 export async function getDashboardReportDetailForAccessSession(input: {
   reportId: string;
   accessSession: CustomerAccessSession;
+  db?: ReportRecordsDbClient;
 }) {
-  const reportAccessCandidate = await getReportAccessCandidateById(input.reportId);
+  const db = input.db ?? prisma;
+  const reportAccessCandidate = await getReportAccessCandidateById(input.reportId, db);
 
   if (!reportAccessCandidate) {
     return null;
   }
 
-  const durableAccessGrant = await findLatestCustomerAccessGrant({
+  const activeGrantRecords = await listActiveCustomerAccessGrantRecords({
+    db,
     organizationId: input.accessSession.organizationId,
-    userId: input.accessSession.customerId,
-    reportId: input.reportId
+    userId: input.accessSession.customerId
   });
+
+  const matchingDurableAccessGrantRecord = activeGrantRecords.find(
+    (record) =>
+      record.reportId === input.reportId ||
+      (!record.reportId &&
+        record.scopeType === CustomerAccessGrantScopeType.ORGANIZATION_REPORTS)
+  );
+  const placeholderAccessGrant =
+    activeGrantRecords.length === 0
+      ? createPlaceholderCustomerAccessGrant({
+          accessSession: input.accessSession,
+          requiredScope: "reports",
+          reportId: input.reportId
+        })
+      : null;
 
   const decision = evaluateCustomerReportAccess({
     reportId: input.reportId,
@@ -735,12 +964,10 @@ export async function getDashboardReportDetailForAccessSession(input: {
     accessSession: input.accessSession,
     requiredScope: "reports",
     accessGrant:
-      durableAccessGrant ??
-      createPlaceholderCustomerAccessGrant({
-        accessSession: input.accessSession,
-        requiredScope: "reports",
-        reportId: input.reportId
-      })
+      (matchingDurableAccessGrantRecord
+        ? mapCustomerAccessGrantRecordToGrant(matchingDurableAccessGrantRecord)
+        : null) ?? placeholderAccessGrant,
+    requireActiveGrant: activeGrantRecords.length > 0
   });
 
   if (!decision.allowed) {
@@ -764,8 +991,11 @@ export async function getDashboardReportDetailViewForAccessSession(input: {
 export async function getDashboardReportDetailById(input: {
   reportId: string;
   organizationId: string;
+  db?: ReportRecordsDbClient;
 }) {
-  return prisma.report.findFirst({
+  const db = input.db ?? prisma;
+
+  return db.report.findFirst({
     where: {
       id: input.reportId,
       organizationId: input.organizationId

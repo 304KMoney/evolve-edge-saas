@@ -14,7 +14,14 @@ import {
   resolveCanonicalPlanCode
 } from "./commercial-catalog";
 import { getIntegrationEnvironmentLabel } from "./integration-contracts";
-import { getAppUrl, getOptionalEnv, getOptionalJsonEnv } from "./runtime-config";
+import {
+  getAiExecutionProvider,
+  getAppUrl,
+  getOpenAIModel,
+  getOpenAIReasoningModel,
+  getOptionalEnv,
+  getOptionalJsonEnv
+} from "./runtime-config";
 import { extractNormalizedWorkflowHints } from "./workflow-routing-hints";
 
 export type N8nWorkflowName =
@@ -175,6 +182,16 @@ export type AuditRequestedN8nPayload = {
   processing_tier: string;
   report_template: string;
   processing_depth: string;
+  commercial_routing: {
+    plan_tier: string;
+    entitlement_source: string | null;
+    report_depth: string | null;
+    max_findings: number | null;
+    roadmap_detail: string | null;
+    executive_briefing_eligible: boolean | null;
+    monitoring_add_on_eligible: boolean | null;
+    add_on_eligible: boolean | null;
+  };
   analysisProvider: string | null;
   analysisModel: string | null;
   synthesisProvider: string | null;
@@ -203,15 +220,17 @@ export type AuditRequestedN8nPayload = {
   industry: string | null;
   additional_notes: string | null;
   website: string | null;
-  routing: {
-    plan_code: string;
-    workflow_code: string;
-    report_template: string;
-    processing_depth: string;
-    status: string;
-    entitlement_summary: Prisma.JsonValue;
-    quota_state: Prisma.JsonValue;
-    feature_flags: Prisma.JsonValue;
+    routing: {
+      plan_code: string;
+      workflow_code: string;
+      report_template: string;
+      processing_depth: string;
+      status: string;
+      entitlement_source: string | null;
+      capability_profile: Prisma.JsonValue;
+      entitlement_summary: Prisma.JsonValue;
+      quota_state: Prisma.JsonValue;
+      feature_flags: Prisma.JsonValue;
     reason: Prisma.JsonValue;
   };
 };
@@ -528,9 +547,9 @@ function normalizeOptionalString(value: unknown) {
 
 function getAuditExecutionModelFallback() {
   return (
-    getOptionalEnv("DIFY_WORKFLOW_ID") ??
-    getOptionalEnv("DIFY_WORKFLOW_VERSION") ??
-    "dify-workflow"
+    getOpenAIReasoningModel() ??
+    getOpenAIModel() ??
+    "gpt-4o-2024-08-06"
   );
 }
 
@@ -545,7 +564,8 @@ export function resolveAuditExecutionTargets(normalizedHints: unknown) {
 
   return {
     analysisProvider:
-      normalizeOptionalString(normalizedHintRecord.analysis_provider) ?? "dify",
+      normalizeOptionalString(normalizedHintRecord.analysis_provider) ??
+      getAiExecutionProvider(),
     analysisModel:
       normalizeOptionalString(normalizedHintRecord.analysis_model) ??
       getAuditExecutionModelFallback()
@@ -730,6 +750,9 @@ export function buildAuditRequestedPayload(input: {
   ) as Prisma.JsonObject;
   const { analysisProvider, analysisModel } =
     resolveAuditExecutionTargets(normalizedHintRecord);
+  const capabilityProfile = readJsonObject(
+    normalizedHintRecord.capability_profile
+  ) as Prisma.JsonObject;
   const synthesisProvider =
     typeof normalizedHintRecord.synthesis_provider === "string"
       ? normalizedHintRecord.synthesis_provider.trim()
@@ -827,6 +850,31 @@ export function buildAuditRequestedPayload(input: {
     processing_tier: processingTier,
     report_template: reportTemplate,
     processing_depth: processingDepth,
+    commercial_routing: {
+      plan_tier: normalizedPlanCode,
+      entitlement_source:
+        normalizeOptionalString(normalizedHintRecord.entitlement_source) ?? null,
+      report_depth:
+        normalizeOptionalString(capabilityProfile.report_depth) ?? null,
+      max_findings:
+        typeof capabilityProfile.max_findings === "number"
+          ? capabilityProfile.max_findings
+          : null,
+      roadmap_detail:
+        normalizeOptionalString(capabilityProfile.roadmap_detail) ?? null,
+      executive_briefing_eligible:
+        typeof capabilityProfile.executive_briefing_eligible === "boolean"
+          ? capabilityProfile.executive_briefing_eligible
+          : null,
+      monitoring_add_on_eligible:
+        typeof capabilityProfile.monitoring_add_on_eligible === "boolean"
+          ? capabilityProfile.monitoring_add_on_eligible
+          : null,
+      add_on_eligible:
+        typeof capabilityProfile.add_on_eligible === "boolean"
+          ? capabilityProfile.add_on_eligible
+          : null
+    },
     analysisProvider,
     analysisModel,
     synthesisProvider,
@@ -844,6 +892,9 @@ export function buildAuditRequestedPayload(input: {
       report_template: reportTemplate,
       processing_depth: processingDepth,
       status: String(input.routingSnapshot.status).toLowerCase(),
+      entitlement_source:
+        normalizeOptionalString(normalizedHintRecord.entitlement_source) ?? null,
+      capability_profile: capabilityProfile,
       entitlement_summary: normalizedHintRecord.entitlement_summary ?? {},
       quota_state: normalizedHintRecord.quota_state ?? {},
       feature_flags: normalizedHintRecord.feature_flags ?? {},

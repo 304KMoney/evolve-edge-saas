@@ -1,12 +1,23 @@
 "use server";
 
-import { Prisma, ReportStatus, prisma } from "@evolve-edge/db";
+import {
+  OperationsQueueSeverity,
+  OperationsQueueSourceSystem,
+  OperationsQueueType,
+  Prisma,
+  ReportStatus,
+  prisma
+} from "@evolve-edge/db";
 import { redirect } from "next/navigation";
 import { getServerAuditRequestContext, writeAuditLog } from "../../../../lib/audit";
 import { requireOrganizationPermission } from "../../../../lib/auth";
 import { syncOrganizationCustomerAccount } from "../../../../lib/customer-accounts";
 import { markCustomerRunDelivered } from "../../../../lib/customer-runs";
 import { publishDomainEvent } from "../../../../lib/domain-events";
+import {
+  assertPaidReportDeliveryEligibility,
+  queuePostReportDeliveryAutomation
+} from "../../../../lib/report-delivery-automation";
 import {
   approveReportPackageQa,
   completeFounderReview,
@@ -15,11 +26,14 @@ import {
   markReportPackageBriefingCompleted,
   markReportPackageSent,
   requestReportPackageChanges,
+  saveReportPackageReviewNotes,
   syncCustomerLifecycleFromReportPackage,
   upsertExecutiveDeliveryPackageForReport
 } from "../../../../lib/executive-delivery";
 import { appendOperatorWorkflowEventRecord } from "../../../../lib/operator-workflow-event-records";
+import { recordOperationalFinding } from "../../../../lib/operations-queues";
 import { trackProductAnalyticsEvent } from "../../../../lib/product-analytics";
+import { queueReportRegeneration } from "../../../../lib/report-review";
 
 async function getReportAndPackage(reportId: string, organizationId: string) {
   const report = await prisma.report.findFirst({
@@ -131,7 +145,84 @@ export async function requestReportPackageChangesAction(formData: FormData) {
     requestContext
   });
 
-  redirectToReport(result.report.id, "?changesRequested=1");
+  redirectToReport(result.report.id, "?rejected=1");
+}
+
+export async function saveReportReviewNotesAction(formData: FormData) {
+  const session = await requireOrganizationPermission("reports.review");
+  const reportId = String(formData.get("reportId") ?? "");
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!reportId || !notes) {
+    redirect("/dashboard/reports?error=missing-report");
+  }
+
+  const result = await getReportAndPackage(reportId, session.organization!.id);
+  if (!result) {
+    redirect("/dashboard/reports?error=missing-report");
+  }
+
+  const requestContext = await getServerAuditRequestContext();
+  const updated = await saveReportPackageReviewNotes({
+    packageId: result.deliveryPackage.id,
+    organizationId: session.organization!.id,
+    actorUserId: session.user.id,
+    notes
+  });
+
+  await writeAuditLog(prisma, {
+    organizationId: session.organization!.id,
+    userId: session.user.id,
+    actorLabel: session.user.email,
+    action: "report_package.review_notes_saved",
+    entityType: "reportPackage",
+    entityId: updated.id,
+    metadata: {
+      reportId: result.report.id
+    },
+    requestContext
+  });
+
+  redirectToReport(result.report.id, "?notesSaved=1");
+}
+
+export async function requestReportRegenerationAction(formData: FormData) {
+  const session = await requireOrganizationPermission("reports.review");
+  const reportId = String(formData.get("reportId") ?? "");
+  const notes = String(formData.get("notes") ?? "");
+
+  if (!reportId) {
+    redirect("/dashboard/reports?error=missing-report");
+  }
+
+  const result = await getReportAndPackage(reportId, session.organization!.id);
+  if (!result) {
+    redirect("/dashboard/reports?error=missing-report");
+  }
+
+  const requestContext = await getServerAuditRequestContext();
+  const queuedJob = await queueReportRegeneration({
+    reportId: result.report.id,
+    organizationId: session.organization!.id,
+    actorUserId: session.user.id,
+    notes
+  });
+
+  await writeAuditLog(prisma, {
+    organizationId: session.organization!.id,
+    userId: session.user.id,
+    actorLabel: session.user.email,
+    action: "report.regeneration_requested",
+    entityType: "report",
+    entityId: result.report.id,
+    metadata: {
+      assessmentId: result.report.assessmentId,
+      analysisJobId: queuedJob.id
+    },
+    requestContext
+  });
+
+  redirectToReport(result.report.id, "?regenerationRequested=1");
 }
 
 export async function completeFounderReviewAction(formData: FormData) {
@@ -193,6 +284,31 @@ export async function markReportDeliveredAction(formData: FormData) {
     redirect(`/dashboard/reports/${report.id}?delivered=1`);
   }
 
+  try {
+    await assertPaidReportDeliveryEligibility(session.organization!.id);
+  } catch {
+    await recordOperationalFinding({
+      organizationId: session.organization!.id,
+      queueType: OperationsQueueType.SUCCESS_RISK,
+      ruleCode: "report.delivery_blocked_unpaid_subscription",
+      severity: OperationsQueueSeverity.HIGH,
+      sourceSystem: OperationsQueueSourceSystem.APP,
+      title: "Report delivery blocked by billing state",
+      summary:
+        "An operator tried to deliver an approved report, but the workspace does not currently have an active paid subscription state in the app.",
+      recommendedAction:
+        "Confirm the latest Stripe-backed subscription state, resync billing if needed, and restore paid access before retrying delivery.",
+      sourceRecordType: "report",
+      sourceRecordId: report.id,
+      metadata: {
+        reportId: report.id,
+        assessmentId: report.assessmentId,
+        reportPackageId: deliveryPackage.id
+      } satisfies Prisma.InputJsonValue
+    });
+    redirect(`/dashboard/reports/${report.id}?error=delivery-requires-paid-subscription`);
+  }
+
   const deliveredAt = new Date();
 
   await prisma.$transaction(async (tx) => {
@@ -214,6 +330,36 @@ export async function markReportDeliveredAction(formData: FormData) {
       }
     });
 
+    await queuePostReportDeliveryAutomation({
+      db: tx,
+      report: {
+        id: report.id,
+        organizationId: report.organizationId,
+        assessmentId: report.assessmentId,
+        customerAccountId: report.customerAccountId ?? null,
+        title: report.title,
+        executiveSummary: report.executiveSummary,
+        customerEmailSnapshot: report.customerEmailSnapshot ?? null,
+        organization: {
+          id: session.organization!.id,
+          name: session.organization!.name
+        },
+        customerAccount: report.customerAccountId
+          ? await tx.customerAccount.findUnique({
+              where: { id: report.customerAccountId },
+              select: {
+                id: true,
+                primaryContactEmail: true,
+                companyName: true
+              }
+            })
+          : null
+      },
+      deliveryPackageId: deliveryPackage.id,
+      actorUserId: session.user.id,
+      deliveredAt
+    });
+
     await publishDomainEvent(tx, {
       type: "report.delivered",
       aggregateType: "report",
@@ -226,6 +372,7 @@ export async function markReportDeliveredAction(formData: FormData) {
         reportId: report.id,
         assessmentId: report.assessmentId,
         organizationId: session.organization!.id,
+        customerAccountId: report.customerAccountId ?? null,
         deliveredAt: deliveredAt.toISOString(),
         deliveredByUserId: session.user.id,
         reportPackageId: deliveryPackage.id

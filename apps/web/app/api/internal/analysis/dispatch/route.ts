@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   dispatchQueuedAssessmentAnalysisJobs,
-  requireDifyDispatchSecret
-} from "../../../../../lib/dify";
+  requireAiExecutionDispatchSecret
+} from "../../../../../lib/ai-execution";
 import { sendOperationalAlert } from "../../../../../lib/monitoring";
 import { isAuthorizedBearerRequest } from "../../../../../lib/security-auth";
 import { applyRouteRateLimit } from "../../../../../lib/security-rate-limit";
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       return rateLimited;
     }
 
-    if (!isAuthorizedBearerRequest(request, requireDifyDispatchSecret())) {
+    if (!isAuthorizedBearerRequest(request, requireAiExecutionDispatchSecret())) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 

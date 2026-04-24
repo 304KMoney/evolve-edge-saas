@@ -1,13 +1,16 @@
 import { getOptionalEnv } from "./runtime-config";
 export {
+  normalizeAuditWorkflowResultShape,
+  normalizedAuditWorkflowResultSchema,
+  type AiFinding as DifyFinding,
+  type AiRecommendation as DifyRecommendation,
+  type AiWorkflowExecutionInput as DifyAssessmentPayload,
+  type NormalizedAuditWorkflowResult as NormalizedDifyContract
+} from "./ai-schemas";
+export {
   buildTopConcernsFromFindings,
   normalizeDifyContractShape,
-  normalizeDifyWorkflowOutputs,
-  type DifyAssessmentPayload,
-  type DifyFinding,
-  type DifyRecommendation,
-  type DifyRunResponse,
-  type NormalizedDifyContract
+  normalizeDifyWorkflowOutputs
 } from "./dify-adapter";
 
 export type StripeContextMetadata = {

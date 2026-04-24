@@ -16,6 +16,10 @@ import { buildProductSurfaceModel } from "./product-surface";
 import { getOrganizationRetentionSnapshot } from "./retention";
 import { getOrganizationUsageMeteringSnapshot } from "./usage-metering";
 import { getUsageRemaining } from "./usage-quotas";
+import {
+  getAuditWorkflowProgressPresentation,
+  parseAuditWorkflowProgress
+} from "./customer-runs";
 
 function formatDate(date: Date | null | undefined) {
   if (!date) return "Draft";
@@ -90,6 +94,16 @@ function calculateAssessmentProgress(sections: Array<{ status: string }>) {
   }, 0);
 
   return Math.round((completedWeight / sections.length) * 100);
+}
+
+function readAssessmentWorkflowProgress(contextJson: Prisma.JsonValue | null | undefined) {
+  if (!contextJson || typeof contextJson !== "object" || Array.isArray(contextJson)) {
+    return null;
+  }
+
+  return parseAuditWorkflowProgress(
+    (contextJson as Record<string, unknown>).workflowProgress
+  );
 }
 
 function buildFallbackDashboardData(organizationName: string): DashboardData {
@@ -259,6 +273,13 @@ const dashboardOrganizationInclude = {
       analysisJobs: {
         orderBy: { createdAt: "desc" },
         take: 1
+      },
+      customerRuns: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          contextJson: true
+        }
       }
     }
   },
@@ -329,6 +350,12 @@ export async function getDashboardData(): Promise<DashboardData> {
   const findingsCount = assessment?.findings.length ?? 0;
   const criticalFindings =
     assessment?.findings.filter((finding) => finding.severity === "CRITICAL").length ?? 0;
+  const activeWorkflowProgress = assessment
+    ? readAssessmentWorkflowProgress(assessment.customerRuns[0]?.contextJson ?? null)
+    : null;
+  const activeWorkflowPresentation = activeWorkflowProgress
+    ? getAuditWorkflowProgressPresentation(activeWorkflowProgress.status)
+    : null;
   const currentPeriodEnd = subscription?.currentPeriodEnd;
   const primaryRecommendation = assessment?.recommendations[0];
   const latestNotification = organization.notifications[0];
@@ -446,20 +473,27 @@ export async function getDashboardData(): Promise<DashboardData> {
     ],
     activeAssessment: {
       name: assessment?.name ?? "No active assessment",
-      status: assessment?.status.replaceAll("_", " ") ?? "Not started",
-      progress: assessment ? calculateAssessmentProgress(assessment.sections) : 0,
+      status:
+        activeWorkflowProgress?.label ??
+        assessment?.status.replaceAll("_", " ") ??
+        "Not started",
+      progress:
+        activeWorkflowProgress?.progressPercent ??
+        (assessment ? calculateAssessmentProgress(assessment.sections) : 0),
       nextStep:
-        assessment?.analysisJobs[0]?.status === "RUNNING"
+        activeWorkflowPresentation?.nextStep ??
+        (assessment?.analysisJobs[0]?.status === "RUNNING"
           ? "Generate executive summary and publish findings package"
           : assessment
             ? "Complete intake sections and queue analysis"
-            : "Create your first live assessment",
+            : "Create your first live assessment"),
       eta:
-        assessment?.analysisJobs[0]?.status === "RUNNING"
+        activeWorkflowPresentation?.eta ??
+        (assessment?.analysisJobs[0]?.status === "RUNNING"
           ? "Ready in about 18 minutes"
           : assessment
             ? "Waiting for input completion"
-            : "No assessment in progress"
+            : "No assessment in progress")
     },
     domainScores: buildDomainScores(assessment?.findings ?? []),
     findings:

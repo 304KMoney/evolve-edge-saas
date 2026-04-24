@@ -8,6 +8,7 @@ import {
   buildRoadmapSummarySnapshot,
   canTransitionReportPackage,
   evaluateFounderReviewRequirement,
+  markReportPackageSent,
   ReportPackageDeliveryStatus,
   ReportPackageQaStatus
 } from "../lib/executive-delivery";
@@ -182,6 +183,87 @@ async function runExecutiveDeliveryTests() {
     );
 
     assert.equal(updateCalled, false);
+  }
+
+  {
+    let updatedReportStatus: string | null = null;
+    const db = {
+      reportPackage: {
+        findFirst: async () => ({
+          id: "pkg_sendable",
+          organizationId: "org_123",
+          assessmentId: "asm_123",
+          latestReportId: "rpt_123",
+          latestReport: {
+            id: "rpt_123",
+            reportJson: {}
+          },
+          deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
+          qaStatus: ReportPackageQaStatus.APPROVED,
+          requiresFounderReview: false,
+          founderReviewedAt: null
+        }),
+        update: async ({ data }: { data: Record<string, unknown> }) => ({
+          id: "pkg_sendable",
+          organizationId: "org_123",
+          assessmentId: "asm_123",
+          ...data
+        })
+      },
+      report: {
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          updatedReportStatus = String(data.status ?? "");
+          return {
+            id: "rpt_123",
+            ...data
+          };
+        }
+      },
+      domainEvent: {
+        create: async () => ({ id: "evt_sent" })
+      },
+      deliveryStateRecord: {
+        findFirst: async () => null,
+        findUnique: async () => null,
+        create: async () => ({ id: "ds_123" }),
+        update: async () => ({ id: "ds_123" })
+      },
+      deliveryStateTransition: {
+        create: async () => ({ id: "dst_123" })
+      },
+      customerRun: {
+        findFirst: async () => ({
+          id: "run_123",
+          contextJson: null,
+          stepsJson: {},
+          reportId: "rpt_123"
+        }),
+        findUnique: async () => ({
+          id: "run_123",
+          contextJson: null,
+          stepsJson: {},
+          reportId: "rpt_123"
+        }),
+        update: async ({ data }: { data: Record<string, unknown> }) => ({
+          id: "run_123",
+          ...data
+        })
+      },
+      notification: {
+        create: async () => ({ id: "ntf_123" })
+      }
+    } as any;
+
+    const sent = await markReportPackageSent({
+      packageId: "pkg_sendable",
+      organizationId: "org_123",
+      actorUserId: "usr_123",
+      notes: "Deliver to customer",
+      db
+    });
+
+    assert.equal(sent.deliveryStatus, ReportPackageDeliveryStatus.SENT);
+    assert.equal(updatedReportStatus, "DELIVERED");
   }
 
   console.log("executive-delivery tests passed");

@@ -10,6 +10,16 @@ The core rule is simple:
 - the Evolve Edge app owns product state and business logic
 - external systems stay in their lane
 
+Current AI execution lane:
+
+- n8n triggers `POST /api/internal/ai/execute`
+- the Next.js backend validates and queues the request
+- the app-owned provider layer runs the LangGraph audit workflow
+- OpenAI handles model execution inside named workflow nodes
+- validated structured output is persisted by the backend
+- n8n does not own prompt logic, scoring, framework mapping, or report persistence
+- Dify is deprecated and retained only as a rollback reference
+
 ## Top-Level Repo Layout
 
 - `apps/web`
@@ -78,6 +88,9 @@ Authority:
 - `commercial-routing.ts` is authoritative for paid-request routing snapshots
 - `workflow-routing.ts` is authoritative for dashboard assessment/report routing
   decisions
+- routing snapshots now carry plan-aware capability policy for AI/report execution
+  including report depth, findings cap, roadmap detail, and executive/monitoring
+  eligibility flags
 
 ### Customer Lifecycle And Lead Pipeline
 
@@ -169,9 +182,16 @@ Responsibilities:
 - orchestration only
 - never core business logic owner
 
+### LangGraph and OpenAI
+
+- app-owned AI execution only
+- LangGraph sequences typed workflow nodes
+- OpenAI performs model execution
+- neither system owns product state
+
 ### Dify
 
-- AI execution only
+- deprecated rollback path only
 - never product state owner
 
 ## Operational Entry Points
@@ -193,3 +213,4 @@ Responsibilities:
 5. phase docs relevant to the area you are editing
 6. `docs/billing-reconciliation-and-delivery-operations.md`
 7. `docs/first-customer-launch-checks.md`
+8. `docs/workflows/n8n-ai-execution.md`

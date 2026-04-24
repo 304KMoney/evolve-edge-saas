@@ -1,4 +1,4 @@
-# Stripe, n8n, Dify, and HubSpot Integration
+# Stripe, n8n, OpenAI/LangGraph, and HubSpot Integration
 
 This document is the production wiring reference for Evolve Edge’s external integration layer.
 
@@ -11,7 +11,7 @@ The supported production flow is:
 3. Evolve Edge updates internal billing and product state.
 4. Evolve Edge emits durable domain events.
 5. Evolve Edge dispatches selected domain events to n8n and HubSpot.
-6. Evolve Edge calls Dify for AI analysis through app-owned jobs.
+6. Evolve Edge executes AI analysis through app-owned OpenAI/LangGraph jobs.
 7. Evolve Edge stores normalized analysis output and generates reports.
 8. Evolve Edge continues downstream delivery, logging, and CRM visibility updates.
 
@@ -20,18 +20,18 @@ Important:
 - Stripe is billing authority.
 - Evolve Edge is the only owner of product state.
 - n8n is orchestration only.
-- Dify is execution only.
+- OpenAI/LangGraph are execution only.
 - HubSpot is CRM visibility only.
 - Apollo, if used, is sales enrichment only.
 
-This means the app does **not** delegate report persistence, subscription truth, or billing access control to n8n or Dify.
+This means the app does **not** delegate report persistence, subscription truth, or billing access control to n8n or OpenAI/LangGraph.
 
 If Apollo is added for prospecting or enrichment, it should sit alongside the
 lead-pipeline workflow as an optional outbound enrichment dependency and must
 not become the owner of leads, lifecycle state, routing policy, or customer
 status.
 
-For the plan-aware routing snapshot layer that now feeds execution hints into n8n and Dify, see:
+For the plan-aware routing snapshot layer that feeds execution hints into n8n and the app-owned AI execution layer, see:
 
 - [phase-61-plan-aware-routing-snapshots.md](/Users/kielg/OneDrive/Desktop/Evolve%20Edge/docs/phase-61-plan-aware-routing-snapshots.md)
 
@@ -83,25 +83,27 @@ Workflow routing:
 
 - [n8n.ts](/Users/kielg/OneDrive/Desktop/Evolve%20Edge/apps/web/lib/n8n.ts)
 
-### Dify
+### OpenAI + LangGraph
 
 Implemented:
 
 - queued analysis jobs
-- typed adapter boundary for Dify request/response normalization
-- idempotent request hashing
-- blocking workflow call
-- timeout handling
-- stale job recovery
+- internal provider abstraction
+- typed LangGraph workflow nodes
+- structured JSON validation with Zod before persistence
+- deterministic risk scoring rules in the backend
 - normalized validated output persisted into `AnalysisJob.outputPayload`
 
-Primary service:
+Primary services:
 
-- [dify.ts](/Users/kielg/OneDrive/Desktop/Evolve%20Edge/apps/web/lib/dify.ts)
+- `apps/web/src/server/ai/providers/index.ts`
+- `apps/web/src/server/ai/providers/openai-langgraph.ts`
+- `apps/web/lib/ai-execution.ts`
 
-Typed adapter:
+Deprecated rollback references:
 
-- [dify-adapter.ts](/Users/kielg/OneDrive/Desktop/Evolve%20Edge/apps/web/lib/dify-adapter.ts)
+- `apps/web/lib/dify.ts`
+- `apps/web/lib/dify-adapter.ts`
 
 ### HubSpot
 
@@ -276,7 +278,17 @@ Those should not be used as the canonical first-customer configuration path.
   - `N8N_WEBHOOK_SECRET`
   - `N8N_WEBHOOK_TIMEOUT_MS`
 
-### Dify
+### OpenAI + LangGraph
+
+- `AI_EXECUTION_PROVIDER=openai_langgraph`
+- `AI_EXECUTION_DISPATCH_SECRET`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- optional:
+  - `OPENAI_REASONING_MODEL`
+  - `AI_EXECUTION_TIMEOUT_MS`
+
+### Deprecated Dify rollback
 
 - `DIFY_API_BASE_URL`
 - `DIFY_API_KEY`
@@ -284,8 +296,6 @@ Those should not be used as the canonical first-customer configuration path.
 - `DIFY_WORKFLOW_VERSION`
 - `DIFY_TIMEOUT_MS`
 - `DIFY_DISPATCH_SECRET`
-- optional:
-  - `DIFY_ANALYSIS_STALE_MINUTES`
 
 ### HubSpot
 
@@ -382,99 +392,61 @@ Use this order when preparing a real customer environment:
    - `REPORT_DOWNLOAD_SIGNING_SECRET`
    - `REPORT_DOWNLOAD_REQUIRE_AUTH=true`
 5. Set optional but recommended external integrations:
-   - `DIFY_API_BASE_URL`
-   - `DIFY_API_KEY`
-   - `DIFY_WORKFLOW_ID`
+   - `OPENAI_API_KEY`
+   - `OPENAI_MODEL`
+   - `AI_EXECUTION_DISPATCH_SECRET`
    - `HUBSPOT_ACCESS_TOKEN`
 6. Run:
    - `pnpm preflight:first-customer`
    - focused tests
    - one manual end-to-end paid request verification
 
-## Dify payload contract
+## n8n to app AI execution contract
 
-Input contract:
+Primary workflow reference:
+
+- [workflows/n8n-ai-execution.md](/Users/kielg/Documents/EvolveEdge/evolve-edge-saas/docs/workflows/n8n-ai-execution.md)
+
+HTTP Request node target:
+
+- `POST {{EVOLVE_EDGE_APP_URL}}/api/internal/ai/execute`
+
+Headers:
+
+- `Authorization: Bearer {{EVOLVE_EDGE_INTERNAL_API_SECRET}}`
+- `Content-Type: application/json`
+
+Body:
 
 ```json
 {
-  "contractVersion": "assessment-analysis.v1",
-  "workflowVersion": "v1",
-  "assessment": {
-    "id": "asm_123",
-    "organizationId": "org_123",
-    "name": "Quarterly Security Review",
-    "submittedAt": "2026-04-10T12:00:00.000Z",
-    "intakeVersion": 1
-  },
-  "sections": [
+  "orgId": "org_123",
+  "assessmentId": "asm_123",
+  "workflowDispatchId": "wd_123",
+  "dispatchId": "disp_123",
+  "customerEmail": "buyer@example.com",
+  "companyName": "Example Org",
+  "industry": "Healthcare",
+  "companySize": "51-200",
+  "selectedFrameworks": ["SOC 2"],
+  "assessmentAnswers": [
     {
-      "key": "governance",
-      "title": "Governance",
-      "status": "COMPLETED",
-      "notes": "..."
+      "question": "Do you have formal security policies?",
+      "answer": "No"
     }
   ],
-  "reportUrl": "https://app.example.com/dashboard/reports",
-  "commercial_context": {
-    "company_name": "Example Org",
-    "contact_name": null,
-    "contact_email": null,
-    "industry": null,
-    "frameworks": ["soc2"],
-    "plan_code": "scale",
-    "workflow_code": "audit_scale",
-    "report_template": "scale_operating_report",
-    "processing_depth": "scale",
-    "top_concerns": []
-  },
-  "routing_context": {
-    "routing_decision_id": "route_123",
-    "workflow_family": "assessment_analysis",
-    "route_key": "analysis.scale_enhanced",
-    "processing_tier": "scale",
-    "report_template": "scale_operating_report",
-    "workflow_code": "audit_scale",
-    "processing_depth": "scale"
-  },
-  "workflowRouting": {
-    "decisionId": "route_123",
-    "workflowFamily": "assessment_analysis",
-    "routeKey": "analysis.scale_standard",
-    "processingTier": "standard",
-    "reportDepth": "standard",
-    "analysisDepth": "standard",
-    "monitoringMode": "standard",
-    "controlScoringMode": "disabled",
-    "featureFlags": {
-      "monitoringEnabled": true,
-      "controlScoringEnabled": false,
-      "customFrameworksEnabled": false,
-      "enterpriseOverrideActive": false,
-      "demoSafeguardsActive": false
-    }
-  }
+  "evidenceSummary": "Policies are incomplete and vendor review is informal.",
+  "planTier": "scale"
 }
 ```
 
 Notes:
 
-- `commercial_context` and `routing_context` are the current canonical Dify
-  request fields
-- `workflowRouting` is still sent as a compatibility payload for existing prompt
-  or workflow expectations
-- the overlap is intentional today and should be treated as a compatibility
-  boundary, not as two competing sources of truth
-- if fallback values ever differ between `routing_context` and `workflowRouting`,
-  treat `routing_context` as authoritative and `workflowRouting` as legacy
-  compatibility context only
-
-Accepted output aliases:
-
-- `finalReport` or `final_report`
-- `executiveSummary` or `executive_summary`
-- `riskLevel` or `risk_level`
-- `topConcerns` or `top_concerns`
-- `recommendations` or `roadmap`
+- n8n triggers execution only
+- n8n must not call OpenAI directly
+- n8n must not own prompts, scoring, framework mapping, or report logic
+- n8n should validate required dispatch fields before calling the app endpoint
+- the app validates structured output before any write to Neon
 
 Normalized stored output:
 
@@ -495,9 +467,9 @@ Normalized stored output:
 
 Important:
 
-- raw Dify output is not trusted directly
+- raw model output is not trusted directly
 - the app validates required fields before updating assessment/report state
-- Dify remains an execution dependency, not a product-state authority
+- Dify is deprecated and no longer the primary execution dependency
 
 ## Required HubSpot properties
 
@@ -554,14 +526,14 @@ Note:
 
 1. Configure Stripe test mode.
 2. Configure `N8N_WORKFLOW_DESTINATIONS` to test webhooks.
-3. Configure Dify test credentials and workflow.
+3. Configure `AI_EXECUTION_PROVIDER=openai_langgraph`, `OPENAI_API_KEY`, and `AI_EXECUTION_DISPATCH_SECRET`.
 4. Configure a HubSpot sandbox token and matching custom properties.
 5. Create a checkout session in-app.
 6. Complete checkout in Stripe test mode.
 7. Confirm `/api/stripe/webhook` processes and creates or updates the internal subscription.
 8. Run `/api/internal/domain-events/dispatch` and confirm n8n and HubSpot deliveries.
-9. Submit an assessment and run `/api/internal/analysis/dispatch`.
-10. Confirm Dify output normalizes and report generation succeeds.
+9. Submit an assessment and have n8n call `/api/internal/ai/execute`.
+10. Confirm the app returns `provider: openai_langgraph`, persists validated output, and marks the assessment/report state correctly.
 11. Replay a failed Stripe or outbound event from `/admin/replays` and confirm no duplicate side effects occur.
 
 ## Maintenance notes

@@ -63,11 +63,41 @@ function getStaleDispatchMinutes() {
 }
 
 function readJsonObject(
-  value: Prisma.InputJsonValue | Prisma.JsonValue | null | undefined
+  value: unknown
 ) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+async function attachWorkflowDispatchToRoutingSnapshot(input: {
+  db: WorkflowDispatchDbClient;
+  routingSnapshotId: string;
+  dispatchId: string;
+}) {
+  const snapshot = await input.db.routingSnapshot.findUnique({
+    where: { id: input.routingSnapshotId },
+    select: {
+      commercialStateJson: true
+    }
+  });
+
+  const currentState = readJsonObject(snapshot?.commercialStateJson) ?? {};
+  const currentRoutingDecision = readJsonObject(currentState.routingDecision) ?? {};
+
+  await input.db.routingSnapshot.update({
+    where: { id: input.routingSnapshotId },
+    data: {
+      commercialStateJson: {
+        ...currentState,
+        workflowDispatchId: input.dispatchId,
+        routingDecision: {
+          ...currentRoutingDecision,
+          workflowDispatchId: input.dispatchId
+        }
+      } satisfies Prisma.InputJsonValue
+    }
+  });
 }
 
 function repairAuditRequestedRequestPayload(dispatch: {
@@ -190,6 +220,12 @@ export async function queueAuditRequestedDispatch(input: {
     data: {
       requestPayload
     }
+  });
+
+  await attachWorkflowDispatchToRoutingSnapshot({
+    db,
+    routingSnapshotId: snapshot.id,
+    dispatchId: dispatch.id
   });
 
   await db.routingSnapshot.update({

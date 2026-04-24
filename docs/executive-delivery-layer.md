@@ -52,7 +52,18 @@ Supported QA states:
 
 - Every generated report now upserts a package and creates a new package
   version.
+- Validated LangGraph reports now move the underlying `Report` through an
+  explicit human-review gate:
+  - `GENERATED`
+  - `PENDING_REVIEW`
+  - `APPROVED`
+  - `REJECTED`
+  - `DELIVERED`
 - QA approval is required before a package can be sent.
+- Report delivery actions are now blocked until the report status is
+  `APPROVED`.
+- Reviewers can save internal notes, reject with reason, or request
+  regeneration without exposing prompts or backend internals.
 - High-risk packages can require founder review before delivery.
 - Sending the package still updates the underlying `Report` to `DELIVERED` for
   backward compatibility.
@@ -130,10 +141,12 @@ Apply the Prisma migration that creates:
 2. Open report detail page
 3. Review the packaged leadership summary
 4. Approve QA or request changes
-5. If the package is red-flagged, complete founder review
-6. Mark the package sent
-7. Track briefing booked and briefing completed
-8. Use prior package versions for historical reference
+5. Save any internal notes needed for future reviewers
+6. If the report needs revision, reject it or request regeneration
+7. If the package is red-flagged, complete founder review
+8. Mark the package sent
+9. Track briefing booked and briefing completed
+10. Use prior package versions for historical reference
 
 ## Future Expansion Notes
 
@@ -143,3 +156,53 @@ Apply the Prisma migration that creates:
 - Add delivery notifications once email delivery moves fully into package-aware
   flows
 - Add operator analytics for time-to-review and time-to-briefing
+
+## Automated Customer Delivery
+
+After a reviewer approves a report and an operator marks it delivered, the app
+now owns the post-report flow end to end:
+
+- delivery is blocked unless the organization has a paid Stripe-backed access
+  state in the app (`ACTIVE` or `GRACE_PERIOD`)
+- the app queues the customer delivery email with:
+  - executive summary
+  - report link
+  - executive briefing booking link
+- the app schedules follow-up emails for:
+  - day 3
+  - day 7
+- the app refreshes engagement opportunities so monitoring, remediation
+  support, and advisory follow-on motions are surfaced internally
+- the app publishes delivery events that HubSpot can observe through the
+  existing projection dispatcher
+
+This keeps delivery, billing checks, follow-up logic, and CRM updates inside
+the Evolve Edge backend instead of pushing them into n8n or HubSpot.
+
+## HubSpot And Scheduling Notes
+
+- `report.delivered` is now a first-class HubSpot projection event.
+- The existing `customer_account.stage_changed` event continues to project
+  customer lifecycle changes after delivery.
+- If `HUBSPOT_REPORT_DELIVERED_DEAL_STAGE_ID` is configured and the customer
+  account has a `crmDealId`, the HubSpot projection layer will also patch the
+  HubSpot deal stage on report delivery.
+- Delayed follow-up emails are stored in the existing `EmailNotification`
+  queue using `nextRetryAt`.
+- Operators should ensure the scheduled jobs runner includes the
+  `dispatch-email-notifications` job so queued delivery and follow-up emails are
+  actually sent.
+
+## Delivery Operations Visibility
+
+- The report detail page now shows an internal-only delivery operations panel
+  with:
+  - paid-delivery eligibility from the app-owned subscription state
+  - delivery email dispatch environment readiness
+  - queued, sent, failed, and scheduled delivery notifications for that report
+- The admin account detail page now shows organization-level delivery
+  automation health for recent report delivery and follow-up notifications.
+- If an operator tries to deliver an approved report while billing is not in an
+  active paid state, the app now records a durable operations-queue finding so
+  the blocked attempt is visible in admin workflows instead of only surfacing as
+  a redirect error.

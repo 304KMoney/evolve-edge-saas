@@ -21,6 +21,13 @@ type RateLimitEntry = {
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
+type ConsumeRateLimitOptions = {
+  storeKey: string;
+  maxRequests: number;
+  windowMs: number;
+  metadata?: Record<string, unknown>;
+};
+
 function getClientIdentifier(request: Request) {
   const forwardedFor = request.headers.get("x-forwarded-for");
   const primaryIp = forwardedFor?.split(",")[0]?.trim();
@@ -49,6 +56,38 @@ export function buildRateLimitResponse(options: {
   );
 }
 
+export function consumeRateLimit(
+  options: ConsumeRateLimitOptions
+): { limited: false } | { limited: true; retryAfterSeconds: number; maxRequests: number } {
+  const now = Date.now();
+  const current = rateLimitStore.get(options.storeKey);
+
+  if (!current || current.resetAt <= now) {
+    rateLimitStore.set(options.storeKey, {
+      count: 1,
+      resetAt: now + options.windowMs
+    });
+    return { limited: false };
+  }
+
+  if (current.count >= options.maxRequests) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((current.resetAt - now) / 1000));
+    logServerEvent("warn", "security.rate_limit.exceeded", {
+      ...options.metadata,
+      storeKey: options.storeKey
+    });
+    return {
+      limited: true,
+      retryAfterSeconds,
+      maxRequests: options.maxRequests
+    };
+  }
+
+  current.count += 1;
+  rateLimitStore.set(options.storeKey, current);
+  return { limited: false };
+}
+
 export function applyRouteRateLimit(request: Request, options: RateLimitOptions) {
   const category = options.category ?? "api";
   const windowMs =
@@ -58,32 +97,23 @@ export function applyRouteRateLimit(request: Request, options: RateLimitOptions)
     options.maxRequests ??
     (category === "webhook" ? getWebhookRateLimitMaxRequests() : getApiRateLimitMaxRequests());
   const clientIdentifier = getClientIdentifier(request);
-  const now = Date.now();
   const entryKey = `${options.key}:${clientIdentifier}`;
-  const current = rateLimitStore.get(entryKey);
-
-  if (!current || current.resetAt <= now) {
-    rateLimitStore.set(entryKey, {
-      count: 1,
-      resetAt: now + windowMs
-    });
-    return null;
-  }
-
-  if (current.count >= maxRequests) {
-    const retryAfterSeconds = Math.max(1, Math.ceil((current.resetAt - now) / 1000));
-    logServerEvent("warn", "security.rate_limit.exceeded", {
+  const result = consumeRateLimit({
+    storeKey: entryKey,
+    maxRequests,
+    windowMs,
+    metadata: {
       routeKey: options.key,
       category,
       clientIdentifier
-    });
+    }
+  });
+
+  if (result.limited) {
     return buildRateLimitResponse({
-      maxRequests,
-      retryAfterSeconds
+      maxRequests: result.maxRequests,
+      retryAfterSeconds: result.retryAfterSeconds
     });
   }
-
-  current.count += 1;
-  rateLimitStore.set(entryKey, current);
   return null;
 }

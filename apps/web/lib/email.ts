@@ -15,6 +15,9 @@ type EmailTemplateKey =
   | "invite"
   | "member-joined"
   | "report-ready"
+  | "report-delivered"
+  | "report-follow-up-3-day"
+  | "report-follow-up-7-day"
   | "payment-failed"
   | "renewal-reminder";
 
@@ -26,6 +29,7 @@ type QueueEmailInput = {
   orgId?: string | null;
   userId?: string | null;
   eventId?: string | null;
+  sendAfterAt?: Date | null;
   payload: Prisma.InputJsonValue;
 };
 
@@ -237,6 +241,89 @@ function renderEmailTemplate(
         ].join("\n\n")
       };
     }
+    case "report-delivered": {
+      const reportTitle = String(payload.reportTitle ?? "Your executive report");
+      const organizationName = String(payload.organizationName ?? "your workspace");
+      const reportUrl = String(payload.reportUrl ?? `${getAppUrl()}/dashboard/reports`);
+      const briefingUrl = String(payload.briefingUrl ?? getAppUrl());
+      const executiveSummary = String(
+        payload.executiveSummary ??
+          "Your report is ready to review, with priority findings and a recommended remediation roadmap."
+      ).trim();
+      const subject = `Executive report delivered: ${reportTitle}`;
+
+      return {
+        subject,
+        html: renderLayout({
+          preview: subject,
+          heading: "Your executive audit report is ready",
+          body: [
+            `${reportTitle} has now been delivered for ${organizationName}.`,
+            executiveSummary,
+            "Use the report link below to review the findings, roadmap, and executive briefing materials. If you want a working session with leadership, use the briefing link to book it."
+          ],
+          ctaLabel: "Open report",
+          ctaUrl: reportUrl
+        }),
+        text: [
+          `${reportTitle} has now been delivered for ${organizationName}.`,
+          executiveSummary,
+          `Open report: ${reportUrl}`,
+          `Book executive briefing: ${briefingUrl}`
+        ].join("\n\n")
+      };
+    }
+    case "report-follow-up-3-day": {
+      const reportTitle = String(payload.reportTitle ?? "your executive report");
+      const organizationName = String(payload.organizationName ?? "your workspace");
+      const reportUrl = String(payload.reportUrl ?? `${getAppUrl()}/dashboard/reports`);
+      const briefingUrl = String(payload.briefingUrl ?? getAppUrl());
+      const subject = `3-day follow-up: ${reportTitle}`;
+
+      return {
+        subject,
+        html: renderLayout({
+          preview: subject,
+          heading: "Checking in on your report",
+          body: [
+            `It has been a few days since ${reportTitle} was delivered for ${organizationName}.`,
+            "If you have not reviewed the priority findings yet, this is a good moment to align on the top risks and near-term remediation actions.",
+            "If it would help, you can book an executive briefing to walk through the report live."
+          ],
+          ctaLabel: "Book briefing",
+          ctaUrl: briefingUrl
+        }),
+        text: [
+          `It has been a few days since ${reportTitle} was delivered for ${organizationName}.`,
+          `Open report: ${reportUrl}`,
+          `Book briefing: ${briefingUrl}`
+        ].join("\n\n")
+      };
+    }
+    case "report-follow-up-7-day": {
+      const reportTitle = String(payload.reportTitle ?? "your executive report");
+      const organizationName = String(payload.organizationName ?? "your workspace");
+      const reportUrl = String(payload.reportUrl ?? `${getAppUrl()}/dashboard/reports`);
+      const subject = `7-day follow-up: ${reportTitle}`;
+
+      return {
+        subject,
+        html: renderLayout({
+          preview: subject,
+          heading: "Next steps after your audit",
+          body: [
+            `${organizationName} now has a delivered audit baseline for ${reportTitle}.`,
+            "The strongest next move is usually to convert the top findings into owned remediation work and decide whether you want ongoing monitoring, remediation support, or a deeper advisory follow-on."
+          ],
+          ctaLabel: "Review report",
+          ctaUrl: reportUrl
+        }),
+        text: [
+          `${organizationName} now has a delivered audit baseline for ${reportTitle}.`,
+          `Review report: ${reportUrl}`
+        ].join("\n\n")
+      };
+    }
     case "renewal-reminder": {
       const organizationName = String(payload.organizationName ?? "your workspace");
       const billingUrl = String(payload.billingUrl ?? `${getAppUrl()}/dashboard/settings`);
@@ -297,6 +384,7 @@ export async function queueEmailNotification(
       orgId: input.orgId ?? null,
       userId: input.userId ?? null,
       eventId: input.eventId ?? null,
+      nextRetryAt: input.sendAfterAt ?? null,
       provider
     },
     create: {
@@ -311,6 +399,7 @@ export async function queueEmailNotification(
       orgId: input.orgId ?? null,
       userId: input.userId ?? null,
       eventId: input.eventId ?? null,
+      nextRetryAt: input.sendAfterAt ?? null,
       payload: payloadObject
     }
   });

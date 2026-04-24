@@ -57,7 +57,16 @@ export type NormalizedRoutingHints = {
   processing_tier: CanonicalProcessingDepth;
   processing_depth: CanonicalProcessingDepth;
   report_template: string;
+  entitlement_source: "subscription" | "trial" | "override" | "blocked";
   route_category: "standard" | "trial" | "fallback" | "blocked";
+  capability_profile: {
+    report_depth: "concise" | "standard" | "enhanced" | "custom";
+    max_findings: number;
+    roadmap_detail: "standard" | "detailed" | "full";
+    executive_briefing_eligible: boolean;
+    monitoring_add_on_eligible: boolean;
+    add_on_eligible: boolean;
+  };
   entitlement_summary: {
     workspace_access: boolean;
     reports_generate: boolean;
@@ -78,6 +87,8 @@ export type NormalizedRoutingHints = {
     enterprise_override_active: boolean;
   };
 };
+
+export type CommercialCapabilityProfile = NormalizedRoutingHints["capability_profile"];
 
 export type CommercialRoutingReason = {
   codes: string[];
@@ -498,6 +509,60 @@ function buildEntitlementsJson(entitlements: Awaited<ReturnType<typeof getOrgani
   } satisfies Prisma.JsonObject;
 }
 
+function deriveEntitlementSource(
+  entitlements: Awaited<ReturnType<typeof getOrganizationEntitlements>>
+): NormalizedRoutingHints["entitlement_source"] {
+  if (!entitlements.canAccessWorkspace) {
+    return "blocked";
+  }
+
+  if (entitlements.appliedOverrides.length > 0) {
+    return "override";
+  }
+
+  if (entitlements.workspaceMode === "TRIAL") {
+    return "trial";
+  }
+
+  return "subscription";
+}
+
+export function buildCommercialCapabilityProfile(input: {
+  planCode: CommercialPlanCode;
+  entitlements: Awaited<ReturnType<typeof getOrganizationEntitlements>>;
+}): CommercialCapabilityProfile {
+  switch (input.planCode) {
+    case CommercialPlanCode.ENTERPRISE:
+      return {
+        report_depth: "custom",
+        max_findings: 15,
+        roadmap_detail: "full",
+        executive_briefing_eligible: true,
+        monitoring_add_on_eligible: true,
+        add_on_eligible: true
+      };
+    case CommercialPlanCode.SCALE:
+      return {
+        report_depth: "enhanced",
+        max_findings: 10,
+        roadmap_detail: "detailed",
+        executive_briefing_eligible: true,
+        monitoring_add_on_eligible: input.entitlements.featureAccess["monitoring.manage"],
+        add_on_eligible: true
+      };
+    case CommercialPlanCode.STARTER:
+    default:
+      return {
+        report_depth: "concise",
+        max_findings: 5,
+        roadmap_detail: "standard",
+        executive_briefing_eligible: false,
+        monitoring_add_on_eligible: false,
+        add_on_eligible: false
+      };
+  }
+}
+
 export function deriveCommercialWorkflowDecision(input: {
   planCode: CommercialPlanCode;
   entitlements: Awaited<ReturnType<typeof getOrganizationEntitlements>>;
@@ -573,6 +638,8 @@ export function deriveCommercialWorkflowDecision(input: {
     uploads_remaining: input.entitlements.uploadsLimit,
     documents_processed_remaining: input.entitlements.aiProcessingRunsLimit
   };
+  const entitlementSource = deriveEntitlementSource(input.entitlements);
+  const capabilityProfile = buildCommercialCapabilityProfile(input);
 
   const normalizedHints: NormalizedRoutingHints = {
     workflow_family: "audit",
@@ -584,7 +651,9 @@ export function deriveCommercialWorkflowDecision(input: {
     report_template: getCanonicalReportTemplateForPlan(
       normalizePlanCode(input.planCode)
     ),
+    entitlement_source: entitlementSource,
     route_category: routeCategory,
+    capability_profile: capabilityProfile,
     entitlement_summary: {
       workspace_access: input.entitlements.featureAccess["workspace.access"],
       reports_generate: input.entitlements.featureAccess["reports.generate"],
@@ -687,9 +756,18 @@ export async function computeAndPersistRoutingSnapshot(input: {
       routingReasonJson: decision.reason,
       commercialStateJson: {
         planCode: normalizePlanCode(input.planCode),
+        planTier: normalizePlanCode(input.planCode),
         workspaceMode: entitlements.workspaceMode,
         subscriptionStatus: entitlements.subscriptionStatus,
         billingAccessState: entitlements.billingAccessState,
+        entitlementSource: deriveEntitlementSource(entitlements),
+        workflowDispatchId: null,
+        routingDecision: {
+          workflowCode: normalizeWorkflowCode(decision.workflowCode),
+          processingDepth: decision.hints.processing_depth,
+          routeCategory: decision.hints.route_category,
+          capabilityProfile: decision.hints.capability_profile
+        },
         environment: getIntegrationEnvironmentLabel()
       },
       status: decision.status

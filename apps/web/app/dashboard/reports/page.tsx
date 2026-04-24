@@ -5,11 +5,16 @@ import { ProductSurfacePanel } from "../../../components/product-surface-panel";
 import { UpsellOfferStack } from "../../../components/upsell-offer-stack";
 import { getOrganizationActivationSnapshot } from "../../../lib/activation";
 import { getCurrentSubscription } from "../../../lib/billing";
-import { requireCurrentSession } from "../../../lib/auth";
+import {
+  getSessionAuthorizationContext,
+  requireCurrentSession,
+} from "../../../lib/auth";
+import { hasPermission } from "../../../lib/authorization";
 import { toCustomerAccessSession } from "../../../lib/customer-access-session";
 import { getOrganizationEntitlements } from "../../../lib/entitlements";
 import { getOrganizationReportPackages } from "../../../lib/executive-delivery";
 import { getExpansionOffers } from "../../../lib/expansion-engine";
+import { getOrganizationAiFeedbackSummary } from "../../../src/server/ai/feedback";
 import { buildProductSurfaceModel } from "../../../lib/product-surface";
 import { logServerEvent } from "../../../lib/monitoring";
 import {
@@ -107,6 +112,12 @@ export default async function ReportsPage({
   let reportUsage: ReturnType<typeof getUsageMetricSnapshot> = null;
   let aiRunUsage: ReturnType<typeof getUsageMetricSnapshot> = null;
   let upsellOffers: ReturnType<typeof getExpansionOffers> = [];
+  const canReviewReports = hasPermission(
+    getSessionAuthorizationContext(session),
+    "reports.review"
+  );
+  let aiFeedbackSummary: Awaited<ReturnType<typeof getOrganizationAiFeedbackSummary>> | null =
+    null;
 
   try {
     [
@@ -150,6 +161,11 @@ export default async function ReportsPage({
       organizationId,
       entitlements
     );
+    if (canReviewReports) {
+      aiFeedbackSummary = await getOrganizationAiFeedbackSummary({
+        organizationId
+      });
+    }
     reportUsage = getUsageMetricSnapshot(usageMetering, "reportsGenerated");
     aiRunUsage = getUsageMetricSnapshot(usageMetering, "aiProcessingRuns");
     upsellOffers = getExpansionOffers({
@@ -243,7 +259,7 @@ export default async function ReportsPage({
 
         {params.generated ? (
           <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-accent">
-            A new report is ready for review and delivery.
+            A new report was generated and is now awaiting internal review.
           </div>
         ) : null}
 
@@ -260,6 +276,100 @@ export default async function ReportsPage({
         <div className="mt-6">
           <ProductSurfacePanel model={productSurface} />
         </div>
+
+        {canReviewReports && aiFeedbackSummary ? (
+          <section className="mt-6 rounded-[24px] border border-line bg-white p-5">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-accent">AI feedback loop</p>
+                <h2 className="mt-2 text-xl font-semibold text-ink">
+                  Internal report quality signals
+                </h2>
+                <p className="mt-2 text-sm text-steel">
+                  Last {aiFeedbackSummary.lookbackDays} days of approval, rejection,
+                  regeneration, and flagged eval feedback.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-line bg-mist p-4">
+                <p className="text-sm font-medium text-steel">Approved</p>
+                <p className="mt-2 text-2xl font-semibold text-ink">
+                  {aiFeedbackSummary.approvalRate}%
+                </p>
+                <p className="mt-2 text-sm text-steel">
+                  {aiFeedbackSummary.approvedCount} approved out of{" "}
+                  {aiFeedbackSummary.reviewedCount} reviewed reports.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-line bg-mist p-4">
+                <p className="text-sm font-medium text-steel">Rejected</p>
+                <p className="mt-2 text-2xl font-semibold text-ink">
+                  {aiFeedbackSummary.rejectionRate}%
+                </p>
+                <p className="mt-2 text-sm text-steel">
+                  {aiFeedbackSummary.rejectedCount} rejected,{" "}
+                  {aiFeedbackSummary.regeneratedCount} regenerated,{" "}
+                  {aiFeedbackSummary.flaggedCount} flagged.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-line bg-mist p-4">
+                <p className="text-sm font-medium text-steel">Top Failure Categories</p>
+                <div className="mt-3 space-y-2">
+                  {aiFeedbackSummary.topFailureCategories.length > 0 ? (
+                    aiFeedbackSummary.topFailureCategories.slice(0, 3).map((entry) => (
+                      <p key={entry.category} className="text-sm text-steel">
+                        {formatStatus(entry.category)}: {entry.count}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-sm text-steel">
+                      No recurring failure category has been recorded yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {(aiFeedbackSummary.promptWeaknesses.length > 0 ||
+              aiFeedbackSummary.modelFailureSignals.length > 0) ? (
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-line bg-mist p-4">
+                  <p className="text-sm font-medium text-steel">Prompt Weaknesses</p>
+                  <div className="mt-3 space-y-3">
+                    {aiFeedbackSummary.promptWeaknesses.map((entry) => (
+                      <div key={`${entry.category}-${entry.node}`} className="rounded-2xl bg-white p-4">
+                        <p className="text-sm font-semibold text-ink">
+                          {formatStatus(entry.category)}
+                        </p>
+                        <p className="mt-2 text-sm text-steel">
+                          {entry.node} · {entry.count} signals
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-steel">{entry.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-line bg-mist p-4">
+                  <p className="text-sm font-medium text-steel">Model Failure Signals</p>
+                  <div className="mt-3 space-y-3">
+                    {aiFeedbackSummary.modelFailureSignals.map((entry) => (
+                      <div key={entry.signal} className="rounded-2xl bg-white p-4">
+                        <p className="text-sm font-semibold text-ink">
+                          {formatStatus(entry.signal)}
+                        </p>
+                        <p className="mt-2 text-sm text-steel">
+                          {entry.count} linked feedback events
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         {!activation.isActivated ? (
           <div className="mt-6">
