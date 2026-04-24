@@ -70,6 +70,7 @@ export function getReportArtifactAvailability(input: {
   }
 
   switch (input.status) {
+    case ReportStatus.APPROVED:
     case ReportStatus.READY:
     case ReportStatus.DELIVERED:
     case ReportStatus.SUPERSEDED:
@@ -79,6 +80,8 @@ export function getReportArtifactAvailability(input: {
         customerMessage:
           "This report artifact is ready for secure viewing and download."
       };
+    case ReportStatus.GENERATED:
+    case ReportStatus.PENDING_REVIEW:
     case ReportStatus.PENDING:
     case ReportStatus.PROCESSING:
       return {
@@ -87,6 +90,7 @@ export function getReportArtifactAvailability(input: {
         customerMessage:
           "This report is still being finalized. The export artifact will appear here as soon as preparation is complete."
       };
+    case ReportStatus.REJECTED:
     case ReportStatus.FAILED:
     default:
       return {

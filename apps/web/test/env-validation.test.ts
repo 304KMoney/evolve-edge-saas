@@ -28,6 +28,9 @@ function runEnvValidationTests() {
   process.env.N8N_DISPATCH_ENABLED = "false";
   delete process.env.HUBSPOT_SYNC_ENABLED;
   delete process.env.HUBSPOT_ACCESS_TOKEN;
+  delete process.env.AI_EXECUTION_PROVIDER;
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_MODEL;
   delete process.env.DIFY_API_KEY;
   delete process.env.DIFY_API_BASE_URL;
   delete process.env.DIFY_BASE_URL;
@@ -36,19 +39,18 @@ function runEnvValidationTests() {
 
   assert.doesNotThrow(() => assertCriticalEnvironmentParity());
 
-  process.env.DIFY_EXECUTION_ENABLED = "true";
-  delete process.env.DIFY_API_KEY;
-  delete process.env.DIFY_API_BASE_URL;
-  assert.throws(() => assertCriticalEnvironmentParity(), /DIFY_API_BASE_URL/);
+  process.env.AI_EXECUTION_PROVIDER = "openai_langgraph";
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_MODEL;
+  assert.throws(() => assertCriticalEnvironmentParity(), /OPENAI_API_KEY/);
 
-  process.env.DIFY_API_BASE_URL = "https://dify.example";
-  process.env.DIFY_API_KEY = "dify";
-  process.env.DIFY_WORKFLOW_ID = "wf_123";
+  process.env.OPENAI_API_KEY = "openai-key";
+  process.env.OPENAI_MODEL = "gpt-4o-2024-08-06";
 
   const status = getEnvironmentParityStatus();
-  const difyKey = status.find((entry) => entry.key === "DIFY_API_KEY");
-  assert.equal(difyKey?.required, true);
-  assert.equal(difyKey?.configured, true);
+  const openAiKey = status.find((entry) => entry.key === "OPENAI_API_KEY");
+  assert.equal(openAiKey?.required, true);
+  assert.equal(openAiKey?.configured, true);
 
   process.env.HUBSPOT_ACCESS_TOKEN = "hubspot_token";
   process.env.HUBSPOT_SYNC_ENABLED = "false";
@@ -82,6 +84,9 @@ function runEnvValidationTests() {
   delete process.env.EMAIL_PROVIDER;
   delete process.env.HUBSPOT_SYNC_ENABLED;
   delete process.env.HUBSPOT_ACCESS_TOKEN;
+  delete process.env.AI_EXECUTION_PROVIDER;
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_MODEL;
   delete process.env.DIFY_EXECUTION_ENABLED;
   delete process.env.N8N_DISPATCH_ENABLED;
   delete process.env.DIFY_API_BASE_URL;

@@ -40,7 +40,7 @@ export const CANONICAL_INTEGRATION_EVENT_TYPES = [
 export type CanonicalIntegrationEventType =
   (typeof CANONICAL_INTEGRATION_EVENT_TYPES)[number];
 
-export const CANONICAL_DIFY_FIELD_KEYS = [
+export const CANONICAL_AI_EXECUTION_FIELD_KEYS = [
   "company_name",
   "contact_name",
   "contact_email",
@@ -53,7 +53,11 @@ export const CANONICAL_DIFY_FIELD_KEYS = [
   "processing_depth"
 ] as const;
 
-export type CanonicalDifyFieldKey = (typeof CANONICAL_DIFY_FIELD_KEYS)[number];
+export const CANONICAL_DIFY_FIELD_KEYS = CANONICAL_AI_EXECUTION_FIELD_KEYS;
+
+export type CanonicalAiExecutionFieldKey =
+  (typeof CANONICAL_AI_EXECUTION_FIELD_KEYS)[number];
+export type CanonicalDifyFieldKey = CanonicalAiExecutionFieldKey;
 
 export const CANONICAL_BILLING_MOTIONS = [
   "stripe_checkout",
@@ -130,6 +134,11 @@ export const CANONICAL_ENV_KEYS = {
   n8nWebhookSecret: "N8N_WEBHOOK_SECRET",
   n8nCallbackSecret: "N8N_CALLBACK_SECRET",
   n8nWritebackSecret: "N8N_WRITEBACK_SECRET",
+  aiExecutionProvider: "AI_EXECUTION_PROVIDER",
+  openAiApiKey: "OPENAI_API_KEY",
+  openAiModel: "OPENAI_MODEL",
+  openAiReasoningModel: "OPENAI_REASONING_MODEL",
+  aiExecutionTimeoutMs: "AI_EXECUTION_TIMEOUT_MS",
   difyApiBaseUrl: "DIFY_API_BASE_URL",
   difyApiKey: "DIFY_API_KEY",
   difyWorkflowId: "DIFY_WORKFLOW_ID",
@@ -162,6 +171,11 @@ export const CANONICAL_SERVER_ONLY_ENV_KEYS = [
   CANONICAL_ENV_KEYS.n8nWebhookSecret,
   CANONICAL_ENV_KEYS.n8nCallbackSecret,
   CANONICAL_ENV_KEYS.n8nWritebackSecret,
+  CANONICAL_ENV_KEYS.aiExecutionProvider,
+  CANONICAL_ENV_KEYS.openAiApiKey,
+  CANONICAL_ENV_KEYS.openAiModel,
+  CANONICAL_ENV_KEYS.openAiReasoningModel,
+  CANONICAL_ENV_KEYS.aiExecutionTimeoutMs,
   CANONICAL_ENV_KEYS.difyApiBaseUrl,
   CANONICAL_ENV_KEYS.difyApiKey,
   CANONICAL_ENV_KEYS.difyWorkflowId,
@@ -203,6 +217,11 @@ export const CANONICAL_ENV_GROUPS = {
     CANONICAL_ENV_KEYS.n8nWebhookSecret,
     CANONICAL_ENV_KEYS.n8nCallbackSecret,
     CANONICAL_ENV_KEYS.n8nWritebackSecret,
+    CANONICAL_ENV_KEYS.aiExecutionProvider,
+    CANONICAL_ENV_KEYS.openAiApiKey,
+    CANONICAL_ENV_KEYS.openAiModel,
+    CANONICAL_ENV_KEYS.openAiReasoningModel,
+    CANONICAL_ENV_KEYS.aiExecutionTimeoutMs,
     CANONICAL_ENV_KEYS.difyApiBaseUrl,
     CANONICAL_ENV_KEYS.difyApiKey,
     CANONICAL_ENV_KEYS.difyWorkflowId,

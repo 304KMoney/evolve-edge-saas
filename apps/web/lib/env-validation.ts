@@ -3,6 +3,7 @@ type EnvCategory =
   | "auth/session"
   | "stripe"
   | "hubspot"
+  | "ai-execution"
   | "dify"
   | "n8n"
   | "monitoring"
@@ -15,6 +16,7 @@ type EnvValidationContext = {
   features: {
     stripe: boolean;
     hubspot: boolean;
+    aiExecution: boolean;
     dify: boolean;
     n8n: boolean;
     resendEmail: boolean;
@@ -76,16 +78,34 @@ function isEnabledViaFlag(name: string) {
   return readEnv(name).toLowerCase() === "true";
 }
 
+function isHubSpotFeatureEnabled() {
+  const configured = readEnv("HUBSPOT_SYNC_ENABLED").toLowerCase();
+
+  if (configured === "false") {
+    return false;
+  }
+
+  if (configured === "true") {
+    return true;
+  }
+
+  return Boolean(readEnv("HUBSPOT_ACCESS_TOKEN"));
+}
+
 function getValidationContext(): EnvValidationContext {
   const runtime = getRuntimeEnvironment();
 
   const hasStripeEnv =
     Boolean(readEnv("STRIPE_SECRET_KEY")) || Boolean(readEnv("STRIPE_WEBHOOK_SECRET"));
-  const hasHubSpotEnv = Boolean(readEnv("HUBSPOT_ACCESS_TOKEN"));
   const hasDifyEnv =
     Boolean(readEnvWithAliases("DIFY_API_BASE_URL", ["DIFY_BASE_URL"])) ||
     Boolean(readEnv("DIFY_API_KEY")) ||
     Boolean(readEnv("DIFY_WORKFLOW_ID"));
+  const hasAiExecutionEnv =
+    Boolean(readEnv("AI_EXECUTION_PROVIDER")) ||
+    Boolean(readEnv("OPENAI_API_KEY")) ||
+    Boolean(readEnv("OPENAI_MODEL")) ||
+    Boolean(readEnv("OPENAI_REASONING_MODEL"));
   const hasN8nEnv =
     Boolean(readEnv("N8N_WORKFLOW_DESTINATIONS")) ||
     Boolean(readEnv("N8N_WEBHOOK_URL")) ||
@@ -99,7 +119,11 @@ function getValidationContext(): EnvValidationContext {
     runtime,
     features: {
       stripe: isEnabledViaFlag("STRIPE_FLOW_ENABLED") || runtime === "production" || hasStripeEnv,
-      hubspot: isEnabledViaFlag("HUBSPOT_SYNC_ENABLED") || hasHubSpotEnv,
+      hubspot: isHubSpotFeatureEnabled(),
+      aiExecution:
+        runtime === "production" ||
+        hasAiExecutionEnv ||
+        readEnv("AI_EXECUTION_PROVIDER").toLowerCase() === "openai_langgraph",
       dify: isEnabledViaFlag("DIFY_EXECUTION_ENABLED") || hasDifyEnv,
       n8n: isEnabledViaFlag("N8N_DISPATCH_ENABLED") || runtime === "production" || hasN8nEnv,
       resendEmail: hasResendEnv,
@@ -168,6 +192,145 @@ const ENV_RULES: EnvRule[] = [
       "Required to authenticate public intake POST requests and prevent spoofed workflow triggers."
   },
   {
+    key: "AI_EXECUTION_PROVIDER",
+    category: "ai-execution",
+    requiredWhen: (context) => context.features.aiExecution
+  },
+  {
+    key: "AI_EXECUTION_DISPATCH_SECRET",
+    aliases: [
+      "AI_EXECUTION_SERVICE_TOKEN",
+      "DIFY_DISPATCH_SECRET",
+      "N8N_CALLBACK_SHARED_SECRET",
+      "N8N_CALLBACK_SECRET"
+    ],
+    category: "ai-execution",
+    requiredWhen: (context) => context.features.aiExecution,
+    notes: "Bearer secret for POST /api/internal/ai/execute."
+  },
+  {
+    key: "OPENAI_API_KEY",
+    category: "ai-execution",
+    requiredWhen: (context) =>
+      context.features.aiExecution &&
+      readEnv("AI_EXECUTION_PROVIDER").toLowerCase() !== "dify"
+  },
+  {
+    key: "OPENAI_CHEAP_MODEL",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional. Overrides the lower-cost model used for lighter audit workflow nodes."
+  },
+  {
+    key: "OPENAI_MODEL",
+    category: "ai-execution",
+    requiredWhen: (context) =>
+      context.features.aiExecution &&
+      readEnv("AI_EXECUTION_PROVIDER").toLowerCase() !== "dify"
+  },
+  {
+    key: "OPENAI_REASONING_MODEL",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional. Used for deeper reasoning nodes in the LangGraph audit workflow."
+  },
+  {
+    key: "OPENAI_STRONG_MODEL",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional. Overrides the stronger model used for higher-value audit workflow nodes."
+  },
+  {
+    key: "AI_EXECUTION_TIMEOUT_MS",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional. Defaults to 20000ms when omitted."
+  },
+  {
+    key: "AI_EXECUTION_MAX_INPUT_CHARS",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional global guardrail for total workflow input size."
+  },
+  {
+    key: "AI_EXECUTION_STARTER_MAX_INPUT_CHARS",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional plan-aware cap for starter audit input size."
+  },
+  {
+    key: "AI_EXECUTION_SCALE_MAX_INPUT_CHARS",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional plan-aware cap for scale audit input size."
+  },
+  {
+    key: "AI_EXECUTION_ENTERPRISE_MAX_INPUT_CHARS",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional plan-aware cap for enterprise audit input size."
+  },
+  {
+    key: "AI_EXECUTION_MAX_CONCURRENCY",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional global cap for simultaneous OpenAI/LangGraph workflow executions."
+  },
+  {
+    key: "AI_EXECUTION_MAX_CONCURRENT_PER_ORG",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional per-organization cap for simultaneous OpenAI/LangGraph workflow executions."
+  },
+  {
+    key: "AI_EXECUTION_ORG_RATE_LIMIT_WINDOW_MS",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional org-scoped acceptance rate-limit window for AI execution triggers."
+  },
+  {
+    key: "AI_EXECUTION_ORG_RATE_LIMIT_MAX_REQUESTS",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional org-scoped acceptance rate-limit cap for AI execution triggers."
+  },
+  {
+    key: "AI_EXECUTION_WORKFLOW_RATE_LIMIT_WINDOW_MS",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional workflow-dispatch scoped rate-limit window for duplicate AI triggers."
+  },
+  {
+    key: "AI_EXECUTION_WORKFLOW_RATE_LIMIT_MAX_REQUESTS",
+    category: "ai-execution",
+    requiredWhen: () => false,
+    notes: "Optional workflow-dispatch scoped rate-limit cap for duplicate AI triggers."
+  },
+  {
+    key: "REPORT_RETENTION_DAYS",
+    category: "monitoring",
+    requiredWhen: () => false,
+    notes: "Optional retention period for delivered, failed, and superseded reports."
+  },
+  {
+    key: "ASSESSMENT_RETENTION_DAYS",
+    category: "monitoring",
+    requiredWhen: () => false,
+    notes: "Optional retention period for archived assessments."
+  },
+  {
+    key: "AUDIT_LOG_RETENTION_DAYS",
+    category: "monitoring",
+    requiredWhen: () => false,
+    notes: "Optional retention period for audit access logs."
+  },
+  {
+    key: "WORKFLOW_TRACE_RETENTION_DAYS",
+    category: "monitoring",
+    requiredWhen: () => false,
+    notes: "Optional retention period for workflow traces, checkpoints, and analysis jobs."
+  },
+  {
     key: "HUBSPOT_ACCESS_TOKEN",
     category: "hubspot",
     requiredWhen: (context) => context.features.hubspot
@@ -176,17 +339,20 @@ const ENV_RULES: EnvRule[] = [
     key: "DIFY_API_BASE_URL",
     aliases: ["DIFY_BASE_URL"],
     category: "dify",
-    requiredWhen: (context) => context.features.dify
+    requiredWhen: (context) => context.features.dify,
+    notes: "Deprecated rollback path only."
   },
   {
     key: "DIFY_API_KEY",
     category: "dify",
-    requiredWhen: (context) => context.features.dify
+    requiredWhen: (context) => context.features.dify,
+    notes: "Deprecated rollback path only."
   },
   {
     key: "DIFY_WORKFLOW_ID",
     category: "dify",
-    requiredWhen: (context) => context.features.dify
+    requiredWhen: (context) => context.features.dify,
+    notes: "Deprecated rollback path only."
   },
   {
     key: "NEXT_PUBLIC_APP_URL",
@@ -295,6 +461,7 @@ export function logEnvironmentParityStatus() {
         "auth/session",
         "stripe",
         "hubspot",
+        "ai-execution",
         "dify",
         "n8n",
         "monitoring",

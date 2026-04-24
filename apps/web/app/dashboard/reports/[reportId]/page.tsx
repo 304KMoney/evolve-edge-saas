@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Prisma, ReportStatus, prisma } from "@evolve-edge/db";
+import { AuditActorType, Prisma, ReportStatus, prisma } from "@evolve-edge/db";
 import {
   getSessionAuthorizationContext,
   requireOrganizationPermission
 } from "../../../../lib/auth";
+import {
+  getServerAuditRequestContext,
+  writeAuditLog
+} from "../../../../lib/audit";
 import {
   canManageReportDelivery,
   hasPermission
@@ -24,12 +28,19 @@ import {
   getReportAccessCandidateById
 } from "../../../../lib/report-records";
 import {
+  buildExecutiveReportViewModel,
+  getLatestAssessmentWorkflowSnapshot
+} from "../../../../lib/report-view-model";
+import { getReportDeliveryOperationsSnapshot } from "../../../../lib/report-delivery-operations";
+import {
   approveReportPackageQaAction,
   bookReportBriefingAction,
   completeFounderReviewAction,
   completeReportBriefingAction,
   markReportDeliveredAction,
-  requestReportPackageChangesAction
+  requestReportPackageChangesAction,
+  requestReportRegenerationAction,
+  saveReportReviewNotesAction
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +50,11 @@ type DeliveryPackageDetail = NonNullable<
 >;
 type DeliveryPackageVersion = DeliveryPackageDetail["versions"][number];
 
-function formatDate(date: Date) {
+function formatDate(date: Date | null | undefined) {
+  if (!date) {
+    return "Not set";
+  }
+
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -50,17 +65,10 @@ function formatDate(date: Date) {
 function formatStatus(status: string) {
   return status
     .toLowerCase()
+    .replaceAll("-", " ")
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function readReportJson(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return value as Record<string, unknown>;
 }
 
 function getDisplayName(input: {
@@ -80,10 +88,13 @@ export default async function ReportDetailPage({
   searchParams: Promise<{
     delivered?: string;
     qaApproved?: string;
-    changesRequested?: string;
+    rejected?: string;
     founderReviewed?: string;
     briefingBooked?: string;
     briefingCompleted?: string;
+    notesSaved?: string;
+    regenerationRequested?: string;
+    error?: string;
   }>;
 }) {
   const session = await requireOrganizationPermission("reports.view");
@@ -139,6 +150,7 @@ export default async function ReportDetailPage({
 
   if (!report.viewedAt) {
     const viewedAt = new Date();
+    const requestContext = await getServerAuditRequestContext();
 
     await prisma.$transaction(async (tx) => {
       const claim = await tx.report.updateMany({
@@ -172,6 +184,23 @@ export default async function ReportDetailPage({
           viewedByUserId: session.user.id
         } satisfies Prisma.InputJsonValue
       });
+
+      await writeAuditLog(tx, {
+        organizationId: session.organization!.id,
+        userId: session.user.id,
+        actorType: AuditActorType.USER,
+        actorLabel: session.user.email,
+        action: "report.viewed",
+        entityType: "report",
+        entityId: report.id,
+        resourceType: "report",
+        resourceId: report.id,
+        dataClassification: report.dataClassification,
+        metadata: {
+          assessmentId: report.assessmentId
+        },
+        requestContext
+      });
     });
 
     report.viewedAt = viewedAt;
@@ -189,29 +218,25 @@ export default async function ReportDetailPage({
     };
   }
 
-  const reportJson = readReportJson(report.reportJson);
   const deliveryPackage = await getReportExecutiveDeliveryPackage(report.id);
-  const currentPackageVersion =
-    deliveryPackage?.versions.find(
-      (version: DeliveryPackageVersion) => version.reportId === report.id
-    ) ?? null;
-  const executiveSummary = readReportJson(currentPackageVersion?.executiveSummaryJson);
-  const roadmapSummary = readReportJson(currentPackageVersion?.roadmapSummaryJson);
-  const frameworkSummary = readReportJson(currentPackageVersion?.frameworkSummaryJson);
-  const findings = Array.isArray(reportJson.findings)
-    ? (reportJson.findings as Array<Record<string, unknown>>)
-    : [];
-  const roadmap = Array.isArray(reportJson.roadmap)
-    ? (reportJson.roadmap as Array<Record<string, unknown>>)
-    : [];
-  const sectionSummaries = Array.isArray(reportJson.sectionSummaries)
-    ? (reportJson.sectionSummaries as Array<Record<string, unknown>>)
-    : [];
+  const workflowSnapshot = await getLatestAssessmentWorkflowSnapshot(report.assessmentId);
+  const executiveReport = buildExecutiveReportViewModel({
+    report,
+    overallRiskPosture: hydratedReportView.overallRiskPosture,
+    workflowSnapshot
+  });
   const authz = getSessionAuthorizationContext(session);
   const canManageDeliveryControls = canManageReportDelivery(authz);
   const canApproveQa = hasPermission(authz, "reports.review");
   const canFounderReview = hasPermission(authz, "organization.manage");
   const artifactAvailability = hydratedReportView.artifactAvailability;
+  const deliveryOperations =
+    canManageDeliveryControls || canApproveQa
+      ? await getReportDeliveryOperationsSnapshot({
+          organizationId: session.organization!.id,
+          reportId: report.id
+        })
+      : null;
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
@@ -219,11 +244,17 @@ export default async function ReportDetailPage({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-medium text-accent">Executive Report</p>
-            <h1 className="mt-2 text-3xl font-semibold text-ink">{report.title}</h1>
+            <h1 className="mt-2 text-3xl font-semibold text-ink">
+              {executiveReport.title}
+            </h1>
             <p className="mt-3 text-sm text-steel">
-              {report.assessment.name} · {report.versionLabel} · {formatStatus(report.status)} · Published{" "}
-              {formatDate(report.publishedAt ?? report.createdAt)}
+              {executiveReport.assessmentName} · {executiveReport.versionLabel} ·{" "}
+              {formatStatus(report.status)} · Published{" "}
+              {formatDate(executiveReport.publishedAt)}
             </p>
+            {executiveReport.subtitle ? (
+              <p className="mt-2 text-sm text-steel">{executiveReport.subtitle}</p>
+            ) : null}
             {hydratedReportView.deliveryStatus ? (
               <p className="mt-2 text-sm text-steel">
                 Delivery {formatStatus(hydratedReportView.deliveryStatus)}
@@ -266,14 +297,29 @@ export default async function ReportDetailPage({
             This report has been marked as delivered.
           </div>
         ) : null}
+        {query.error === "delivery-requires-paid-subscription" ? (
+          <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-danger">
+            Delivery is blocked because this workspace does not currently have an active paid subscription state in the app.
+          </div>
+        ) : null}
         {query.qaApproved === "1" ? (
           <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-accent">
             QA review completed. This executive package is ready for delivery decisions.
           </div>
         ) : null}
-        {query.changesRequested === "1" ? (
+        {query.rejected === "1" ? (
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
-            QA changes were requested before external delivery.
+            This report was rejected for delivery and requires revision before client release.
+          </div>
+        ) : null}
+        {query.notesSaved === "1" ? (
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-accent">
+            Internal review notes were saved.
+          </div>
+        ) : null}
+        {query.regenerationRequested === "1" ? (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
+            Regeneration was requested. A fresh LangGraph run has been queued and this version remains internal-only.
           </div>
         ) : null}
         {query.founderReviewed === "1" ? (
@@ -315,6 +361,24 @@ export default async function ReportDetailPage({
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-line bg-mist p-5">
+            <p className="text-sm font-medium text-steel">Workflow Progress</p>
+            <p className="mt-2 text-lg font-semibold text-ink">
+              {executiveReport.workflowProgress?.label ?? "Unavailable"}
+            </p>
+            <p className="mt-2 text-sm text-steel">
+              {executiveReport.workflowProgress?.description ??
+                "No workflow milestone is currently available for this report."}
+            </p>
+            <div className="mt-4 h-2.5 rounded-full bg-white/70">
+              <div
+                className="h-2.5 rounded-full bg-accent"
+                style={{
+                  width: `${executiveReport.workflowProgress?.progressPercent ?? 0}%`
+                }}
+              />
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Delivery Status</p>
             <p className="mt-2 text-lg font-semibold text-ink">
               {formatStatus(hydratedReportView.deliveryStatus ?? report.status)}
@@ -323,8 +387,8 @@ export default async function ReportDetailPage({
               {hydratedReportView.deliveryMessage
                 ? hydratedReportView.deliveryMessage
                 : report.deliveredAt
-                ? `Delivered ${formatDate(report.deliveredAt)}`
-                : "Ready for customer delivery"}
+                  ? `Delivered ${formatDate(report.deliveredAt)}`
+                  : "Ready for customer delivery"}
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-mist p-5">
@@ -352,6 +416,23 @@ export default async function ReportDetailPage({
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-mist p-5">
+            <p className="text-sm font-medium text-steel">Review Gate</p>
+            <p className="mt-2 text-lg font-semibold text-ink">
+              {formatStatus(report.status)}
+            </p>
+            <p className="mt-2 text-sm text-steel">
+              {report.status === ReportStatus.PENDING_REVIEW
+                ? "Awaiting internal reviewer approval before client delivery."
+                : report.status === ReportStatus.APPROVED
+                  ? "Approved for delivery controls and customer send."
+                  : report.status === ReportStatus.REJECTED
+                    ? "Rejected for delivery until revised or regenerated."
+                    : report.status === ReportStatus.DELIVERED
+                      ? "Customer delivery has been recorded."
+                      : "Report review status is being synchronized."}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Artifact state</p>
             <p className="mt-2 text-lg font-semibold text-ink">
               {typeof hydratedReportView.artifactMetadata?.downloadStatus === "string"
@@ -374,7 +455,7 @@ export default async function ReportDetailPage({
             <div className="rounded-2xl border border-line bg-white p-5">
               <p className="text-sm font-medium text-steel">Internal QA review</p>
               <p className="mt-2 text-sm text-steel">
-                Delivery is blocked until QA signs off on the executive packet.
+                Delivery is blocked until a reviewer approves the report package and any required founder review is cleared.
               </p>
               <div className="mt-4 space-y-3">
                 {deliveryPackage.reviewedAt ? (
@@ -388,8 +469,26 @@ export default async function ReportDetailPage({
                 {deliveryPackage.qaNotes ? (
                   <p className="text-sm text-steel">{deliveryPackage.qaNotes}</p>
                 ) : null}
-                {deliveryPackage.deliveryStatus === "GENERATED" && canApproveQa ? (
+                {canApproveQa ? (
                   <div className="flex flex-col gap-3">
+                    <form action={saveReportReviewNotesAction} className="space-y-3">
+                      <input type="hidden" name="reportId" value={report.id} />
+                      <textarea
+                        name="notes"
+                        rows={3}
+                        defaultValue={deliveryPackage.qaNotes ?? ""}
+                        placeholder="Internal review notes for this report."
+                        className="w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none"
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
+                      >
+                        Save internal notes
+                      </button>
+                    </form>
+                    {deliveryPackage.deliveryStatus === "GENERATED" ? (
+                      <>
                     <form action={approveReportPackageQaAction} className="space-y-3">
                       <input type="hidden" name="reportId" value={report.id} />
                       <textarea
@@ -417,7 +516,24 @@ export default async function ReportDetailPage({
                         type="submit"
                         className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
                       >
-                        Request changes
+                        Reject with reason
+                      </button>
+                    </form>
+                    </>
+                    ) : null}
+                    <form action={requestReportRegenerationAction} className="space-y-3">
+                      <input type="hidden" name="reportId" value={report.id} />
+                      <textarea
+                        name="notes"
+                        rows={3}
+                        placeholder="Why should the report be regenerated?"
+                        className="w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none"
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
+                      >
+                        Request regeneration
                       </button>
                     </form>
                   </div>
@@ -463,7 +579,9 @@ export default async function ReportDetailPage({
                   </form>
                 ) : null}
 
-                {report.status !== ReportStatus.DELIVERED && canManageDeliveryControls ? (
+                {report.status !== ReportStatus.DELIVERED &&
+                report.status === ReportStatus.APPROVED &&
+                canManageDeliveryControls ? (
                   <form action={markReportDeliveredAction} className="space-y-3">
                     <input type="hidden" name="reportId" value={report.id} />
                     <textarea
@@ -522,179 +640,284 @@ export default async function ReportDetailPage({
           </section>
         ) : null}
 
+        {deliveryOperations ? (
+          <section className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-line bg-white p-5">
+              <p className="text-sm font-medium text-steel">Delivery operations</p>
+              <div className="mt-4 space-y-3 text-sm text-steel">
+                <div className="rounded-2xl bg-mist p-4">
+                  <p className="font-medium text-ink">
+                    Billing {deliveryOperations.billing.eligible ? "eligible" : "blocked"}
+                  </p>
+                  <p className="mt-1 text-sm text-steel">
+                    {deliveryOperations.billing.accessStateLabel}
+                  </p>
+                  <p className="mt-2 text-sm text-steel">
+                    {deliveryOperations.billing.message}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-mist p-4">
+                  <p className="font-medium text-ink">
+                    Email dispatch {deliveryOperations.dispatch.configured ? "configured" : "needs setup"}
+                  </p>
+                  <p className="mt-2 text-sm text-steel">
+                    {deliveryOperations.dispatch.message}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {deliveryOperations.dispatch.requiredEnv.map((entry) => (
+                      <span
+                        key={entry.key}
+                        className="rounded-full bg-white px-3 py-1 text-xs font-medium text-steel"
+                      >
+                        {entry.key}: {entry.configured ? "ready" : "missing"}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-line bg-white p-5">
+              <p className="text-sm font-medium text-steel">Queued delivery emails</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                <div className="rounded-2xl bg-mist p-4">
+                  <p className="text-sm text-steel">Pending</p>
+                  <p className="mt-2 text-xl font-semibold text-ink">
+                    {deliveryOperations.emailQueue.counts.pending}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-mist p-4">
+                  <p className="text-sm text-steel">Processing</p>
+                  <p className="mt-2 text-xl font-semibold text-ink">
+                    {deliveryOperations.emailQueue.counts.processing}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-mist p-4">
+                  <p className="text-sm text-steel">Sent</p>
+                  <p className="mt-2 text-xl font-semibold text-ink">
+                    {deliveryOperations.emailQueue.counts.sent}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-mist p-4">
+                  <p className="text-sm text-steel">Failed</p>
+                  <p className="mt-2 text-xl font-semibold text-ink">
+                    {deliveryOperations.emailQueue.counts.failed}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-4 text-sm text-steel">
+                Due now: {deliveryOperations.emailQueue.dueCount} · Scheduled later:{" "}
+                {deliveryOperations.emailQueue.scheduledCount} · Latest activity:{" "}
+                {formatDate(deliveryOperations.emailQueue.latestActivityAt)}
+              </p>
+              <div className="mt-4 space-y-3">
+                {deliveryOperations.emailQueue.notifications.length > 0 ? (
+                  deliveryOperations.emailQueue.notifications.map((notification) => (
+                    <div key={notification.id} className="rounded-2xl bg-mist p-4">
+                      <p className="font-medium text-ink">
+                        {formatStatus(notification.templateKey)}
+                      </p>
+                      <p className="mt-1 text-sm text-steel">
+                        {formatStatus(notification.status)} · Created{" "}
+                        {formatDate(notification.createdAt)}
+                      </p>
+                      <p className="mt-2 text-sm text-steel">
+                        {notification.sentAt
+                          ? `Sent ${formatDate(notification.sentAt)}`
+                          : notification.scheduledFor
+                            ? `Scheduled ${formatDate(notification.scheduledFor)}`
+                            : "Awaiting dispatch"}
+                      </p>
+                      {notification.lastError ? (
+                        <p className="mt-2 text-sm text-danger">
+                          Last error: {notification.lastError}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl bg-mist p-4 text-sm text-steel">
+                    No delivery or follow-up emails have been queued for this report yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-line bg-mist p-5">
-            <p className="text-sm font-medium text-steel">Posture Score</p>
+            <p className="text-sm font-medium text-steel">Overall Risk Posture</p>
             <p className="mt-2 text-2xl font-semibold text-ink">
-              {typeof reportView?.overallRiskPosture.score === "number"
-                ? `${reportView.overallRiskPosture.score}/100`
+              {executiveReport.overallRiskPosture.riskLevel ?? "Pending"}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-steel">
+              {executiveReport.overallRiskPosture.summary}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-line bg-mist p-5">
+            <p className="text-sm font-medium text-steel">Compliance Score</p>
+            <p className="mt-2 text-2xl font-semibold text-ink">
+              {typeof executiveReport.complianceScore === "number"
+                ? `${executiveReport.complianceScore}/100`
                 : "Pending"}
             </p>
           </div>
           <div className="rounded-2xl border border-line bg-mist p-5">
-            <p className="text-sm font-medium text-steel">Risk Level</p>
+            <p className="text-sm font-medium text-steel">Top Concerns</p>
             <p className="mt-2 text-2xl font-semibold text-ink">
-              {typeof reportView?.overallRiskPosture.level === "string"
-                ? reportView.overallRiskPosture.level
-                : "Not scored"}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-line bg-mist p-5">
-            <p className="text-sm font-medium text-steel">Coverage</p>
-            <p className="mt-2 text-2xl font-semibold text-ink">
-              {typeof reportJson.findingCount === "number"
-                ? `${reportJson.findingCount} findings`
-                : "0 findings"}
+              {executiveReport.topConcerns.length > 0
+                ? `${executiveReport.topConcerns.length} priorities`
+                : "Pending"}
             </p>
             <p className="mt-2 text-sm text-steel">
-              {typeof reportJson.recommendationCount === "number"
-                ? `${reportJson.recommendationCount} recommendations`
-                : "0 recommendations"}
+              {executiveReport.topConcerns[0] ??
+                "Validated concerns will appear here once report generation completes."}
             </p>
           </div>
         </div>
 
-        <section className="mt-8 rounded-2xl border border-line bg-white p-6">
-          <p className="text-sm font-medium text-steel">Executive Summary</p>
-          <p className="mt-3 text-sm leading-7 text-ink">
-            {reportView?.executiveSummary
-              ? reportView.executiveSummary
-              : "No executive summary was generated for this report yet."}
-          </p>
-        </section>
-
-        {currentPackageVersion ? (
-          <section className="mt-8 grid gap-4 lg:grid-cols-2">
-            <article className="rounded-2xl border border-line bg-white p-6">
-              <p className="text-sm font-medium text-steel">Leadership overview</p>
-              <p className="mt-3 text-sm leading-7 text-ink">
-                {String(
-                  executiveSummary.leadershipOverview ??
-                    "No packaged leadership overview is available."
-                )}
-              </p>
-              <div className="mt-4 space-y-3">
-                <div className="rounded-2xl bg-mist p-4">
-                  <p className="text-sm font-semibold text-ink">Business risk framing</p>
-                  <p className="mt-2 text-sm text-steel">
-                    {String(executiveSummary.businessRisk ?? "Risk framing pending.")}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-mist p-4">
-                  <p className="text-sm font-semibold text-ink">Priority actions</p>
-                  <div className="mt-2 space-y-2">
-                    {Array.isArray(roadmapSummary.topActions)
-                      ? (roadmapSummary.topActions as Array<Record<string, unknown>>).map(
-                          (action, index) => (
-                            <p key={`${action.title}-${index}`} className="text-sm text-steel">
-                              {String(action.title ?? "Untitled")} · {String(action.priority ?? "Unknown")} ·{" "}
-                              {String(action.timeline ?? "Timeline pending")}
-                            </p>
-                          )
-                        )
-                      : null}
-                  </div>
-                </div>
-              </div>
-            </article>
-
-            <article className="rounded-2xl border border-line bg-white p-6">
-              <p className="text-sm font-medium text-steel">Briefing packet metadata</p>
-              <div className="mt-4 space-y-3">
-                <div className="rounded-2xl bg-mist p-4">
-                  <p className="text-sm font-semibold text-ink">Frameworks assessed</p>
-                  <div className="mt-2 space-y-2">
-                    {Array.isArray(frameworkSummary.frameworksAssessed)
-                      ? (
-                          frameworkSummary.frameworksAssessed as Array<Record<string, unknown>>
-                        ).map((framework, index) => (
-                          <p key={`${framework.code}-${index}`} className="text-sm text-steel">
-                            {String(framework.name ?? framework.code ?? "Framework")}
-                            {framework.version ? ` ${String(framework.version)}` : ""}
-                          </p>
-                        ))
-                      : null}
-                  </div>
-                </div>
-                <div className="rounded-2xl bg-mist p-4">
-                  <p className="text-sm font-semibold text-ink">Top findings snapshot</p>
-                  <div className="mt-2 space-y-2">
-                    {Array.isArray(executiveSummary.topFindings)
-                      ? (
-                          executiveSummary.topFindings as Array<Record<string, unknown>>
-                        ).map((finding, index) => (
-                          <p key={`${finding.title}-${index}`} className="text-sm text-steel">
-                            {String(finding.title ?? "Untitled")} · {String(finding.severity ?? "Unknown")}
-                          </p>
-                        ))
-                      : null}
-                  </div>
-                </div>
-              </div>
-            </article>
+        {executiveReport.emptyState ? (
+          <section className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6">
+            <p className="text-sm font-semibold text-warning">
+              {executiveReport.emptyState.title}
+            </p>
+            <p className="mt-3 text-sm leading-7 text-warning">
+              {executiveReport.emptyState.description}
+            </p>
           </section>
         ) : null}
 
+        <section className="mt-8 rounded-2xl border border-line bg-white p-6">
+          <p className="text-sm font-medium text-steel">Executive Summary</p>
+          <p className="mt-3 text-sm leading-7 text-ink">
+            {executiveReport.executiveSummary}
+          </p>
+        </section>
+
         <section className="mt-8 grid gap-4 lg:grid-cols-2">
           <article className="rounded-2xl border border-line bg-white p-6">
-            <p className="text-sm font-medium text-steel">Findings</p>
+            <p className="text-sm font-medium text-steel">Top Findings</p>
             <div className="mt-4 space-y-3">
-              {findings.map((finding, index) => (
-                <div key={`${finding.title}-${index}`} className="rounded-2xl bg-mist p-4">
-                  <p className="text-sm font-semibold text-ink">
-                    {String(finding.title ?? "Untitled finding")}
-                  </p>
-                  <p className="mt-2 text-sm text-steel">
-                    {String(finding.severity ?? "Unknown severity")} ·{" "}
-                    {String(finding.riskDomain ?? "Unknown domain")}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-steel">
-                    {String(finding.summary ?? "No finding summary available.")}
-                  </p>
+              {executiveReport.topFindings.length > 0 ? (
+                executiveReport.topFindings.map((finding, index) => (
+                  <div key={`${finding.title}-${index}`} className="rounded-2xl bg-mist p-4">
+                    <p className="text-sm font-semibold text-ink">{finding.title}</p>
+                    <p className="mt-2 text-sm text-steel">
+                      {finding.severity}
+                      {finding.affectedArea ? ` · ${finding.affectedArea}` : ""}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-steel">
+                      {finding.summary}
+                    </p>
+                    {finding.businessImpact ? (
+                      <p className="mt-2 text-sm leading-6 text-steel">
+                        Business impact: {finding.businessImpact}
+                      </p>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl bg-mist p-4 text-sm text-steel">
+                  No validated findings are available yet.
                 </div>
-              ))}
+              )}
             </div>
           </article>
 
           <article className="rounded-2xl border border-line bg-white p-6">
-            <p className="text-sm font-medium text-steel">Roadmap</p>
+            <p className="text-sm font-medium text-steel">Compliance &amp; Governance Gaps</p>
             <div className="mt-4 space-y-3">
-              {roadmap.map((item, index) => (
-                <div key={`${item.title}-${index}`} className="rounded-2xl bg-mist p-4">
-                  <p className="text-sm font-semibold text-ink">
-                    {String(item.title ?? "Untitled action")}
-                  </p>
-                  <p className="mt-2 text-sm text-steel">
-                    {String(item.priority ?? "Unknown priority")} ·{" "}
-                    {String(item.ownerRole ?? "Owner pending")} ·{" "}
-                    {String(item.timeline ?? "Timeline pending")}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-steel">
-                    {String(item.description ?? "No roadmap detail was generated.")}
-                  </p>
+              {executiveReport.complianceAndGovernanceGaps.length > 0 ? (
+                executiveReport.complianceAndGovernanceGaps.map((gap, index) => (
+                  <div key={`${gap}-${index}`} className="rounded-2xl bg-mist p-4">
+                    <p className="text-sm leading-6 text-steel">{gap}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl bg-mist p-4 text-sm text-steel">
+                  No material compliance and governance gaps are currently summarized.
                 </div>
-              ))}
+              )}
             </div>
           </article>
         </section>
 
         <section className="mt-8 rounded-2xl border border-line bg-white p-6">
-          <p className="text-sm font-medium text-steel">Intake Evidence Summary</p>
-          <div className="mt-4 space-y-3">
-            {sectionSummaries.map((section, index) => (
-              <div key={`${section.title}-${index}`} className="rounded-2xl bg-mist p-4">
-                <p className="text-sm font-semibold text-ink">
-                  {String(section.title ?? "Untitled section")}
-                </p>
-                <p className="mt-2 text-sm text-steel">
-                  Status: {String(section.status ?? "Unknown")}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-steel">
-                  {String(section.notes ?? "No intake summary captured.")}
-                </p>
+          <p className="text-sm font-medium text-steel">30/60/90 Day Roadmap</p>
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            {[
+              {
+                title: "0-30 Days",
+                items: executiveReport.roadmap.days30,
+                empty: "No immediate actions are currently available."
+              },
+              {
+                title: "31-60 Days",
+                items: executiveReport.roadmap.days60,
+                empty: "No stabilization actions are currently available."
+              },
+              {
+                title: "61-90 Days",
+                items: executiveReport.roadmap.days90,
+                empty: "No maturity actions are currently available."
+              }
+            ].map((bucket) => (
+              <div key={bucket.title} className="rounded-2xl bg-mist p-4">
+                <p className="text-sm font-semibold text-ink">{bucket.title}</p>
+                <div className="mt-3 space-y-3">
+                  {bucket.items.length > 0 ? (
+                    bucket.items.map((item, index) => (
+                      <div
+                        key={`${bucket.title}-${item.title}-${index}`}
+                        className="rounded-2xl border border-white/70 bg-white p-4"
+                      >
+                        <p className="text-sm font-semibold text-ink">{item.title}</p>
+                        <p className="mt-2 text-sm text-steel">
+                          {item.priority}
+                          {item.ownerRole ? ` · ${item.ownerRole}` : ""}
+                          {item.timeline ? ` · ${item.timeline}` : ""}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-steel">
+                          {item.description}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-steel">{bucket.empty}</p>
+                  )}
+                </div>
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="mt-8 grid gap-4 lg:grid-cols-2">
+          <article className="rounded-2xl border border-line bg-white p-6">
+            <p className="text-sm font-medium text-steel">Executive Briefing Talking Points</p>
+            <div className="mt-4 space-y-3">
+              {executiveReport.executiveBriefingTalkingPoints.length > 0 ? (
+                executiveReport.executiveBriefingTalkingPoints.map((point, index) => (
+                  <div
+                    key={`${point}-${index}`}
+                    className="rounded-2xl bg-mist p-4 text-sm leading-6 text-steel"
+                  >
+                    {point}
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl bg-mist p-4 text-sm text-steel">
+                  Briefing talking points will appear after validated report assembly.
+                </div>
+              )}
+            </div>
+          </article>
+          <article className="rounded-2xl border border-line bg-white p-6">
+            <p className="text-sm font-medium text-steel">Closing Advisory Note</p>
+            <p className="mt-4 text-sm leading-7 text-ink">
+              {executiveReport.closingAdvisoryNote}
+            </p>
+          </article>
         </section>
 
         {deliveryPackage ? (
@@ -709,7 +932,8 @@ export default async function ReportDetailPage({
                         {version.report.title} · {version.report.versionLabel}
                       </p>
                       <p className="mt-1 text-sm text-steel">
-                        Packet version {version.versionNumber} · {formatDate(version.createdAt)}
+                        Packet version {version.versionNumber} ·{" "}
+                        {formatDate(version.createdAt)}
                       </p>
                     </div>
                     <Link

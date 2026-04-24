@@ -377,7 +377,7 @@ export async function generateReportAction(formData: FormData) {
         createdByUserId: session.user.id,
         title: `${assessment.name} Executive Summary`,
         versionLabel: `v${versionCount + 1}.0`,
-        status: ReportStatus.READY,
+        status: ReportStatus.PENDING_REVIEW,
         publishedAt: new Date(),
         reportJson: {
           assessmentName: assessment.name,

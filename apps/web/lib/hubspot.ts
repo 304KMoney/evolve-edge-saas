@@ -43,6 +43,7 @@ const HUBSPOT_SYNC_EVENT_TYPES = new Set([
   "onboarding.completed",
   "assessment.created",
   "report.generated",
+  "report.delivered",
   "customer_account.stage_changed",
   "subscription.created",
   "subscription.updated"
@@ -109,6 +110,7 @@ function getLifecycleStage(eventType: string) {
     case "assessment.created":
       return "assessment_started";
     case "report.generated":
+    case "report.delivered":
       return "value_realized";
     case "customer_account.stage_changed":
       return "customer_lifecycle_updated";
@@ -159,6 +161,15 @@ function buildMilestoneProperties(eventType: string, event: DomainEvent) {
       ? { evolve_edge_first_assessment_created_at: occurredAt }
       : {}),
     ...(eventType === "report.generated"
+      ? {
+          evolve_edge_report_delivered_at: occurredAt,
+          evolve_edge_report_generated: "true",
+          evolve_edge_risk_level:
+            typeof payload.riskLevel === "string" ? payload.riskLevel : "",
+          evolve_edge_top_concerns: topConcerns
+        }
+      : {}),
+    ...(eventType === "report.delivered"
       ? {
           evolve_edge_report_delivered_at: occurredAt,
           evolve_edge_report_generated: "true",
@@ -524,6 +535,78 @@ async function upsertPrimaryContactForEvent(
   return contact.id;
 }
 
+async function resolveDealIdForEvent(event: DomainEvent) {
+  const payload = readPayloadRecord(event.payload);
+  const payloadDealId = readPayloadString(payload, "crmDealId", "hubspotDealId");
+  if (payloadDealId) {
+    return payloadDealId;
+  }
+
+  const customerAccountId = readPayloadString(payload, "customerAccountId");
+  if (customerAccountId) {
+    const customerAccount = await prisma.customerAccount.findUnique({
+      where: { id: customerAccountId },
+      select: { crmDealId: true }
+    });
+    if (customerAccount?.crmDealId) {
+      return customerAccount.crmDealId;
+    }
+  }
+
+  if (!event.orgId) {
+    return null;
+  }
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: event.orgId },
+    include: {
+      customerAccount: {
+        select: { crmDealId: true }
+      }
+    }
+  });
+
+  return organization?.customerAccount?.crmDealId ?? null;
+}
+
+function getDealStageForEvent(event: DomainEvent) {
+  if (event.type === "report.delivered") {
+    const configured = getOptionalEnv("HUBSPOT_REPORT_DELIVERED_DEAL_STAGE_ID");
+    return configured && configured.trim().length > 0 ? configured.trim() : null;
+  }
+
+  return null;
+}
+
+async function syncDealForEvent(event: DomainEvent, timeoutMs: number) {
+  const dealStage = getDealStageForEvent(event);
+  if (!dealStage) {
+    return null;
+  }
+
+  const dealId = await resolveDealIdForEvent(event);
+  if (!dealId) {
+    return null;
+  }
+
+  await hubspotRequest<HubSpotUpsertResponse>(
+    `/crm/v3/objects/deals/${dealId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        properties: {
+          dealstage: dealStage,
+          evolve_edge_last_event_type: event.type,
+          evolve_edge_last_event_at: event.occurredAt.toISOString()
+        }
+      })
+    },
+    timeoutMs
+  );
+
+  return dealId;
+}
+
 export async function syncDomainEventToHubSpot(input: {
   event: DomainEvent;
   timeoutMs?: number;
@@ -547,13 +630,14 @@ export async function syncDomainEventToHubSpot(input: {
       companyId,
       timeoutMs
     );
+    const dealId = await syncDealForEvent(input.event, timeoutMs);
 
     logServerEvent("info", "hubspot.sync.completed", {
       traceId: input.traceId ?? (requestId || null),
       route: "hubspot.sync",
       customer_email: maskEmail(customerEmail) || null,
       hubspot_contact_id: contactId,
-      hubspot_deal_id: null,
+      hubspot_deal_id: dealId,
       request_id: requestId || null,
       status: "synced",
       source: "hubspot.sync",
@@ -566,6 +650,7 @@ export async function syncDomainEventToHubSpot(input: {
     return {
       companyId,
       contactId,
+      dealId,
       customerEmail: customerEmail || null
     };
   } catch (error) {

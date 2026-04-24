@@ -9,9 +9,15 @@ import {
   prisma
 } from "@evolve-edge/db";
 import {
+  AI_WORKFLOW_FEEDBACK_TYPES,
+  extractWorkflowDispatchIdFromReportJson,
+  recordAiWorkflowFeedback,
+} from "../src/server/ai/feedback";
+import {
   markDeliveryStateAwaitingReviewForReport,
   markDeliveryStateDeliveredForReport
 } from "./delivery-state";
+import { markCustomerRunWorkflowProgressByReport } from "./customer-runs";
 import { publishDomainEvent } from "./domain-events";
 import { logServerEvent } from "./monitoring";
 import { recordOperationalFinding } from "./operations-queues";
@@ -553,12 +559,27 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
     }
   });
 
+  await db.report.update({
+    where: { id: report.id },
+    data: {
+      status: ReportStatus.PENDING_REVIEW,
+      deliveredAt: null,
+      deliveredByUserId: null
+    }
+  });
+
   await markDeliveryStateAwaitingReviewForReport({
     db,
     organizationId: report.organizationId,
     reportId: report.id,
     reportPackageId: deliveryPackage.id,
     actorUserId: input.actorUserId ?? report.createdByUserId ?? null
+  });
+
+  await markCustomerRunWorkflowProgressByReport({
+    reportId: report.id,
+    status: "pending_review",
+    db
   });
 
   return deliveryPackage;
@@ -749,6 +770,19 @@ export async function approveReportPackageQa(input: {
     }
   });
 
+  await db.report.update({
+    where: { id: latestReportId },
+    data: {
+      status: ReportStatus.APPROVED
+    }
+  });
+
+  await markCustomerRunWorkflowProgressByReport({
+    reportId: latestReportId,
+    status: "completed",
+    db
+  });
+
   await publishReportPackageEvent(db, {
     type: "report_package.reviewed",
     reportPackageId: updated.id,
@@ -800,6 +834,19 @@ export async function requestReportPackageChanges(input: {
     }
   });
 
+  await db.report.update({
+    where: { id: latestReportId },
+    data: {
+      status: ReportStatus.REJECTED
+    }
+  });
+
+  await markCustomerRunWorkflowProgressByReport({
+    reportId: latestReportId,
+    status: "failed",
+    db
+  });
+
   await publishReportPackageEvent(db, {
     type: "report_package.changes_requested",
     reportPackageId: updated.id,
@@ -811,6 +858,56 @@ export async function requestReportPackageChanges(input: {
       qaNotes: updated.qaNotes
     }
   });
+
+  return updated;
+}
+
+export async function saveReportPackageReviewNotes(input: {
+  packageId: string;
+  organizationId: string;
+  actorUserId: string;
+  notes: string;
+  db?: ExecutiveDeliveryDbClient;
+}) {
+  const db = (input.db ?? prisma) as ExecutiveDeliveryDbClient;
+  const deliveryPackage = await getPackageById(input.packageId, input.organizationId, db);
+  const latestReportId = getLatestReportId(deliveryPackage);
+
+  const updated = await db.reportPackage.update({
+    where: { id: deliveryPackage.id },
+    data: {
+      qaNotes: input.notes.trim() || null
+    }
+  });
+
+  await publishReportPackageEvent(db, {
+    type: "report_package.review_notes_saved",
+    reportPackageId: updated.id,
+    organizationId: updated.organizationId,
+    userId: input.actorUserId,
+    reportId: latestReportId,
+    assessmentId: updated.assessmentId,
+    payload: {
+      qaNotes: updated.qaNotes
+    }
+  });
+
+  const workflowDispatchId = extractWorkflowDispatchIdFromReportJson(
+    deliveryPackage.latestReport!.reportJson
+  );
+  if (workflowDispatchId) {
+    await recordAiWorkflowFeedback({
+      db,
+      workflowDispatchId,
+      organizationId: updated.organizationId,
+      reportId: latestReportId,
+      feedbackType: AI_WORKFLOW_FEEDBACK_TYPES.APPROVED,
+      notes: input.notes ?? null,
+      metadata: {
+        source: "report_package.qa_approved",
+      },
+    });
+  }
 
   return updated;
 }
@@ -937,6 +1034,29 @@ export async function markReportPackageSent(input: {
     actorUserId: input.actorUserId
   });
 
+  await markCustomerRunWorkflowProgressByReport({
+    reportId: latestReportId,
+    status: "completed",
+    db
+  });
+
+  const workflowDispatchId = extractWorkflowDispatchIdFromReportJson(
+    deliveryPackage.latestReport!.reportJson
+  );
+  if (workflowDispatchId) {
+    await recordAiWorkflowFeedback({
+      db,
+      workflowDispatchId,
+      organizationId: updated.organizationId,
+      reportId: latestReportId,
+      feedbackType: AI_WORKFLOW_FEEDBACK_TYPES.REJECTED,
+      notes: updated.qaNotes,
+      metadata: {
+        source: "report_package.changes_requested",
+      },
+    });
+  }
+
   return updated;
 }
 
@@ -986,6 +1106,23 @@ export async function markReportPackageBriefingBooked(input: {
       briefingNotes: updated.briefingNotes
     }
   });
+
+  const workflowDispatchId = extractWorkflowDispatchIdFromReportJson(
+    deliveryPackage.latestReport!.reportJson
+  );
+  if (workflowDispatchId) {
+    await recordAiWorkflowFeedback({
+      db,
+      workflowDispatchId,
+      organizationId: updated.organizationId,
+      reportId: latestReportId,
+      feedbackType: AI_WORKFLOW_FEEDBACK_TYPES.EDITED,
+      notes: updated.qaNotes,
+      metadata: {
+        source: "report_package.review_notes_saved",
+      },
+    });
+  }
 
   return updated;
 }

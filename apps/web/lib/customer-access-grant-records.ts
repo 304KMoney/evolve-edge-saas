@@ -285,6 +285,32 @@ export async function findLatestActiveCustomerAccessGrantRecord(input: {
   });
 }
 
+export async function listActiveCustomerAccessGrantRecords(input: {
+  db?: CustomerAccessGrantDbClient;
+  organizationId?: string | null;
+  userId?: string | null;
+  customerEmail?: string | null;
+  limit?: number;
+}) {
+  const db = input.db ?? prisma;
+  const now = new Date();
+  const organizationId = input.organizationId?.trim() || null;
+  const userId = input.userId?.trim() || null;
+  const customerEmail = normalizeEmail(input.customerEmail);
+
+  return db.customerAccessGrantRecord.findMany({
+    where: {
+      organizationId: organizationId ?? undefined,
+      userId: userId ?? undefined,
+      customerEmail: customerEmail ?? undefined,
+      grantStatus: CustomerAccessGrantStatus.ISSUED,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
+    },
+    orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }],
+    take: input.limit ?? 50
+  });
+}
+
 export async function listCustomerAccessGrantRecords(input?: {
   db?: CustomerAccessGrantDbClient;
   organizationId?: string | null;
