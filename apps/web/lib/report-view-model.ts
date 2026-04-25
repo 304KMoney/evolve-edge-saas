@@ -111,6 +111,16 @@ export type ExecutiveReportViewModel = {
   executiveBriefingTalkingPoints: string[];
   closingAdvisoryNote: string;
   topConcerns: string[];
+  trustSignals: {
+    howGenerated: string;
+    dataUsed: string;
+    confidenceLevel: string;
+    lastUpdatedLabel: string;
+  };
+  disclaimers: {
+    advisoryOnly: string;
+    noGuarantee: string;
+  };
   emptyState: {
     title: string;
     description: string;
@@ -157,6 +167,25 @@ function formatDate(date: Date) {
     month: "short",
     day: "numeric",
     year: "numeric"
+  }).format(date);
+}
+
+function formatDateTimeLabel(value: Date | string | null | undefined) {
+  if (!value) {
+    return "Not yet available";
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Not yet available";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
   }).format(date);
 }
 
@@ -387,6 +416,36 @@ function buildLegacyOverallRiskSummary(reportJson: JsonObject | null, posture: O
   );
 }
 
+function buildTrustSignals(input: {
+  workflowSnapshot: WorkflowSnapshot;
+  report: ReportRecordLike;
+}) {
+  const confidenceLevel =
+    input.workflowSnapshot.state === "completed"
+      ? input.report.status === ReportStatus.PENDING_REVIEW
+        ? "High confidence, pending internal review"
+        : "High confidence"
+      : input.workflowSnapshot.state === "failed"
+        ? "Unavailable until review"
+        : input.workflowSnapshot.state === "running"
+          ? "In progress"
+          : "Pending";
+
+  const lastUpdatedSource =
+    input.workflowSnapshot.progress?.updatedAt ??
+    input.report.publishedAt ??
+    input.report.createdAt;
+
+  return {
+    howGenerated:
+      "This report was created from your submitted assessment and reviewed evidence, then checked by our backend before it was made available in Evolve Edge.",
+    dataUsed:
+      "We used your assessment answers, selected frameworks, evidence summaries, and validated workflow analysis. We summarize sensitive material rather than reproducing it in full.",
+    confidenceLevel,
+    lastUpdatedLabel: formatDateTimeLabel(lastUpdatedSource)
+  };
+}
+
 function buildWorkflowSnapshotResult(outputPayload: Prisma.JsonValue | null): AuditWorkflowOutput | null {
   const payload = readJsonObject(outputPayload);
   const rawResult = payload ? payload.result : null;
@@ -572,6 +631,16 @@ export function buildExecutiveReportViewModel(input: {
       result?.finalReport.conclusion ??
       "Prioritize governance, remediation ownership, and measurable control adoption before the next customer-facing review cycle.",
     topConcerns: result?.topConcerns ?? asStringArray(reportJson?.topConcerns).slice(0, 5),
+    trustSignals: buildTrustSignals({
+      workflowSnapshot: input.workflowSnapshot,
+      report: input.report
+    }),
+    disclaimers: {
+      advisoryOnly:
+        "This report is advisory guidance designed to support planning and decision-making.",
+      noGuarantee:
+        "It does not guarantee compliance, certification, or a specific regulatory outcome."
+    },
     emptyState:
       state === "ready"
         ? null
@@ -687,6 +756,21 @@ export function buildExecutiveReportHtml(model: ExecutiveReportViewModel) {
         <section class="section">
           <h2>Executive Summary</h2>
           <p>${escapeHtml(model.executiveSummary)}</p>
+        </section>
+
+        <section class="section-grid">
+          <section class="section">
+            <h2>How This Report Was Generated</h2>
+            <p>${escapeHtml(model.trustSignals.howGenerated)}</p>
+            <p class="meta" style="margin-top: 12px;">Confidence level: ${escapeHtml(model.trustSignals.confidenceLevel)}</p>
+            <p class="meta" style="margin-top: 8px;">Last updated: ${escapeHtml(model.trustSignals.lastUpdatedLabel)}</p>
+          </section>
+          <section class="section">
+            <h2>What Data Was Used</h2>
+            <p>${escapeHtml(model.trustSignals.dataUsed)}</p>
+            <p class="meta" style="margin-top: 12px;">${escapeHtml(model.disclaimers.advisoryOnly)}</p>
+            <p class="meta" style="margin-top: 8px;">${escapeHtml(model.disclaimers.noGuarantee)}</p>
+          </section>
         </section>
 
         <section class="section-grid">

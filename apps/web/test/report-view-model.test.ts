@@ -190,7 +190,33 @@ async function runReportViewModelTests() {
 
   const html = buildExecutiveReportHtml(completedModel);
   assert.equal(completedModel.state, "ready");
+  assert.match(
+    completedModel.trustSignals.howGenerated,
+    /submitted assessment and reviewed evidence/i
+  );
+  assert.match(
+    completedModel.trustSignals.dataUsed,
+    /selected frameworks, evidence summaries, and validated workflow analysis/i
+  );
+  assert.match(completedModel.trustSignals.confidenceLevel, /high confidence/i);
+  assert.match(
+    completedModel.disclaimers.advisoryOnly,
+    /advisory guidance designed to support planning and decision-making/i
+  );
+  assert.match(
+    completedModel.disclaimers.noGuarantee,
+    /does not guarantee compliance, certification, or a specific regulatory outcome/i
+  );
   assert.match(html, /Executive Summary/);
+  assert.match(html, /How This Report Was Generated/);
+  assert.match(html, /What Data Was Used/);
+  assert.match(html, /Confidence level:/);
+  assert.match(html, /Last updated:/);
+  assert.match(html, /advisory guidance designed to support planning and decision-making/i);
+  assert.match(
+    html,
+    /does not guarantee compliance, certification, or a specific regulatory outcome/i
+  );
   assert.match(html, /Overall Risk Posture/);
   assert.match(html, /Compliance Score/);
   assert.match(html, /Top Findings/);

@@ -17,6 +17,10 @@ import {
   markDeliveryStateAwaitingReviewForReport,
   markDeliveryStateDeliveredForReport
 } from "./delivery-state";
+import {
+  buildExecutiveBriefingOutput,
+  isExecutiveBriefingEligiblePlan
+} from "./executive-briefing";
 import { markCustomerRunWorkflowProgressByReport } from "./customer-runs";
 import { publishDomainEvent } from "./domain-events";
 import { logServerEvent } from "./monitoring";
@@ -199,6 +203,7 @@ export function buildBriefingPacketSnapshot(input: {
   executiveSummary: Prisma.JsonObject;
   roadmapSummary: Prisma.JsonObject;
   frameworkSummary: Prisma.JsonObject;
+  executiveBriefingAvailable: boolean;
   reportJson: unknown;
 }) {
   const reportJson = readRecord(input.reportJson);
@@ -210,6 +215,7 @@ export function buildBriefingPacketSnapshot(input: {
     executiveSummary: input.executiveSummary,
     roadmapSummary: input.roadmapSummary,
     frameworkSummary: input.frameworkSummary,
+    executiveBriefingAvailable: input.executiveBriefingAvailable,
     sectionSummaries: Array.isArray(reportJson.sectionSummaries)
       ? reportJson.sectionSummaries
       : [],
@@ -462,6 +468,14 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
       category: selection.framework.category
     }))
   });
+  const executiveBriefing = buildExecutiveBriefingOutput({
+    reportId: report.id,
+    reportTitle: report.title,
+    assessmentName: report.assessment.name,
+    versionLabel: report.versionLabel,
+    planCode: report.selectedPlan,
+    reportJson: report.reportJson
+  });
   const packet = buildBriefingPacketSnapshot({
     reportId: report.id,
     reportTitle: report.title,
@@ -469,6 +483,7 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
     executiveSummary,
     roadmapSummary,
     frameworkSummary,
+    executiveBriefingAvailable: executiveBriefing !== null,
     reportJson: report.reportJson
   });
   const founderReview = evaluateFounderReviewRequirement({
@@ -541,6 +556,7 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
       executiveSummaryJson: executiveSummary,
       roadmapSummaryJson: roadmapSummary,
       frameworkSummaryJson: frameworkSummary,
+      executiveBriefingJson: executiveBriefing,
       packetJson: packet
     }
   });
@@ -555,7 +571,9 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
     payload: {
       versionNumber: nextVersionNumber,
       requiresFounderReview: founderReview.requiresFounderReview,
-      founderReviewReason: founderReview.reason
+      founderReviewReason: founderReview.reason,
+      executiveBriefingEligible: isExecutiveBriefingEligiblePlan(report.selectedPlan),
+      executiveBriefingGenerated: executiveBriefing !== null
     }
   });
 

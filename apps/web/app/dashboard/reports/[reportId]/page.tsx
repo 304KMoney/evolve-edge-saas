@@ -789,6 +789,42 @@ export default async function ReportDetailPage({
         ) : null}
 
         <section className="mt-8 rounded-2xl border border-line bg-white p-6">
+          <p className="text-sm font-medium text-steel">How this report was generated</p>
+          <p className="mt-3 text-sm leading-7 text-ink">
+            {executiveReport.trustSignals.howGenerated}
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm font-medium text-steel">What data was used</p>
+              <p className="mt-2 text-sm leading-6 text-ink">
+                {executiveReport.trustSignals.dataUsed}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm font-medium text-steel">Confidence level</p>
+              <p className="mt-2 text-sm leading-6 text-ink">
+                {executiveReport.trustSignals.confidenceLevel}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-mist p-4">
+              <p className="text-sm font-medium text-steel">Last updated</p>
+              <p className="mt-2 text-sm leading-6 text-ink">
+                {executiveReport.trustSignals.lastUpdatedLabel}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 rounded-2xl border border-line bg-mist p-4">
+            <p className="text-sm font-medium text-steel">Important to know</p>
+            <p className="mt-2 text-sm leading-6 text-ink">
+              {executiveReport.disclaimers.advisoryOnly}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-ink">
+              {executiveReport.disclaimers.noGuarantee}
+            </p>
+          </div>
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-line bg-white p-6">
           <p className="text-sm font-medium text-steel">Executive Summary</p>
           <p className="mt-3 text-sm leading-7 text-ink">
             {executiveReport.executiveSummary}
