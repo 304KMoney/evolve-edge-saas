@@ -931,15 +931,15 @@ export default async function AdminPage({
                         <p className="mt-2 text-sm text-steel">{finding.summary}</p>
                         <div className="mt-3 space-y-1 text-sm text-steel">
                           <p>
-                            Delivery: {finding.linkage.deliveryStateId} Â· Dispatch{" "}
+                            Delivery: {finding.linkage.deliveryStateId} | Dispatch{" "}
                             {finding.linkage.workflowDispatchId ?? "Not linked"}
                           </p>
                           <p>
-                            Run: {finding.linkage.customerRunId ?? "Not linked"} Â· Report{" "}
+                            Run: {finding.linkage.customerRunId ?? "Not linked"} | Report{" "}
                             {finding.linkage.reportId ?? "Not linked"}
                           </p>
                           <p>
-                            Customer run: {finding.state.customerRunStatus ?? "None"} Â· Step{" "}
+                            Customer run: {finding.state.customerRunStatus ?? "None"} | Step{" "}
                             {finding.state.customerRunStep ?? "None"}
                           </p>
                           {finding.state.failedDestinations.length > 0 ? (
@@ -989,7 +989,7 @@ export default async function AdminPage({
                         <p className="mt-2 text-sm text-steel">{finding.summary}</p>
                         <div className="mt-3 space-y-1 text-sm text-steel">
                           <p>
-                            Delivery: {finding.state.deliveryStatus} Â· Dispatch{" "}
+                            Delivery: {finding.state.deliveryStatus} | Dispatch{" "}
                             {finding.state.workflowDispatchStatus ?? "Not linked"}
                           </p>
                           <p>
@@ -1619,3 +1619,4 @@ export default async function AdminPage({
     </main>
   );
 }
+

@@ -720,16 +720,16 @@ export default async function AdminAccountDetailPage({
               billingAdminSnapshot.fulfillmentVisibility.recentAttention.map((finding) => (
                 <div key={`${finding.linkage.deliveryStateId}:${finding.code}`} className="rounded-2xl bg-mist p-4">
                   <p className="font-medium text-ink">
-                    {finding.title} Â· {formatStatus(finding.severity)}
+                    {finding.title} | {formatStatus(finding.severity)}
                   </p>
                   <p className="mt-1 text-sm text-steel">{finding.summary}</p>
                   <p className="mt-2 text-xs text-steel">
-                    Delivery {finding.linkage.deliveryStateId} Â· Dispatch {finding.linkage.workflowDispatchId ?? "n/a"} Â·
-                    Run {finding.linkage.customerRunId ?? "n/a"} Â· Report {finding.linkage.reportId ?? "n/a"}
+                    Delivery {finding.linkage.deliveryStateId} | Dispatch {finding.linkage.workflowDispatchId ?? "n/a"} |
+                    Run {finding.linkage.customerRunId ?? "n/a"} | Report {finding.linkage.reportId ?? "n/a"}
                   </p>
                   <p className="mt-2 text-xs text-steel">
-                    Delivery {formatStatus(finding.state.deliveryStatus)} Â· Customer run{" "}
-                    {finding.state.customerRunStatus ? formatStatus(finding.state.customerRunStatus) : "None"} Â·
+                    Delivery {formatStatus(finding.state.deliveryStatus)} | Customer run{" "}
+                    {finding.state.customerRunStatus ? formatStatus(finding.state.customerRunStatus) : "None"} |
                     Step {finding.state.customerRunStep ? formatStatus(finding.state.customerRunStep) : "None"}
                   </p>
                   {finding.state.failedDestinations.length > 0 ? (
@@ -748,12 +748,12 @@ export default async function AdminAccountDetailPage({
               billingAdminSnapshot.fulfillmentVisibility.recentRecovered.map((finding) => (
                 <div key={`${finding.linkage.deliveryStateId}:${finding.code}`} className="rounded-2xl bg-mist p-4">
                   <p className="font-medium text-ink">
-                    {finding.title} Â· {formatStatus(finding.status)}
+                    {finding.title} | {formatStatus(finding.status)}
                   </p>
                   <p className="mt-1 text-sm text-steel">{finding.summary}</p>
                   <p className="mt-2 text-xs text-steel">
-                    Delivery {formatStatus(finding.state.deliveryStatus)} Â· Dispatch{" "}
-                    {finding.state.workflowDispatchStatus ? formatStatus(finding.state.workflowDispatchStatus) : "None"} Â·
+                    Delivery {formatStatus(finding.state.deliveryStatus)} | Dispatch{" "}
+                    {finding.state.workflowDispatchStatus ? formatStatus(finding.state.workflowDispatchStatus) : "None"} |
                     Recovered {formatDate(finding.state.recoveryAt ? new Date(finding.state.recoveryAt) : null)}
                   </p>
                 </div>
@@ -776,7 +776,7 @@ export default async function AdminAccountDetailPage({
               billingAdminSnapshot.recentDeliveryMismatchFindings.map((finding) => (
                 <div key={`${finding.code}:${finding.deliveryStateId}`} className="rounded-2xl bg-mist p-4">
                   <p className="font-medium text-ink">
-                    {finding.title} · {formatStatus(finding.severity)}
+                    {finding.title} | {formatStatus(finding.severity)}
                   </p>
                   <p className="mt-1 text-sm text-steel">
                     {formatStatus(finding.deliveryStatus)} · Age {finding.ageMinutes} minutes · Observed{" "}
@@ -913,7 +913,7 @@ export default async function AdminAccountDetailPage({
               billingAdminSnapshot.recentDeliveryOpsFindings.map((finding) => (
                 <div key={finding.id} className="rounded-2xl bg-mist p-4">
                   <p className="font-medium text-ink">
-                    {finding.title} · {formatStatus(finding.severity)} · {formatStatus(finding.status)}
+                    {finding.title} | {formatStatus(finding.status)}
                   </p>
                   <p className="mt-1 text-sm text-steel">
                     {finding.ruleCode} · {formatDate(finding.lastDetectedAt)}
@@ -1095,3 +1095,5 @@ export default async function AdminAccountDetailPage({
     </main>
   );
 }
+
+
