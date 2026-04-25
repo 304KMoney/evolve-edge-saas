@@ -1,0 +1,129 @@
+
+=== Context ===
+Root: C:\Users\kielg\Documents\EvolveEdge\evolve-edge-saas
+Branch: codex-launch-hardening-handoff
+Log: C:\Users\kielg\Documents\EvolveEdge\evolve-edge-saas\review-logs\evolve-edge-preflight-summary-20260424-204117.log
+Worktree clean: NO
+
+=== Key Files ===
+AGENTS.md                                                                                  OK
+README.md                                                                                  OK
+.env.example                                                                               OK
+apps/web/vercel.json                                                                       OK
+.github/workflows/ci.yml                                                                   OK
+.github/workflows/deploy.yml                                                               OK
+apps/web/lib/ai-execution.ts                                                               OK
+apps/web/lib/ai-execution-route.ts                                                         OK
+apps/web/src/server/ai/providers/openai-langgraph.ts                                       OK
+apps/web/src/server/ai/workflows/audit/graph.ts                                            OK
+apps/web/src/server/ai/workflows/audit/nodes.ts                                            OK
+apps/web/src/server/ai/workflows/audit/state.ts                                            OK
+apps/web/src/server/ai/observability/workflow-tracker.ts                                   OK
+apps/web/lib/report-view-model.ts                                                          OK
+packages/db/prisma/schema.prisma                                                           OK
+docs/migrations/openai-langgraph-ai-execution.md                                           OK
+docs/workflows/n8n-ai-execution.md                                                         OK
+docs/migrations/dify-to-openai-langgraph-cutover.md                                        OK
+docs/observability.md                                                                      OK
+docs/data-retention.md                                                                     OK
+
+=== Prisma Migrations ===
+20260409230000_auth_onboarding_foundation
+20260410003000_auth_lockout_hardening
+20260410013000_billing_events
+20260410053000_domain_events_foundation
+20260410090000_outbound_webhook_dispatcher
+20260410103000_customer_runs
+20260410103000_stripe_webhook_hardening
+20260410113000_org_provisioning_api
+20260410114500_customer_accounts_control_plane
+20260410130000_hubspot_sync_foundation
+20260410132000_executive_delivery_layer
+20260410143000_transactional_email_service
+20260410150000_continuous_monitoring_foundation
+20260410153000_dify_analysis_hardening
+20260410170000_operator_console_founder_review
+20260410170000_report_delivery_access
+20260410183000_multi_engagement_programs
+20260410190000_scheduled_jobs_layer
+20260410193000_enterprise_authorization_platform_roles
+20260410195000_audit_log_expansion
+20260410203000_evidence_ingestion_foundation
+20260410210000_revenue_architecture_hardening
+20260410233000_usage_metering
+20260411003000_lead_pipeline
+20260411012000_product_analytics
+20260411020000_framework_control_scoring
+20260411030000_account_timeline_unification
+20260411033000_event_replay_tooling
+20260411040000_proactive_operations_queues
+20260411043000_subscription_domain_canonical_plan_model
+20260411050000_entitlement_resolution_system
+20260411053000_usage_metering_quota_enforcement
+20260411060000_billing_admin_enterprise_overrides
+20260411070000_workflow_routing_snapshots
+20260411080000_backend_commercial_routing_layer
+20260411110000_security_foundation
+20260412110000_delivery_state_tracking_layer
+20260412120000_access_grant_idempotency_boundary
+20260412123000_reconciliation_linkage
+20260412143000_purchase_payment_record_layer
+20260412183000_workflow_writeback_receipts
+20260412233000_payment_reconciliation_records
+20260412234500_customer_access_grant_records
+20260413000000_report_record_snapshots
+20260413001500_operator_workflow_event_records
+20260424143000_langgraph_review_feedback_checkpointing
+20260424170000_executive_briefing_output
+
+=== .env.example Coverage ===
+AI_EXECUTION_PROVIDER                    PRESENT
+AI_EXECUTION_DISPATCH_SECRET             PRESENT
+OPENAI_API_KEY                           PRESENT
+OPENAI_MODEL                             PRESENT
+OPENAI_CHEAP_MODEL                       PRESENT
+OPENAI_STRONG_MODEL                      PRESENT
+AI_EXECUTION_TIMEOUT_MS                  PRESENT
+NOTIFICATION_DISPATCH_SECRET             PRESENT
+CRON_SECRET                              PRESENT
+RESEND_API_KEY                           PRESENT
+EMAIL_FROM_ADDRESS                       PRESENT
+NEXT_PUBLIC_APP_URL                      PRESENT
+NEXT_PUBLIC_FOUNDING_RISK_AUDIT_URL      PRESENT
+HUBSPOT_ACCESS_TOKEN                     PRESENT
+HUBSPOT_SYNC_ENABLED                     PRESENT
+
+=== Pattern Checks ===
+Dify references found: 7876
+Internal AI endpoint references found: 26
+Legacy AI response parsing references found: 660
+
+=== Workflow/Review Signals ===
+Pending review references: 40
+Checkpoint/replay references: 1754
+Paid-delivery gate references: 0
+
+=== Manual External Review Required ===
+- VERCEL: confirm env vars, cron jobs, deployment logs, and internal route logs
+- NEON: confirm migrations applied and inspect AnalysisJob, reports, checkpoints, feedback, and audit logs
+- N8N: confirm only HTTP Request -> /api/internal/ai/execute, with no Dify or direct OpenAI node
+- STRIPE: confirm active subscriptions map to paid delivery access correctly
+- HUBSPOT: confirm projection still works after report delivery
+- STAGING: run full assessment -> workflow -> review -> delivery flow
+
+=== Summary ===
+[WARN] Git worktree: Worktree has uncommitted changes.
+[PASS] Key files: All expected workflow and docs files are present.
+[PASS] Prisma migrations: Migration directory is present with migration entries.
+[PASS] .env.example coverage: All expected environment keys are documented.
+[WARN] Dify cleanup: 7876 Dify references still exist and should be reviewed for intentional rollback-only usage.
+[PASS] Internal AI endpoint references: Internal AI execute endpoint is referenced in the repo.
+[WARN] Legacy response parsing: 660 possible legacy response parsing references still exist.
+[PASS] Review gate: Pending review state appears in the repo.
+[PASS] Checkpointing/replay: Checkpointing or replay references appear in the repo.
+[WARN] Paid delivery gating: No obvious paid access gating references were found by this quick scan.
+[WARN] External systems: Manual review is still required in Vercel, Neon, n8n, Stripe, HubSpot, and staging.
+PASS: 6  WARN: 5  FAIL: 0
+
+=== Completed ===
+Saved summary log to: C:\Users\kielg\Documents\EvolveEdge\evolve-edge-saas\review-logs\evolve-edge-preflight-summary-20260424-204117.log

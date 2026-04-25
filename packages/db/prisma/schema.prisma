@@ -2227,6 +2227,7 @@ model ReportPackageVersion {
   executiveSummaryJson Json
   roadmapSummaryJson   Json
   frameworkSummaryJson Json
+  executiveBriefingJson Json?
   packetJson           Json
   createdAt            DateTime @default(now())
   reportPackage        ReportPackage @relation(fields: [reportPackageId], references: [id], onDelete: Cascade)

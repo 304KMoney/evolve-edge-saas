@@ -29,8 +29,8 @@ report generation flow.
   - shared tenant-scoped lookup helpers should be preferred over ad hoc global-id fetches when this mutation surface expands
 - `ReportPackageVersion`
   - immutable package snapshot for each generated report version
-  - stores executive summary, roadmap summary, framework summary, and briefing
-    packet JSON
+  - stores executive summary, roadmap summary, framework summary, executive
+    briefing JSON, and briefing packet JSON
 
 ### Delivery Lifecycle
 
@@ -52,6 +52,17 @@ Supported QA states:
 
 - Every generated report now upserts a package and creates a new package
   version.
+- `scale` and `enterprise` reports now generate a separate executive briefing
+  artifact from validated report data.
+- The executive briefing artifact is stored on `ReportPackageVersion`, not in
+  `Report.reportJson`, and includes:
+  - 3-5 key risks
+  - business impact framing
+  - urgency framing
+  - roadmap highlights
+  - talking points
+  - slide-ready bullets
+  - a meeting script
 - Validated LangGraph reports now move the underlying `Report` through an
   explicit human-review gate:
   - `GENERATED`

@@ -1,0 +1,62 @@
+
+=== Review Run ===
+Repo: C:\Users\kielg\Documents\EvolveEdge\evolve-edge-saas
+Log: C:\Users\kielg\Documents\EvolveEdge\evolve-edge-saas\review-logs\evolve-edge-review-20260424-203736.log
+Branch: codex-launch-hardening-handoff
+
+=== Prisma Generate ===
+COMMAND: corepack pnpm --filter @evolve-edge/db prisma:generate
+STARTED: 2026-04-24T20:37:37
+
+> @evolve-edge/db@0.0.1 prisma:generate C:\Users\kielg\Documents\EvolveEdge\evolve-edge-saas\packages\db
+> prisma generate
+
+Prisma schema loaded from prisma\schema.prisma
+
+G£ö Generated Prisma Client (v6.19.3) to .\..\..\node_modules\.pnpm\@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e\node_modules\@prisma\client in 852ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+
+RESULT: PASS
+FINISHED: 2026-04-24T20:37:43
+
+=== Web Typecheck ===
+COMMAND: corepack pnpm --filter @evolve-edge/web exec tsc --noEmit
+STARTED: 2026-04-24T20:37:43
+[no output]
+RESULT: PASS
+FINISHED: 2026-04-24T20:37:48
+
+=== Web Test Suite ===
+COMMAND: corepack pnpm --filter @evolve-edge/web test
+STARTED: 2026-04-24T20:37:48
+FINISHED: 2026-04-24T20:39:33
+
+=== AI Regression Tests ===
+COMMAND: corepack pnpm test:ai
+STARTED: 2026-04-24T20:39:33
+FINISHED: 2026-04-24T20:39:36
+
+=== AI Eval Harness ===
+COMMAND: corepack pnpm ai:eval
+STARTED: 2026-04-24T20:39:36
+FINISHED: 2026-04-24T20:39:39
+
+=== Summary ===
+Prisma Generate          PASS
+Web Typecheck            PASS
+
+=== Next Manual Checks ===
+- VERCEL: confirm env vars, cron jobs, deployment logs, and internal route logs
+- NEON: inspect AnalysisJob rows, report statuses, checkpoints, feedback, and migration state
+- N8N: confirm only HTTP Request -> /api/internal/ai/execute, with no Dify or OpenAI node
+- STRIPE: confirm paid org gating and subscription sync
+- HUBSPOT: confirm delivery projection and optional deal stage updates
+- STAGING FLOW: submit assessment -> queued -> running -> pending_review/completed -> approve -> deliver
+
+=== Completed ===
+All local verification steps passed.
+Saved log to: C:\Users\kielg\Documents\EvolveEdge\evolve-edge-saas\review-logs\evolve-edge-review-20260424-203736.log

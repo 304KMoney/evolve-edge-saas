@@ -10,8 +10,11 @@ import {
   evaluateFounderReviewRequirement,
   markReportPackageSent,
   ReportPackageDeliveryStatus,
-  ReportPackageQaStatus
+  ReportPackageQaStatus,
+  upsertExecutiveDeliveryPackageForReport
 } from "../lib/executive-delivery";
+import { CommercialPlanCode } from "@evolve-edge/db";
+import { buildExecutiveBriefingOutput } from "../lib/executive-briefing";
 
 async function runExecutiveDeliveryTests() {
   {
@@ -77,6 +80,7 @@ async function runExecutiveDeliveryTests() {
       },
       roadmapSummary,
       frameworkSummary,
+      executiveBriefingAvailable: true,
       reportJson: {
         postureScore: 77,
         riskLevel: "MEDIUM",
@@ -93,6 +97,161 @@ async function runExecutiveDeliveryTests() {
     );
     assert.equal(packet.reportId, "rpt_123");
     assert.equal(packet.versionLabel, "v1.0");
+    assert.equal(packet.executiveBriefingAvailable, true);
+  }
+
+  {
+    const scaleBriefing = buildExecutiveBriefingOutput({
+      reportId: "rpt_123",
+      reportTitle: "Executive Delivery Packet",
+      assessmentName: "April 2026 Audit",
+      versionLabel: "v1.0",
+      planCode: CommercialPlanCode.SCALE,
+      reportJson: {
+        executiveSummary: "Leadership should focus on privileged access and vendor oversight.",
+        postureScore: 68,
+        riskLevel: "HIGH",
+        findings: [
+          {
+            title: "Privileged access review is informal",
+            severity: "HIGH",
+            summary: "Admin permissions are not reviewed on a recurring schedule.",
+            businessImpact: "Unreviewed privileged access increases operational and audit exposure."
+          },
+          {
+            title: "Vendor due diligence is incomplete",
+            severity: "MODERATE",
+            summary: "Critical vendors are not reassessed consistently."
+          }
+        ],
+        roadmap: [
+          {
+            title: "Formalize privileged access review",
+            timeline: "30 days"
+          }
+        ]
+      }
+    }) as Record<string, unknown>;
+
+    const starterBriefing = buildExecutiveBriefingOutput({
+      reportId: "rpt_123",
+      reportTitle: "Executive Delivery Packet",
+      assessmentName: "April 2026 Audit",
+      versionLabel: "v1.0",
+      planCode: CommercialPlanCode.STARTER,
+      reportJson: {}
+    });
+
+    assert.equal(scaleBriefing.planTier, "scale");
+    assert.equal(Array.isArray(scaleBriefing.talkingPoints), true);
+    assert.equal(Array.isArray((scaleBriefing.summary as Record<string, unknown>).keyRisks), true);
+    assert.equal(starterBriefing, null);
+  }
+
+  {
+    let createdVersionData: Record<string, unknown> | null = null;
+    await upsertExecutiveDeliveryPackageForReport({
+      reportId: "rpt_123",
+      actorUserId: "usr_123",
+      db: {
+        report: {
+          findUnique: async () => ({
+            id: "rpt_123",
+            organizationId: "org_123",
+            assessmentId: "asm_123",
+            selectedPlan: CommercialPlanCode.ENTERPRISE,
+            createdByUserId: "usr_123",
+            title: "Enterprise Audit Report",
+            versionLabel: "v2.0",
+            reportJson: {
+              executiveSummary: "Leadership should sequence remediation around access and vendor controls.",
+              postureScore: 59,
+              riskLevel: "HIGH",
+              findings: [
+                {
+                  title: "Access review gap",
+                  severity: "HIGH",
+                  summary: "Administrative access is not reviewed frequently enough.",
+                  businessImpact: "This increases breach impact and customer diligence friction."
+                }
+              ],
+              roadmap: [
+                {
+                  title: "Launch quarterly access review",
+                  timeline: "30 days",
+                  priority: "P1",
+                  ownerRole: "Security Lead",
+                  effort: "Medium"
+                }
+              ]
+            },
+            assessment: {
+              id: "asm_123",
+              name: "Enterprise Assessment",
+              organization: {
+                frameworkSelections: [
+                  {
+                    framework: {
+                      code: "SOC2",
+                      name: "SOC 2",
+                      version: "2017",
+                      category: "Security"
+                    }
+                  }
+                ]
+              }
+            }
+          }),
+          update: async ({ data }: { data: Record<string, unknown> }) => ({
+            id: "rpt_123",
+            ...data
+          })
+        },
+        reportPackage: {
+          findUnique: async () => null,
+          create: async ({ data }: { data: Record<string, unknown> }) => ({
+            id: "pkg_123",
+            organizationId: "org_123",
+            assessmentId: "asm_123",
+            ...data
+          })
+        },
+        reportPackageVersion: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            createdVersionData = data;
+            return {
+              id: "pkg_ver_123",
+              ...data
+            };
+          }
+        },
+        domainEvent: {
+          create: async () => ({ id: "evt_123" })
+        },
+        deliveryStateRecord: {
+          findFirst: async () => null
+        },
+        customerRun: {
+          findFirst: async () => null
+        }
+      } as any
+    });
+
+    assert.ok(createdVersionData);
+    const briefingVersionData = createdVersionData as Record<string, unknown>;
+
+    assert.equal(briefingVersionData.reportId, "rpt_123");
+    assert.equal(
+      Boolean(
+        briefingVersionData.executiveBriefingJson &&
+          typeof briefingVersionData.executiveBriefingJson === "object"
+      ),
+      true
+    );
+    assert.equal(
+      (briefingVersionData.executiveBriefingJson as Record<string, unknown>).formatVersion,
+      "executive-briefing.v1"
+    );
   }
 
   {

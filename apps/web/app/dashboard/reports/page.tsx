@@ -421,6 +421,18 @@ export default async function ReportsPage({
               ? "This workspace can still view existing reports, but billing is currently read-only for new report generation."
               : "This workspace cannot generate reports until an eligible plan is active."}
         </p>
+        <div className="mt-4 rounded-2xl border border-line bg-white p-4 text-sm text-steel">
+          <p className="font-medium text-ink">How reports are generated</p>
+          <p className="mt-2 leading-6">
+            Reports are built from your submitted assessment answers, selected
+            frameworks, and reviewed evidence summaries. Evolve Edge validates
+            the workflow output before it appears in the product.
+          </p>
+          <p className="mt-2 leading-6">
+            Reports are advisory guidance for planning and review. They do not
+            guarantee compliance or certification.
+          </p>
+        </div>
         {reportUsage ? (
           <p className="mt-2 text-sm text-steel">
             Usage: {reportUsage.usageLabel}. {reportUsage.helperText}
@@ -443,8 +455,19 @@ export default async function ReportsPage({
                       <div>
                         <p className="text-lg font-semibold text-ink">{report.title}</p>
                         <p className="mt-2 text-sm text-steel">
-                          {report.assessment.name} · {formatStatus(report.status)} ·{" "}
+                          {report.assessment.name} | {formatStatus(report.status)} |{" "}
                           {formatDate(report.publishedAt ?? report.createdAt)}
+                        </p>
+                        <p className="mt-2 text-sm text-steel">
+                          Confidence{" "}
+                          {report.status === "DELIVERED" ||
+                          report.status === "APPROVED" ||
+                          report.status === "READY"
+                            ? "High"
+                            : report.status === "PENDING_REVIEW"
+                              ? "High, pending review"
+                              : "In progress"}{" "}
+                          | Last updated {formatDate(report.publishedAt ?? report.createdAt)}
                         </p>
                         {deliveryPackage ? (
                           <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
@@ -514,3 +537,5 @@ export default async function ReportsPage({
     </main>
   );
 }
+
+
