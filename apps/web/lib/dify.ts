@@ -42,9 +42,9 @@ const DEFAULT_ANALYSIS_STALE_MINUTES = 30;
 
 type DifyDbClient = Prisma.TransactionClient | typeof prisma;
 
-// Dify calls are server-only and flow through this module. Request payloads are
-// assembled from app-owned assessment and routing state, and raw Dify outputs
-// must pass adapter validation before they are persisted or allowed to affect
+// Deprecated rollback-only Dify execution path. Request payloads are assembled
+// from app-owned assessment and routing state, and raw Dify outputs must pass
+// adapter validation before they are persisted or allowed to affect
 // report-generation state.
 
 export function getDifyWorkflowVersion() {
