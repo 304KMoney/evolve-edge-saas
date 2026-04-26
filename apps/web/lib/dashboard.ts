@@ -389,7 +389,9 @@ export async function getDashboardData(): Promise<DashboardData> {
               "Open the roadmap to assign ownership and due dates for this action.",
             primaryHref: "/dashboard/roadmap",
             primaryLabel: "Open Roadmap",
-            secondaryHref: "/dashboard/assessments",
+            secondaryHref: assessment
+              ? `/dashboard/assessments/${assessment.id}`
+              : "/dashboard/assessments",
             secondaryLabel: "Review Assessment"
           }
         : latestNotification
@@ -513,6 +515,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         effort: item.effort ?? "Unknown"
       })) ?? [],
     reports: reports.map((report) => ({
+      id: report.id,
       title: report.title,
       type:
         report.status === "DELIVERED"
@@ -520,7 +523,8 @@ export async function getDashboardData(): Promise<DashboardData> {
           : report.pdfUrl
             ? "Executive PDF"
             : "Ready for delivery",
-      date: formatDate(report.publishedAt ?? report.createdAt)
+      date: formatDate(report.publishedAt ?? report.createdAt),
+      href: `/dashboard/reports/${report.id}`
     })),
     notifications: organization.notifications.map((notification) => ({
       title: notification.title,

@@ -376,17 +376,32 @@ export default async function ReportsPage({
             <ActivationTipCard
               title="This page is the activation milestone"
               body={
-                entitlements.canGenerateReports
+                entitlements.canGenerateReports && assessments.length > 0
                   ? "Generating the first executive report is the clearest first-value moment in Evolve Edge because it turns intake and analysis into stakeholder-ready output."
+                  : entitlements.canGenerateReports
+                    ? "A submitted assessment is required before the first executive report can be generated from live workspace data."
                   : "The first executive report is the activation milestone, but current plan or billing state is blocking report generation."
               }
-              href={entitlements.canGenerateReports ? "/dashboard/reports" : "/dashboard/settings"}
-              label={entitlements.canGenerateReports ? "Generate first report" : "Open billing"}
+              href={
+                entitlements.canGenerateReports
+                  ? assessments.length > 0
+                    ? "/dashboard/reports#generate-report-workflow"
+                    : "/dashboard/assessments/start"
+                  : "/dashboard/settings"
+              }
+              label={
+                entitlements.canGenerateReports
+                  ? assessments.length > 0
+                    ? "Generate first report"
+                    : "Start an assessment"
+                  : "Open billing"
+              }
             />
           </div>
         ) : null}
 
         <form
+          id="generate-report-workflow"
           action={generateReportAction}
           className="mt-8 flex flex-col gap-3 rounded-[24px] border border-line bg-mist p-5 md:flex-row md:items-center"
         >
