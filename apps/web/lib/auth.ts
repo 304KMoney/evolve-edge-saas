@@ -4,7 +4,7 @@ import {
   prisma,
   verifyPassword
 } from "@evolve-edge/db";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { timingSafeEqual } from "node:crypto";
 import {
@@ -177,8 +177,26 @@ export function getSignInErrorMessage(error?: string) {
   }
 }
 
-function redirectToSignIn(error?: string): never {
-  redirect(error ? `/sign-in?error=${error}` : "/sign-in");
+async function redirectToSignIn(error?: string): Promise<never> {
+  const headerStore = await headers();
+  const requestPath = sanitizeInternalRedirect(
+    headerStore.get("x-request-path"),
+    ""
+  );
+  const redirectTo =
+    requestPath && requestPath !== "/sign-in" ? requestPath : "";
+  const params = new URLSearchParams();
+
+  if (error) {
+    params.set("error", error);
+  }
+
+  if (redirectTo) {
+    params.set("redirectTo", redirectTo);
+  }
+
+  const destination = params.size > 0 ? `/sign-in?${params.toString()}` : "/sign-in";
+  redirect(destination);
 }
 
 export function sanitizeInternalRedirect(
@@ -307,7 +325,7 @@ async function resolveCurrentSession(options?: {
 }): Promise<AppSession | null> {
   if (!isPasswordAuthEnabled()) {
     if (options?.redirectOnMissing ?? true) {
-      redirectToSignIn("config");
+      await redirectToSignIn("config");
     }
 
     return null;
@@ -316,7 +334,7 @@ async function resolveCurrentSession(options?: {
   const config = getPasswordAuthConfig();
   if (!config.isComplete) {
     if (options?.redirectOnMissing ?? true) {
-      redirectToSignIn("config");
+      await redirectToSignIn("config");
     }
 
     return null;
@@ -326,7 +344,7 @@ async function resolveCurrentSession(options?: {
   const token = cookieStore.get(AUTH_SESSION_COOKIE)?.value;
   if (!token) {
     if (options?.redirectOnMissing ?? true) {
-      redirectToSignIn();
+      await redirectToSignIn();
     }
 
     return null;
@@ -352,7 +370,7 @@ async function resolveCurrentSession(options?: {
 
   if (!dbSession) {
     if (options?.redirectOnMissing ?? true) {
-      redirectToSignIn("expired");
+      await redirectToSignIn("expired");
     }
 
     return null;
@@ -365,7 +383,7 @@ async function resolveCurrentSession(options?: {
     await prisma.session.delete({
       where: { id: dbSession.id }
     });
-    redirectToSignIn("expired");
+    await redirectToSignIn("expired");
   }
 
   await prisma.session.update({
@@ -408,7 +426,7 @@ export async function getCurrentSession(): Promise<AppSession> {
   const session = await resolveCurrentSession({ redirectOnMissing: true });
 
   if (!session) {
-    redirectToSignIn();
+    await redirectToSignIn();
   }
 
   return session;
