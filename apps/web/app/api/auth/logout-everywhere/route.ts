@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { AuditActorType, prisma } from "@evolve-edge/db";
-import { AUTH_SESSION_COOKIE, requireCurrentSession, revokeAllUserSessions } from "../../../../lib/auth";
+import { AUTH_SESSION_COOKIE, requireCurrentSession } from "../../../../lib/auth";
 import { writeAuditLog, buildAuditRequestContextFromRequest } from "../../../../lib/audit";
 import { cookies } from "next/headers";
 import { enforceTrustedOrigin } from "../../../../lib/route-security";
@@ -21,7 +21,16 @@ export async function POST(request: Request) {
   }
 
   const session = await requireCurrentSession({ requireOrganization: true });
-  await revokeAllUserSessions(session.user.id);
+  await prisma.session.updateMany({
+    where: {
+      userId: session.user.id,
+      revokedAt: null
+    },
+    data: {
+      revokedAt: new Date(),
+      revokedReason: "logout_everywhere"
+    }
+  });
 
   const cookieStore = await cookies();
   cookieStore.delete(AUTH_SESSION_COOKIE);
