@@ -159,8 +159,7 @@ export async function createUserSession(userId: string, context?: CreateUserSess
 
   const activeSessions = await prisma.session.findMany({
     where: {
-      userId,
-      revokedAt: null
+      userId
     },
     orderBy: { createdAt: "desc" },
     select: { id: true }
@@ -187,8 +186,7 @@ export async function revokeAllUserSessions(
 ) {
   await prisma.session.updateMany({
     where: {
-      userId,
-      revokedAt: null
+      userId
     },
     data: {
       revokedAt: new Date(),
@@ -204,8 +202,7 @@ export async function revokeSession(token: string | null | undefined) {
 
   await prisma.session.updateMany({
     where: {
-      tokenHash: hashOpaqueToken(token),
-      revokedAt: null
+      tokenHash: hashOpaqueToken(token)
     },
     data: {
       revokedAt: new Date(),
@@ -567,8 +564,7 @@ async function resolveCurrentSession(options?: {
   const dbSession = await prisma.session.findFirst({
     where: {
       tokenHash: hashOpaqueToken(token),
-      expiresAt: { gt: new Date() },
-      revokedAt: null
+      expiresAt: { gt: new Date() }
     },
     include: {
       user: {
@@ -589,6 +585,14 @@ async function resolveCurrentSession(options?: {
       return previewGuestSession;
     }
 
+    if (options?.redirectOnMissing ?? true) {
+      await redirectToSignIn("expired");
+    }
+
+    return null;
+  }
+
+  if (dbSession.revokedAt) {
     if (options?.redirectOnMissing ?? true) {
       await redirectToSignIn("expired");
     }
