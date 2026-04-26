@@ -128,11 +128,6 @@ type CreateUserSessionContext = {
   userAgent?: string | null;
 };
 
-function trimSessionMetadata(value: string | null | undefined, maxLength: number) {
-  const normalized = value?.trim();
-  return normalized ? normalized.slice(0, maxLength) : null;
-}
-
 export function getSessionInactivityTimeoutSeconds() {
   const configured = Number(getOptionalEnv("SESSION_INACTIVITY_TIMEOUT_SECONDS") ?? "");
   if (Number.isFinite(configured) && configured > 0) {
@@ -143,6 +138,8 @@ export function getSessionInactivityTimeoutSeconds() {
 }
 
 export async function createUserSession(userId: string, context?: CreateUserSessionContext) {
+  void context;
+
   await prisma.session.deleteMany({
     where: {
       userId,
@@ -156,9 +153,7 @@ export async function createUserSession(userId: string, context?: CreateUserSess
     data: {
       userId,
       tokenHash: hashOpaqueToken(token),
-      expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * 1000),
-      ipAddress: trimSessionMetadata(context?.ipAddress, 128),
-      userAgent: trimSessionMetadata(context?.userAgent, 512)
+      expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * 1000)
     }
   });
 
