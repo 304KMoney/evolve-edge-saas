@@ -1,19 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-
-function buildCsp() {
-  return [
-    "default-src 'self'",
-    "img-src 'self' data: blob: https:",
-    "style-src 'self' 'unsafe-inline'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-    "font-src 'self' data:",
-    "connect-src 'self' https:",
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'"
-  ].join("; ");
-}
+import { buildSecurityHeaders } from "./lib/http-security";
 
 export function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
@@ -30,12 +17,17 @@ export function middleware(request: NextRequest) {
       headers: requestHeaders
     }
   });
+  const securityHeaders = buildSecurityHeaders({
+    pathname: request.nextUrl.pathname,
+    isDevelopment: process.env.NODE_ENV !== "production",
+    isPreview:
+      process.env.VERCEL_ENV === "preview" || process.env.NEXT_PUBLIC_VERCEL_ENV === "preview"
+  });
 
-  response.headers.set("Content-Security-Policy", buildCsp());
-  response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
-  response.headers.set("X-Frame-Options", "DENY");
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  for (const [key, value] of Object.entries(securityHeaders)) {
+    response.headers.set(key, value);
+  }
+
   response.headers.set("x-request-id", requestHeaders.get("x-request-id")!);
 
   return response;
