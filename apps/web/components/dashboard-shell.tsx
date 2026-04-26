@@ -52,9 +52,11 @@ export type DashboardRoadmapItem = {
 };
 
 export type DashboardReport = {
+  id: string;
   title: string;
   type: string;
   date: string;
+  href: string;
 };
 
 export type DashboardNotification = {
@@ -606,8 +608,8 @@ export function DashboardShell({
                 {data.reports.length > 0 ? (
                   data.reports.map((report) => (
                     <Link
-                      key={report.title}
-                      href="/dashboard/reports"
+                      key={report.id}
+                      href={report.href as Route}
                       className="flex items-center justify-between rounded-2xl border border-line bg-mist p-4 transition hover:border-accent"
                     >
                       <div>
