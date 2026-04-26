@@ -157,7 +157,6 @@ export async function createUserSession(userId: string, context?: CreateUserSess
       userId,
       tokenHash: hashOpaqueToken(token),
       expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * 1000),
-      lastAuthenticatedAt: new Date(),
       ipAddress: trimSessionMetadata(context?.ipAddress, 128),
       userAgent: trimSessionMetadata(context?.userAgent, 512)
     }
