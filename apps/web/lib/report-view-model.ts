@@ -232,7 +232,8 @@ function buildWorkflowProgressViewModel(input: {
 
   if (
     input.workflowSnapshot.state === "completed" &&
-    (input.reportStatus === ReportStatus.PENDING_REVIEW ||
+    (input.reportStatus === ReportStatus.PENDING ||
+      input.reportStatus === ReportStatus.PENDING_REVIEW ||
       input.reportStatus === ReportStatus.GENERATED)
   ) {
     const presentation = getAuditWorkflowProgressPresentation("pending_review");
@@ -420,9 +421,13 @@ function buildTrustSignals(input: {
   workflowSnapshot: WorkflowSnapshot;
   report: ReportRecordLike;
 }) {
+  const isPendingReviewLikeStatus =
+    input.report.status === ReportStatus.PENDING ||
+    input.report.status === ReportStatus.PENDING_REVIEW ||
+    input.report.status === ReportStatus.GENERATED;
   const confidenceLevel =
     input.workflowSnapshot.state === "completed"
-      ? input.report.status === ReportStatus.PENDING_REVIEW
+      ? isPendingReviewLikeStatus
         ? "High confidence, pending internal review"
         : "High confidence"
       : input.workflowSnapshot.state === "failed"

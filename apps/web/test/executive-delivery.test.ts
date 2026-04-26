@@ -8,6 +8,8 @@ import {
   buildRoadmapSummarySnapshot,
   canTransitionReportPackage,
   evaluateFounderReviewRequirement,
+  getOrganizationReportPackages,
+  getReportExecutiveDeliveryPackage,
   markReportPackageSent,
   ReportPackageDeliveryStatus,
   ReportPackageQaStatus,
@@ -149,6 +151,62 @@ async function runExecutiveDeliveryTests() {
   }
 
   {
+    let findManyArgs: Record<string, unknown> | null = null;
+    await getOrganizationReportPackages("org_123", {
+      limit: 5,
+      db: {
+        reportPackage: {
+          findMany: async (args: Record<string, unknown>) => {
+            findManyArgs = args;
+            return [];
+          }
+        }
+      } as any
+    });
+
+    assert.ok(findManyArgs);
+    const versionsSelection = ((findManyArgs as any).include.versions.select ?? {}) as Record<
+      string,
+      unknown
+    >;
+    assert.equal(versionsSelection.id, true);
+    assert.equal(versionsSelection.reportId, true);
+    assert.equal(versionsSelection.versionNumber, true);
+    assert.equal(versionsSelection.createdAt, true);
+    assert.equal(
+      (((versionsSelection.report as Record<string, unknown>).select as Record<string, unknown>)
+        .versionLabel),
+      true
+    );
+  }
+
+  {
+    let findFirstArgs: Record<string, unknown> | null = null;
+    await getReportExecutiveDeliveryPackage("rpt_123", {
+      reportPackage: {
+        findFirst: async (args: Record<string, unknown>) => {
+          findFirstArgs = args;
+          return null;
+        }
+      }
+    } as any);
+
+    assert.ok(findFirstArgs);
+    const versionsSelection = ((findFirstArgs as any).include.versions.select ?? {}) as Record<
+      string,
+      unknown
+    >;
+    assert.equal(versionsSelection.id, true);
+    assert.equal(versionsSelection.reportId, true);
+    assert.equal(versionsSelection.versionNumber, true);
+    assert.equal(
+      (((versionsSelection.report as Record<string, unknown>).select as Record<string, unknown>)
+        .status),
+      true
+    );
+  }
+
+  {
     let createdVersionData: Record<string, unknown> | null = null;
     await upsertExecutiveDeliveryPackageForReport({
       reportId: "rpt_123",
@@ -226,7 +284,7 @@ async function runExecutiveDeliveryTests() {
           }
         },
         domainEvent: {
-          create: async () => ({ id: "evt_123" })
+          upsert: async () => ({ id: "evt_123" })
         },
         deliveryStateRecord: {
           findFirst: async () => null
@@ -241,15 +299,17 @@ async function runExecutiveDeliveryTests() {
     const briefingVersionData = createdVersionData as Record<string, unknown>;
 
     assert.equal(briefingVersionData.reportId, "rpt_123");
+    assert.equal(Boolean(briefingVersionData.packetJson), true);
+    const packetJson = briefingVersionData.packetJson as Record<string, unknown>;
     assert.equal(
       Boolean(
-        briefingVersionData.executiveBriefingJson &&
-          typeof briefingVersionData.executiveBriefingJson === "object"
+        packetJson.executiveBriefing &&
+          typeof packetJson.executiveBriefing === "object"
       ),
       true
     );
     assert.equal(
-      (briefingVersionData.executiveBriefingJson as Record<string, unknown>).formatVersion,
+      (packetJson.executiveBriefing as Record<string, unknown>).formatVersion,
       "executive-briefing.v1"
     );
   }
@@ -379,7 +439,7 @@ async function runExecutiveDeliveryTests() {
         }
       },
       domainEvent: {
-        create: async () => ({ id: "evt_sent" })
+        upsert: async () => ({ id: "evt_sent" })
       },
       deliveryStateRecord: {
         findFirst: async () => null,

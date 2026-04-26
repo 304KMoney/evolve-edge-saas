@@ -26,8 +26,10 @@ function clearRelevantEnv() {
   delete env.REPORT_DOWNLOAD_REQUIRE_AUTH;
   delete env.EMAIL_FROM_ADDRESS;
   delete env.RESEND_API_KEY;
+  delete env.RESEND_WEBHOOK_SIGNING_SECRET;
   delete env.NOTIFICATION_DISPATCH_SECRET;
   delete env.CRON_SECRET;
+  delete env.OPS_READINESS_SECRET;
   delete env.NEXT_PUBLIC_FOUNDING_RISK_AUDIT_URL;
   delete env.STRIPE_PRICE_STARTER_ANNUAL;
   delete env.STRIPE_PRICE_SCALE_ANNUAL;
@@ -69,15 +71,12 @@ function runLaunchPreflightTests() {
   process.env.REPORT_DOWNLOAD_REQUIRE_AUTH = "true";
   process.env.EMAIL_FROM_ADDRESS = "Evolve Edge <ops@example.com>";
   process.env.RESEND_API_KEY = "re_test_123";
-  process.env.NOTIFICATION_DISPATCH_SECRET = "notification_secret";
-  process.env.CRON_SECRET = "cron_secret";
   process.env.STRIPE_PRICE_STARTER_ANNUAL = "price_starter";
   process.env.STRIPE_PRICE_SCALE_ANNUAL = "price_scale";
   process.env.STRIPE_PRICE_ENTERPRISE_ANNUAL = "price_enterprise";
   process.env.STRIPE_PRODUCT_STARTER = "prod_starter";
   process.env.STRIPE_PRODUCT_SCALE = "prod_scale";
   process.env.STRIPE_PRODUCT_ENTERPRISE = "prod_enterprise";
-  process.env.PUBLIC_INTAKE_SHARED_SECRET = "public_intake_secret";
 
   const missingAuditRequestedDestination = runFirstCustomerLaunchPreflight();
   assert.equal(missingAuditRequestedDestination.status, "fail");
@@ -90,6 +89,41 @@ function runLaunchPreflightTests() {
 
   process.env.N8N_WORKFLOW_DESTINATIONS =
     '[{"name":"auditRequested","url":"https://example.com"},{"name":"leadPipeline","url":"https://example.com/lead"}]';
+
+  const missingResendWebhookSigningSecret = runFirstCustomerLaunchPreflight();
+  assert.equal(missingResendWebhookSigningSecret.status, "fail");
+  assert.equal(
+    missingResendWebhookSigningSecret.findings.some(
+      (finding) => finding.code === "email.resend_webhook_signing_secret_missing"
+    ),
+    true
+  );
+
+  process.env.RESEND_WEBHOOK_SIGNING_SECRET = "resend_webhook_secret";
+  process.env.NOTIFICATION_DISPATCH_SECRET = "notification_secret";
+  process.env.CRON_SECRET = "cron_secret";
+
+  const missingPublicIntakeSharedSecret = runFirstCustomerLaunchPreflight();
+  assert.equal(missingPublicIntakeSharedSecret.status, "fail");
+  assert.equal(
+    missingPublicIntakeSharedSecret.findings.some(
+      (finding) => finding.code === "intake.public_shared_secret_missing"
+    ),
+    true
+  );
+
+  process.env.PUBLIC_INTAKE_SHARED_SECRET = "public_intake_secret";
+
+  const missingOpsReadinessSecret = runFirstCustomerLaunchPreflight();
+  assert.equal(missingOpsReadinessSecret.status, "fail");
+  assert.equal(
+    missingOpsReadinessSecret.findings.some(
+      (finding) => finding.code === "ops.readiness_secret_missing"
+    ),
+    true
+  );
+
+  process.env.OPS_READINESS_SECRET = "ops_readiness_secret";
 
   const passed = runFirstCustomerLaunchPreflight();
   assert.equal(passed.status, "pass");
@@ -118,6 +152,27 @@ function runLaunchPreflightTests() {
     checklist.groups
       .flatMap((group) => group.entries)
       .some((entry) => entry.key === "CRON_SECRET" && entry.configured),
+    true
+  );
+  assert.equal(
+    checklist.groups
+      .flatMap((group) => group.entries)
+      .some(
+        (entry) =>
+          entry.key === "RESEND_WEBHOOK_SIGNING_SECRET" && entry.configured
+      ),
+    true
+  );
+  assert.equal(
+    checklist.groups
+      .flatMap((group) => group.entries)
+      .some((entry) => entry.key === "OPS_READINESS_SECRET" && entry.configured),
+    true
+  );
+  assert.equal(
+    checklist.groups
+      .flatMap((group) => group.entries)
+      .some((entry) => entry.key === "PUBLIC_INTAKE_SHARED_SECRET" && entry.configured),
     true
   );
 

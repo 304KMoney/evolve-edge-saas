@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "integration:status": "tsx scripts/integration-status.ts",
     "preflight:first-customer:env": "tsx scripts/first-customer-env-status.ts",
     "preflight:first-customer": "tsx scripts/first-customer-preflight.ts",
     "load:test:ai": "tsx scripts/load-test-ai-execution.ts",

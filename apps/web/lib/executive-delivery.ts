@@ -35,6 +35,8 @@ export const ReportPackageDeliveryStatus = {
   BRIEFING_COMPLETED: "BRIEFING_COMPLETED"
 } as const;
 
+const REPORT_PENDING_REVIEW_COMPATIBLE_STATUS = ReportStatus.PENDING;
+
 export type ReportPackageDeliveryStatus =
   (typeof ReportPackageDeliveryStatus)[keyof typeof ReportPackageDeliveryStatus];
 
@@ -87,6 +89,92 @@ function toSentence(value: string | null | undefined, fallback: string) {
 
 function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+const reportPackageVersionSummarySelection = {
+  id: true,
+  reportId: true,
+  versionNumber: true,
+  createdAt: true,
+  report: {
+    select: {
+      id: true,
+      title: true,
+      versionLabel: true,
+      status: true,
+      createdAt: true
+    }
+  }
+} as const;
+
+async function createReportPackageVersionWithCompatibility(input: {
+  db: ExecutiveDeliveryDbClient;
+  reportPackageId: string;
+  reportId: string;
+  versionNumber: number;
+  createdByUserId: string | null;
+  executiveSummary: Prisma.JsonObject;
+  roadmapSummary: Prisma.JsonObject;
+  frameworkSummary: Prisma.JsonObject;
+  executiveBriefing: Prisma.JsonObject | null;
+  packet: Prisma.JsonObject;
+}) {
+  const packetJson = input.executiveBriefing
+    ? ({
+        ...input.packet,
+        executiveBriefing: input.executiveBriefing
+      } satisfies Prisma.JsonObject)
+    : input.packet;
+
+  const createData = {
+    id: `rpv_${crypto.randomUUID()}`,
+    reportPackageId: input.reportPackageId,
+    reportId: input.reportId,
+    versionNumber: input.versionNumber,
+    createdByUserId: input.createdByUserId,
+    executiveSummaryJson: input.executiveSummary,
+    roadmapSummaryJson: input.roadmapSummary,
+    frameworkSummaryJson: input.frameworkSummary,
+    packetJson
+  };
+
+  const rawExecutor = (input.db as { $executeRaw?: typeof prisma.$executeRaw }).$executeRaw;
+
+  if (typeof rawExecutor === "function") {
+    await rawExecutor.call(
+      input.db,
+      Prisma.sql`
+        INSERT INTO "ReportPackageVersion" (
+          "id",
+          "reportPackageId",
+          "reportId",
+          "versionNumber",
+          "createdByUserId",
+          "executiveSummaryJson",
+          "roadmapSummaryJson",
+          "frameworkSummaryJson",
+          "packetJson"
+        )
+        VALUES (
+          ${createData.id},
+          ${createData.reportPackageId},
+          ${createData.reportId},
+          ${createData.versionNumber},
+          ${createData.createdByUserId},
+          ${JSON.stringify(createData.executiveSummaryJson)}::jsonb,
+          ${JSON.stringify(createData.roadmapSummaryJson)}::jsonb,
+          ${JSON.stringify(createData.frameworkSummaryJson)}::jsonb,
+          ${JSON.stringify(createData.packetJson)}::jsonb
+        )
+      `
+    );
+
+    return { id: createData.id };
+  }
+
+  return input.db.reportPackageVersion.create({
+    data: createData
+  });
 }
 
 export function buildExecutiveSummarySnapshot(input: {
@@ -497,10 +585,14 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
         assessmentId: report.assessmentId
       }
     },
-    include: {
+    select: {
+      id: true,
       versions: {
         orderBy: { versionNumber: "desc" },
-        take: 1
+        take: 1,
+        select: {
+          versionNumber: true
+        }
       }
     }
   });
@@ -547,18 +639,17 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
         }
       });
 
-  await db.reportPackageVersion.create({
-    data: {
-      reportPackageId: deliveryPackage.id,
-      reportId: report.id,
-      versionNumber: nextVersionNumber,
-      createdByUserId: input.actorUserId ?? report.createdByUserId ?? null,
-      executiveSummaryJson: executiveSummary,
-      roadmapSummaryJson: roadmapSummary,
-      frameworkSummaryJson: frameworkSummary,
-      executiveBriefingJson: executiveBriefing,
-      packetJson: packet
-    }
+  await createReportPackageVersionWithCompatibility({
+    db,
+    reportPackageId: deliveryPackage.id,
+    reportId: report.id,
+    versionNumber: nextVersionNumber,
+    createdByUserId: input.actorUserId ?? report.createdByUserId ?? null,
+    executiveSummary,
+    roadmapSummary,
+    frameworkSummary,
+    executiveBriefing,
+    packet
   });
 
   await publishReportPackageEvent(db, {
@@ -580,7 +671,7 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
   await db.report.update({
     where: { id: report.id },
     data: {
-      status: ReportStatus.PENDING_REVIEW,
+      status: REPORT_PENDING_REVIEW_COMPATIBLE_STATUS,
       deliveredAt: null,
       deliveredByUserId: null
     }
@@ -618,17 +709,7 @@ export async function getReportExecutiveDeliveryPackage(
     include: {
       versions: {
         orderBy: { versionNumber: "desc" },
-        include: {
-          report: {
-            select: {
-              id: true,
-              title: true,
-              versionLabel: true,
-              status: true,
-              createdAt: true
-            }
-          }
-        }
+        select: reportPackageVersionSummarySelection
       },
       reviewedBy: {
         select: {
@@ -700,16 +781,7 @@ export async function getOrganizationReportPackages(
       versions: {
         orderBy: { versionNumber: "desc" },
         take: 3,
-        include: {
-          report: {
-            select: {
-              id: true,
-              versionLabel: true,
-              title: true,
-              createdAt: true
-            }
-          }
-        }
+        select: reportPackageVersionSummarySelection
       }
     },
     orderBy: { updatedAt: "desc" },

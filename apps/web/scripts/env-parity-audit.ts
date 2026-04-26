@@ -1,5 +1,8 @@
+import { loadScriptEnv } from "./load-script-env";
 import { getEnvironmentParityStatus } from "../lib/env-validation";
 import { getRuntimeEnvironment } from "../lib/runtime-config";
+
+loadScriptEnv();
 
 const status = getEnvironmentParityStatus();
 const grouped = new Map<string, typeof status>();

@@ -71,6 +71,14 @@ function formatStatus(status: string) {
     .join(" ");
 }
 
+function isPendingReviewLikeStatus(status: ReportStatus) {
+  return (
+    status === ReportStatus.PENDING ||
+    status === ReportStatus.PENDING_REVIEW ||
+    status === ReportStatus.GENERATED
+  );
+}
+
 function getDisplayName(input: {
   firstName?: string | null;
   lastName?: string | null;
@@ -421,7 +429,7 @@ export default async function ReportDetailPage({
               {formatStatus(report.status)}
             </p>
             <p className="mt-2 text-sm text-steel">
-              {report.status === ReportStatus.PENDING_REVIEW
+              {isPendingReviewLikeStatus(report.status)
                 ? "Awaiting internal reviewer approval before client delivery."
                 : report.status === ReportStatus.APPROVED
                   ? "Approved for delivery controls and customer send."

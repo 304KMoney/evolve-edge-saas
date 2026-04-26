@@ -37,6 +37,8 @@ import {
 } from "../../../lib/usage-metering";
 import { computeAndPersistWorkflowRoutingDecision } from "../../../lib/workflow-routing";
 
+const REPORT_PENDING_REVIEW_COMPATIBLE_STATUS = ReportStatus.PENDING;
+
 function getRiskDomain(sectionKey: string) {
   switch (sectionKey) {
     case "company-profile":
@@ -377,7 +379,11 @@ export async function generateReportAction(formData: FormData) {
         createdByUserId: session.user.id,
         title: `${assessment.name} Executive Summary`,
         versionLabel: `v${versionCount + 1}.0`,
-        status: ReportStatus.PENDING_REVIEW,
+        // Some preview databases are still on the older enum contract where
+        // newer pre-review statuses do not exist yet, so persist the report
+        // in the legacy pending state and let the view model present it as
+        // an in-review draft.
+        status: REPORT_PENDING_REVIEW_COMPATIBLE_STATUS,
         publishedAt: new Date(),
         reportJson: {
           assessmentName: assessment.name,

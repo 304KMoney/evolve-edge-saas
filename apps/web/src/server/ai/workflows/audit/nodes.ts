@@ -102,7 +102,7 @@ export async function riskAnalysisNode(
     schemaName: "risk_analysis",
     systemPrompt: prompt.system,
     userPrompt: prompt.user,
-    model: dependencies.strongModel,
+    model: getReasoningExecutionModel(dependencies),
     timeoutMs: dependencies.timeoutMs,
   });
   const riskAnalysis = normalizeRiskAnalysis(response);
@@ -169,7 +169,7 @@ export async function remediationRoadmapNode(
     schemaName: "remediation_roadmap",
     systemPrompt: prompt.system,
     userPrompt: prompt.user,
-    model: dependencies.strongModel,
+    model: getReasoningExecutionModel(dependencies),
     timeoutMs: dependencies.timeoutMs,
   });
   const remediationRoadmap = normalizeRemediationRoadmap(response);
@@ -196,7 +196,7 @@ export async function finalReportNode(
     schemaName: "final_report",
     systemPrompt: prompt.system,
     userPrompt: prompt.user,
-    model: dependencies.strongModel,
+    model: getReasoningExecutionModel(dependencies),
     timeoutMs: dependencies.timeoutMs,
   });
   const finalReport = normalizeFinalReport(response);
@@ -212,6 +212,12 @@ function requireStateValue<T>(value: T | undefined, label: string): T {
     throw new Error(`LangGraph state is missing ${label}.`);
   }
   return value;
+}
+
+function getReasoningExecutionModel(
+  dependencies: AuditNodeDependencies
+) {
+  return dependencies.reasoningModel ?? dependencies.strongModel;
 }
 
 function mapRecordToAssessmentAnswers(

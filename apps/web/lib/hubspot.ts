@@ -122,7 +122,7 @@ function getLifecycleStage(eventType: string) {
   }
 }
 
-function buildMilestoneProperties(eventType: string, event: DomainEvent) {
+export function buildHubSpotMilestoneProperties(eventType: string, event: DomainEvent) {
   const occurredAt = event.occurredAt.toISOString();
   const payload = readPayloadRecord(event.payload);
   const rawTopConcerns = Array.isArray(payload.topConcerns)
@@ -136,9 +136,9 @@ function buildMilestoneProperties(eventType: string, event: DomainEvent) {
     .join(" | ");
 
   return {
-    evolve_edge_last_event_type: event.type,
-    evolve_edge_last_event_at: occurredAt,
-    evolve_edge_last_product_milestone: event.type,
+    [HUBSPOT_COMPANY_PROPERTY_MAP.lastEventType]: event.type,
+    [HUBSPOT_COMPANY_PROPERTY_MAP.lastEventAt]: occurredAt,
+    [HUBSPOT_COMPANY_PROPERTY_MAP.lastMilestone]: event.type,
     ...(eventType === "customer_account.stage_changed"
       ? {
           evolve_edge_customer_stage:
@@ -152,30 +152,29 @@ function buildMilestoneProperties(eventType: string, event: DomainEvent) {
         }
       : {}),
     ...(eventType === "org.created"
-      ? { evolve_edge_onboarding_started_at: occurredAt }
+      ? { [HUBSPOT_COMPANY_PROPERTY_MAP.onboardingStartedAt]: occurredAt }
       : {}),
     ...(eventType === "onboarding.completed"
-      ? { evolve_edge_onboarding_completed_at: occurredAt }
+      ? { [HUBSPOT_COMPANY_PROPERTY_MAP.onboardingCompletedAt]: occurredAt }
       : {}),
     ...(eventType === "assessment.created"
-      ? { evolve_edge_first_assessment_created_at: occurredAt }
+      ? { [HUBSPOT_COMPANY_PROPERTY_MAP.firstAssessmentCreatedAt]: occurredAt }
       : {}),
     ...(eventType === "report.generated"
       ? {
-          evolve_edge_report_delivered_at: occurredAt,
-          evolve_edge_report_generated: "true",
-          evolve_edge_risk_level:
+          [HUBSPOT_COMPANY_PROPERTY_MAP.reportGenerated]: "true",
+          [HUBSPOT_COMPANY_PROPERTY_MAP.riskLevel]:
             typeof payload.riskLevel === "string" ? payload.riskLevel : "",
-          evolve_edge_top_concerns: topConcerns
+          [HUBSPOT_COMPANY_PROPERTY_MAP.topConcerns]: topConcerns
         }
       : {}),
     ...(eventType === "report.delivered"
       ? {
-          evolve_edge_report_delivered_at: occurredAt,
-          evolve_edge_report_generated: "true",
-          evolve_edge_risk_level:
+          [HUBSPOT_COMPANY_PROPERTY_MAP.reportDeliveredAt]: occurredAt,
+          [HUBSPOT_COMPANY_PROPERTY_MAP.reportGenerated]: "true",
+          [HUBSPOT_COMPANY_PROPERTY_MAP.riskLevel]:
             typeof payload.riskLevel === "string" ? payload.riskLevel : "",
-          evolve_edge_top_concerns: topConcerns
+          [HUBSPOT_COMPANY_PROPERTY_MAP.topConcerns]: topConcerns
         }
       : {}),
     ...(eventType === "lead.captured"
@@ -370,7 +369,7 @@ async function upsertCompanyForEvent(event: DomainEvent, timeoutMs: number) {
     [HUBSPOT_COMPANY_PROPERTY_MAP.postureScore]:
       organization.currentPostureScore?.toString() ?? "",
     [HUBSPOT_COMPANY_PROPERTY_MAP.lifecycleStage]: getLifecycleStage(event.type),
-    ...buildMilestoneProperties(event.type, event)
+    ...buildHubSpotMilestoneProperties(event.type, event)
   });
 
   const company = existingCompanyId

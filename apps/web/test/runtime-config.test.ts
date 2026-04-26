@@ -272,9 +272,15 @@ function runRuntimeConfigTests() {
   process.env.DATABASE_URL = "postgres://example";
   process.env.STRIPE_SECRET_KEY = "sk_test_123";
   process.env.STRIPE_WEBHOOK_SECRET = "whsec_123";
+  process.env.STRIPE_PRICE_STARTER_ANNUAL = "price_starter";
+  process.env.STRIPE_PRICE_SCALE_ANNUAL = "price_scale";
+  process.env.STRIPE_PRICE_ENTERPRISE_ANNUAL = "price_enterprise";
+  process.env.STRIPE_PRODUCT_STARTER = "prod_starter";
+  process.env.STRIPE_PRODUCT_SCALE = "prod_scale";
+  process.env.STRIPE_PRODUCT_ENTERPRISE = "prod_enterprise";
   process.env.HUBSPOT_ACCESS_TOKEN = "hubspot_token";
-  process.env.N8N_WEBHOOK_URL = "https://n8n.example/webhook";
-  process.env.N8N_WORKFLOW_DESTINATIONS = "[]";
+  process.env.N8N_WORKFLOW_DESTINATIONS =
+    '[{"name":"auditRequested","url":"https://n8n.example/webhook"}]';
   process.env.OUTBOUND_DISPATCH_SECRET = "dispatch-secret";
   process.env.AI_EXECUTION_PROVIDER = "openai_langgraph";
   process.env.AI_EXECUTION_DISPATCH_SECRET = "ai-dispatch-secret";
@@ -306,6 +312,12 @@ function runRuntimeConfigTests() {
   delete process.env.DATABASE_URL;
   delete process.env.STRIPE_SECRET_KEY;
   delete process.env.STRIPE_WEBHOOK_SECRET;
+  delete process.env.STRIPE_PRICE_STARTER_ANNUAL;
+  delete process.env.STRIPE_PRICE_SCALE_ANNUAL;
+  delete process.env.STRIPE_PRICE_ENTERPRISE_ANNUAL;
+  delete process.env.STRIPE_PRODUCT_STARTER;
+  delete process.env.STRIPE_PRODUCT_SCALE;
+  delete process.env.STRIPE_PRODUCT_ENTERPRISE;
   delete process.env.HUBSPOT_ACCESS_TOKEN;
   delete process.env.N8N_WEBHOOK_URL;
   delete process.env.N8N_WORKFLOW_DESTINATIONS;

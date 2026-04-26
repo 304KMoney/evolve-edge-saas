@@ -14,6 +14,7 @@
     "test:ai": "pnpm --filter @evolve-edge/web test:ai",
     "ai:eval": "pnpm --filter @evolve-edge/web ai:eval",
     "ai:eval:live": "pnpm --filter @evolve-edge/web ai:eval:live",
+    "integration:status": "pnpm --filter @evolve-edge/web integration:status",
     "preflight:first-customer:env": "pnpm --filter @evolve-edge/web preflight:first-customer:env",
     "preflight:first-customer": "pnpm --filter @evolve-edge/web preflight:first-customer",
     "db:generate": "pnpm --filter @evolve-edge/db generate",

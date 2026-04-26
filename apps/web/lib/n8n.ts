@@ -24,16 +24,19 @@ import {
 } from "./runtime-config";
 import { extractNormalizedWorkflowHints } from "./workflow-routing-hints";
 
-export type N8nWorkflowName =
-  | "auditRequested"
-  | "leadPipeline"
-  | "customerOnboarding"
-  | "onboardingVisibility"
-  | "customerSuccess"
-  | "reportReady"
-  | "renewalAlert"
-  | "expansionSignal"
-  | "billingRecovery";
+export const N8N_WORKFLOW_NAMES = [
+  "auditRequested",
+  "leadPipeline",
+  "customerOnboarding",
+  "onboardingVisibility",
+  "customerSuccess",
+  "reportReady",
+  "renewalAlert",
+  "expansionSignal",
+  "billingRecovery"
+] as const;
+
+export type N8nWorkflowName = (typeof N8N_WORKFLOW_NAMES)[number];
 
 type N8nWorkflowConfig = {
   name: N8nWorkflowName;
@@ -367,33 +370,26 @@ export function getN8nWorkflowDestinations(): N8nDestination[] {
   // Compatibility-only fallback for older environments. First-customer launch
   // should cut over to explicit per-workflow destinations in
   // N8N_WORKFLOW_DESTINATIONS instead of relying on one shared webhook URL.
-  return [
-    {
-      name: "auditRequested",
-      url: legacyUrl,
-      secret: getDefaultN8nSecret(),
-      provider: "n8n",
-      timeoutMs: getDefaultN8nTimeoutMs()
-    },
-    {
-      name: "leadPipeline",
-      url: legacyUrl,
-      secret: getDefaultN8nSecret(),
-      provider: "n8n",
-      timeoutMs: getDefaultN8nTimeoutMs()
-    },
-    {
-      name: "customerOnboarding",
-      url: legacyUrl,
-      secret: getDefaultN8nSecret(),
-      provider: "n8n",
-      timeoutMs: getDefaultN8nTimeoutMs()
-    }
-  ];
+  return N8N_WORKFLOW_NAMES.map((name) => ({
+    name,
+    url: legacyUrl,
+    secret: getDefaultN8nSecret(),
+    provider: "n8n" as const,
+    timeoutMs: getDefaultN8nTimeoutMs()
+  }));
 }
 
 export function getN8nWorkflowDestinationByName(name: N8nWorkflowName) {
   return getN8nWorkflowDestinations().find((destination) => destination.name === name) ?? null;
+}
+
+export function requireN8nWorkflowDestinationByName(name: N8nWorkflowName) {
+  const destination = getN8nWorkflowDestinationByName(name);
+  if (!destination) {
+    throw new Error(`Missing n8n destination configuration for ${name}.`);
+  }
+
+  return destination;
 }
 
 function readEventPayload(payload: unknown) {

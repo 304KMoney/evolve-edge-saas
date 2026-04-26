@@ -113,8 +113,11 @@ function getRequiredEnvironmentEntries() {
     "REPORT_DOWNLOAD_SIGNING_SECRET",
     "EMAIL_FROM_ADDRESS",
     "RESEND_API_KEY",
+    "RESEND_WEBHOOK_SIGNING_SECRET",
     "NOTIFICATION_DISPATCH_SECRET",
     "CRON_SECRET",
+    "OPS_READINESS_SECRET",
+    "PUBLIC_INTAKE_SHARED_SECRET",
     ...CANONICAL_PLAN_CODES.flatMap((planCode) => [
       getCanonicalStripePriceEnvVar(planCode),
       getCanonicalStripeProductEnvVar(planCode)
@@ -226,6 +229,16 @@ function getRequiredEnvironmentEntries() {
               notes: "Required for the internal notification dispatch route."
             },
             {
+              key: "OPS_READINESS_SECRET",
+              required: true,
+              notes: "Required to protect fulfillment and ops readiness endpoints from public access."
+            },
+            {
+              key: "PUBLIC_INTAKE_SHARED_SECRET",
+              required: true,
+              notes: "Required to authorize the production public intake routes."
+            },
+            {
               key: "EMAIL_FROM_ADDRESS",
               required: true,
               notes: "Required for customer delivery and follow-up emails."
@@ -234,6 +247,11 @@ function getRequiredEnvironmentEntries() {
               key: "RESEND_API_KEY",
               required: true,
               notes: "Required when Resend is the email provider."
+            },
+            {
+              key: "RESEND_WEBHOOK_SIGNING_SECRET",
+              required: true,
+              notes: "Required to verify inbound Resend delivery and failure webhooks."
             }
           ]);
         })()
@@ -340,6 +358,12 @@ export function runFirstCustomerLaunchPreflight(): LaunchPreflightResult {
     message: "Missing RESEND_API_KEY for queued delivery emails."
   });
   addMissingEnvFinding(findings, {
+    name: "RESEND_WEBHOOK_SIGNING_SECRET",
+    code: "email.resend_webhook_signing_secret_missing",
+    message:
+      "Missing RESEND_WEBHOOK_SIGNING_SECRET for verified inbound email delivery/failure webhooks."
+  });
+  addMissingEnvFinding(findings, {
     name: "NOTIFICATION_DISPATCH_SECRET",
     code: "email.notification_dispatch_secret_missing",
     message: "Missing NOTIFICATION_DISPATCH_SECRET for the internal notifications dispatch route."
@@ -348,6 +372,16 @@ export function runFirstCustomerLaunchPreflight(): LaunchPreflightResult {
     name: "CRON_SECRET",
     code: "jobs.cron_secret_missing",
     message: "Missing CRON_SECRET for scheduled jobs and queued email dispatch."
+  });
+  addMissingEnvFinding(findings, {
+    name: "OPS_READINESS_SECRET",
+    code: "ops.readiness_secret_missing",
+    message: "Missing OPS_READINESS_SECRET for protected fulfillment and ops readiness endpoints."
+  });
+  addMissingEnvFinding(findings, {
+    name: "PUBLIC_INTAKE_SHARED_SECRET",
+    code: "intake.public_shared_secret_missing",
+    message: "Missing PUBLIC_INTAKE_SHARED_SECRET for the production public intake routes."
   });
 
   for (const planCode of CANONICAL_PLAN_CODES) {

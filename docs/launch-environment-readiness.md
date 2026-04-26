@@ -51,14 +51,21 @@ Set these in Vercel or the target server environment only:
 - `OPENAI_MODEL`
 - `EMAIL_FROM_ADDRESS`
 - `RESEND_API_KEY`
+- `RESEND_WEBHOOK_SIGNING_SECRET`
 - `NOTIFICATION_DISPATCH_SECRET`
 - `CRON_SECRET`
+- `OPS_READINESS_SECRET`
+- `PUBLIC_INTAKE_SHARED_SECRET`
 - `REPORT_DOWNLOAD_SIGNING_SECRET`
 - `REPORT_DOWNLOAD_REQUIRE_AUTH=true`
 
 The launch preflight now fails closed unless `N8N_WORKFLOW_DESTINATIONS`
 contains a valid `auditRequested` destination, because that is the paid-flow
 handoff used after Stripe reconciliation and routing.
+
+That fail-closed gate is intentionally narrower than the full named n8n surface.
+Use `/api/fulfillment/dispatch-health` to inspect every app-known workflow
+destination and its latest app-owned dispatch outcome.
 
 ### Stripe-related
 
@@ -151,6 +158,9 @@ Set if the first-customer flow depends on them:
 - `HUBSPOT_REPORT_DELIVERED_DEAL_STAGE_ID`
 - `APOLLO_API_KEY`
 - `APOLLO_API_BASE_URL`
+
+Apollo is currently optional enrichment-only for n8n/operator workflows. No
+app-owned launch-critical Apollo client is wired in this repo today.
 - `OPS_ALERT_WEBHOOK_URL`
 - `OPS_ALERT_WEBHOOK_SECRET`
 - `SENTRY_DSN`
@@ -176,7 +186,11 @@ Set if the first-customer flow depends on them:
    - from the repo root: `pnpm preflight:first-customer`
    - or from `apps/web`: the same commands through that package
 2. Interpret the results correctly:
-   - `integration:status` checks whether Neon, Vercel, Stripe, n8n, LangGraph/OpenAI, HubSpot, Apollo, and Dify look wired from local env files plus `.vercel/project.json`
+- `integration:status` checks whether Neon, Vercel, Stripe, n8n, LangGraph/OpenAI, HubSpot, Apollo, and Dify look wired from local env files plus `.vercel/project.json`
+- `integration:status` treats Stripe as incomplete unless the canonical secret, webhook, and all canonical price/product envs are present, so partial commercial env setup no longer shows as configured
+- `integration:status` treats n8n as incomplete unless the paid-flow `auditRequested` destination actually resolves, so a non-empty `N8N_WORKFLOW_DESTINATIONS` value without that entry still shows up as missing
+- `integration:status` treats the OpenAI/LangGraph path as incomplete unless `AI_EXECUTION_DISPATCH_SECRET`, `OPENAI_API_KEY`, and `OPENAI_MODEL` are all present, because n8n still needs the shared auth secret to call the app-owned execute route
+- `integration:status` is a presence-only snapshot; it treats Apollo and Dify as optional integrations and reports legacy `N8N_WEBHOOK_URL` fallback separately from explicit `N8N_WORKFLOW_DESTINATIONS`
    - `integration:status` does not verify live API credentials, Stripe webhook registration, n8n workflow existence, or HubSpot write scopes
    - `preflight:first-customer:env` only checks config presence and required-vs-optional coverage
    - `preflight:first-customer` checks repo-owned safety assumptions and fail-closed launch conditions
@@ -228,6 +242,7 @@ Do not launch a first customer if any of these are still true:
   `auditRequested` destination
 - `AI_EXECUTION_PROVIDER`, `AI_EXECUTION_DISPATCH_SECRET`, `OPENAI_API_KEY`, or `OPENAI_MODEL` is missing
 - queued email dispatch is not schedulable because `CRON_SECRET`, `NOTIFICATION_DISPATCH_SECRET`, `EMAIL_FROM_ADDRESS`, or `RESEND_API_KEY` is missing
+- Resend webhook processing is not safely enabled because `RESEND_WEBHOOK_SIGNING_SECRET` is missing
 - production is still relying on legacy `N8N_WEBHOOK_URL` fallback
 - signed report auth is not enforced
 - operators cannot inspect queue findings in the app

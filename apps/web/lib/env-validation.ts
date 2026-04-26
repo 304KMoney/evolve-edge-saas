@@ -4,7 +4,6 @@ type EnvCategory =
   | "stripe"
   | "hubspot"
   | "ai-execution"
-  | "dify"
   | "n8n"
   | "monitoring"
   | "email/webhooks";
@@ -17,7 +16,6 @@ type EnvValidationContext = {
     stripe: boolean;
     hubspot: boolean;
     aiExecution: boolean;
-    dify: boolean;
     n8n: boolean;
     resendEmail: boolean;
     sentry: boolean;
@@ -55,6 +53,36 @@ function readEnvWithAliases(name: string, aliases: string[] = []) {
   }
 
   return "";
+}
+
+function hasNamedWorkflowDestination(name: string) {
+  const rawValue = readEnv("N8N_WORKFLOW_DESTINATIONS");
+  if (!rawValue) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+    if (!Array.isArray(parsed)) {
+      return false;
+    }
+
+    return parsed.some((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return false;
+      }
+
+      const record = item as Record<string, unknown>;
+      return (
+        typeof record.name === "string" &&
+        record.name.trim() === name &&
+        typeof record.url === "string" &&
+        record.url.trim().length > 0
+      );
+    });
+  } catch {
+    return false;
+  }
 }
 
 function getRuntimeEnvironment(): AppRuntimeEnvironment {
@@ -97,10 +125,6 @@ function getValidationContext(): EnvValidationContext {
 
   const hasStripeEnv =
     Boolean(readEnv("STRIPE_SECRET_KEY")) || Boolean(readEnv("STRIPE_WEBHOOK_SECRET"));
-  const hasDifyEnv =
-    Boolean(readEnvWithAliases("DIFY_API_BASE_URL", ["DIFY_BASE_URL"])) ||
-    Boolean(readEnv("DIFY_API_KEY")) ||
-    Boolean(readEnv("DIFY_WORKFLOW_ID"));
   const hasAiExecutionEnv =
     Boolean(readEnv("AI_EXECUTION_PROVIDER")) ||
     Boolean(readEnv("OPENAI_API_KEY")) ||
@@ -124,13 +148,20 @@ function getValidationContext(): EnvValidationContext {
         runtime === "production" ||
         hasAiExecutionEnv ||
         readEnv("AI_EXECUTION_PROVIDER").toLowerCase() === "openai_langgraph",
-      dify: isEnabledViaFlag("DIFY_EXECUTION_ENABLED") || hasDifyEnv,
       n8n: isEnabledViaFlag("N8N_DISPATCH_ENABLED") || runtime === "production" || hasN8nEnv,
       resendEmail: hasResendEnv,
       sentry:
         Boolean(readEnv("SENTRY_DSN")) || Boolean(readEnv("NEXT_PUBLIC_SENTRY_DSN"))
     }
   };
+}
+
+function isRuleConfigured(rule: EnvRule) {
+  if (rule.key === "N8N_WORKFLOW_DESTINATIONS") {
+    return hasNamedWorkflowDestination("auditRequested");
+  }
+
+  return Boolean(readEnvWithAliases(rule.key, rule.aliases ?? []));
 }
 
 const ENV_RULES: EnvRule[] = [
@@ -167,10 +198,47 @@ const ENV_RULES: EnvRule[] = [
     requiredWhen: (context) => context.features.stripe
   },
   {
+    key: "STRIPE_PRICE_STARTER_ANNUAL",
+    category: "stripe",
+    requiredWhen: (context) => context.features.stripe,
+    notes: "Canonical Stripe price for starter."
+  },
+  {
+    key: "STRIPE_PRICE_SCALE_ANNUAL",
+    category: "stripe",
+    requiredWhen: (context) => context.features.stripe,
+    notes: "Canonical Stripe price for scale."
+  },
+  {
+    key: "STRIPE_PRICE_ENTERPRISE_ANNUAL",
+    category: "stripe",
+    requiredWhen: (context) => context.features.stripe,
+    notes: "Canonical Stripe price for enterprise."
+  },
+  {
+    key: "STRIPE_PRODUCT_STARTER",
+    category: "stripe",
+    requiredWhen: (context) => context.features.stripe,
+    notes: "Canonical Stripe product for starter."
+  },
+  {
+    key: "STRIPE_PRODUCT_SCALE",
+    category: "stripe",
+    requiredWhen: (context) => context.features.stripe,
+    notes: "Canonical Stripe product for scale."
+  },
+  {
+    key: "STRIPE_PRODUCT_ENTERPRISE",
+    category: "stripe",
+    requiredWhen: (context) => context.features.stripe,
+    notes: "Canonical Stripe product for enterprise."
+  },
+  {
     key: "N8N_WORKFLOW_DESTINATIONS",
     category: "n8n",
     requiredWhen: (context) => context.features.n8n,
-    notes: "Preferred over legacy N8N_WEBHOOK_URL fallback."
+    notes:
+      "Required to include a valid auditRequested destination; legacy N8N_WEBHOOK_URL fallback is not enough for canonical launch readiness."
   },
   {
     key: "N8N_CALLBACK_SECRET",
@@ -185,7 +253,6 @@ const ENV_RULES: EnvRule[] = [
   },
   {
     key: "PUBLIC_INTAKE_SHARED_SECRET",
-    aliases: ["OUTBOUND_DISPATCH_SECRET"],
     category: "n8n",
     requiredWhen: (context) => context.runtime === "production",
     notes:
@@ -198,12 +265,6 @@ const ENV_RULES: EnvRule[] = [
   },
   {
     key: "AI_EXECUTION_DISPATCH_SECRET",
-    aliases: [
-      "AI_EXECUTION_SERVICE_TOKEN",
-      "DIFY_DISPATCH_SECRET",
-      "N8N_CALLBACK_SHARED_SECRET",
-      "N8N_CALLBACK_SECRET"
-    ],
     category: "ai-execution",
     requiredWhen: (context) => context.features.aiExecution,
     notes: "Bearer secret for POST /api/internal/ai/execute."
@@ -336,25 +397,6 @@ const ENV_RULES: EnvRule[] = [
     requiredWhen: (context) => context.features.hubspot
   },
   {
-    key: "DIFY_API_BASE_URL",
-    aliases: ["DIFY_BASE_URL"],
-    category: "dify",
-    requiredWhen: (context) => context.features.dify,
-    notes: "Deprecated rollback path only."
-  },
-  {
-    key: "DIFY_API_KEY",
-    category: "dify",
-    requiredWhen: (context) => context.features.dify,
-    notes: "Deprecated rollback path only."
-  },
-  {
-    key: "DIFY_WORKFLOW_ID",
-    category: "dify",
-    requiredWhen: (context) => context.features.dify,
-    notes: "Deprecated rollback path only."
-  },
-  {
     key: "NEXT_PUBLIC_APP_URL",
     aliases: ["APP_BASE_URL"],
     category: "monitoring",
@@ -408,7 +450,7 @@ export function getEnvironmentParityStatus() {
 
   return ENV_RULES.map((rule) => {
     const required = rule.requiredWhen(context);
-    const configured = Boolean(readEnvWithAliases(rule.key, rule.aliases ?? []));
+    const configured = isRuleConfigured(rule);
 
     return {
       key: rule.key,
@@ -462,7 +504,6 @@ export function logEnvironmentParityStatus() {
         "stripe",
         "hubspot",
         "ai-execution",
-        "dify",
         "n8n",
         "monitoring",
         "email/webhooks"
