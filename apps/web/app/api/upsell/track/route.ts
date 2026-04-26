@@ -3,6 +3,14 @@ import { NextResponse } from "next/server";
 import { buildAuditRequestContextFromRequest, writeAuditLog } from "../../../../lib/audit";
 import { requireCurrentSession } from "../../../../lib/auth";
 import { publishDomainEvent } from "../../../../lib/domain-events";
+import { enforceTrustedOrigin } from "../../../../lib/route-security";
+import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
+import {
+  expectObject,
+  parseJsonRequestBody,
+  readRequiredString,
+  ValidationError
+} from "../../../../lib/security-validation";
 
 type UpsellTrackRequest = {
   eventId?: string;
@@ -26,11 +34,48 @@ function trim(value: string | undefined, maxLength = 120) {
 }
 
 export async function POST(request: Request) {
+  const invalidOrigin = enforceTrustedOrigin(request);
+  if (invalidOrigin) {
+    return invalidOrigin;
+  }
+
+  const rateLimited = applyRouteRateLimit(request, {
+    key: "upsell-track",
+    category: "api"
+  });
+  if (rateLimited) {
+    return rateLimited;
+  }
+
   const session = await requireCurrentSession({ requireOrganization: true });
-  const body = (await request.json()) as UpsellTrackRequest;
-  const eventType = body.eventType === "click" ? "click" : body.eventType === "impression" ? "impression" : null;
-  const offerKey = trim(body.offerKey);
-  const eventId = trim(body.eventId, 200);
+  let body: UpsellTrackRequest;
+
+  try {
+    body = expectObject(await parseJsonRequestBody(request)) as UpsellTrackRequest;
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    throw error;
+  }
+
+  const rawEventType = readRequiredString(body as Record<string, unknown>, "eventType", {
+    maxLength: 20
+  });
+  const eventType =
+    rawEventType === "click"
+      ? "click"
+      : rawEventType === "impression"
+        ? "impression"
+        : null;
+  const offerKey = trim(
+    readRequiredString(body as Record<string, unknown>, "offerKey", { maxLength: 120 })
+  );
+  const eventId = trim(
+    readRequiredString(body as Record<string, unknown>, "eventId", { maxLength: 200 }),
+    200
+  );
 
   if (!eventType || !offerKey || !eventId) {
     return NextResponse.json(
