@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/internal/jobs/run?job=dispatch-email-notifications",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 14 * * *"
     }
   ]
 }
