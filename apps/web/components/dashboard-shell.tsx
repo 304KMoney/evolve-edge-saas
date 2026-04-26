@@ -139,7 +139,28 @@ function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
-export function DashboardShell({ data }: { data: DashboardData }) {
+function isActiveDashboardRoute(pathname: string, href: Route) {
+  if (pathname === href) {
+    return true;
+  }
+
+  if (href === "/dashboard") {
+    return pathname === "/dashboard";
+  }
+
+  return pathname.startsWith(`${href}/`);
+}
+
+export function DashboardShell({
+  data,
+  flashMessage
+}: {
+  data: DashboardData;
+  flashMessage?: {
+    title: string;
+    body: string;
+  } | null;
+}) {
   const pathname = usePathname();
   const resolvedNavigation = data.isDemoMode
     ? [
@@ -182,7 +203,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
           <nav className="mt-8 space-y-2">
             {resolvedNavigation.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href;
+              const active = isActiveDashboardRoute(pathname, item.href);
 
               return (
                 <Link
@@ -212,7 +233,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               notes for your current assessments.
             </p>
             <Link
-              href="/dashboard/settings"
+              href={"/dashboard/settings#trust-center" as Route}
               className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#8debf4]"
             >
               Open trust center
@@ -250,13 +271,24 @@ export function DashboardShell({ data }: { data: DashboardData }) {
                 Notifications
               </Link>
               <Link
-                href="/dashboard/assessments"
+                href="/dashboard/assessments/start"
                 className="rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-4 py-2 text-sm font-semibold text-[#05111d]"
               >
                 Start Reassessment
               </Link>
             </div>
           </header>
+
+          {flashMessage ? (
+            <section className="mt-6 rounded-[24px] border border-emerald-200 bg-emerald-50 p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
+                {flashMessage.title}
+              </p>
+              <p className="mt-2 text-sm leading-7 text-ink">
+                {flashMessage.body}
+              </p>
+            </section>
+          ) : null}
 
           <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {data.metrics.map((metric) => (
@@ -364,7 +396,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
                   </h2>
                 </div>
                 <Link
-                  href="/dashboard/settings"
+                  href={"/dashboard/settings#billing-controls" as Route}
                   className="text-sm font-semibold text-accent"
                 >
                   Open billing
@@ -689,7 +721,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               </div>
               <div className="mt-5">
                 <Link
-                  href="/dashboard/settings"
+                  href={"/dashboard/settings#inventory-registry" as Route}
                   className="inline-flex items-center gap-2 text-sm font-semibold text-accent"
                 >
                   Manage registry records
