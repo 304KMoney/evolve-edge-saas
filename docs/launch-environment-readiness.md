@@ -163,14 +163,21 @@ Set if the first-customer flow depends on them:
 - Changes to server-only values should also be treated as redeploy-required for
   first-customer operations so Route Handlers, Prisma-backed server code, and
   webhook callbacks all restart against the same configuration set.
+- Vercel Hobby projects cannot deploy sub-daily cron schedules. The repo's
+  built-in email-dispatch cron is therefore set to run once per day at 14:00
+  UTC until the project is upgraded or that job is moved to a different
+  scheduler.
 
 ## Required verification order
 
 1. Run:
+   - from the repo root: `pnpm integration:status`
    - from the repo root: `pnpm preflight:first-customer:env`
    - from the repo root: `pnpm preflight:first-customer`
    - or from `apps/web`: the same commands through that package
 2. Interpret the results correctly:
+   - `integration:status` checks whether Neon, Vercel, Stripe, n8n, LangGraph/OpenAI, HubSpot, Apollo, and Dify look wired from local env files plus `.vercel/project.json`
+   - `integration:status` does not verify live API credentials, Stripe webhook registration, n8n workflow existence, or HubSpot write scopes
    - `preflight:first-customer:env` only checks config presence and required-vs-optional coverage
    - `preflight:first-customer` checks repo-owned safety assumptions and fail-closed launch conditions
    - neither command proves live third-party connectivity or external dashboard setup
@@ -229,6 +236,7 @@ Do not launch a first customer if any of these are still true:
 ## Notes on live verification
 
 - This repo now includes env-status and preflight commands.
+- `pnpm integration:status` gives the quickest app-owned snapshot of whether the repo is pointed at Neon, linked to Vercel, and configured for Stripe, n8n, LangGraph/OpenAI, HubSpot, optional Apollo enrichment, and rollback-only Dify.
 - `pnpm preflight:first-customer:env` is a config-coverage check only.
 - `pnpm preflight:first-customer` validates repo-owned safety assumptions and
   fail-closed launch conditions.
