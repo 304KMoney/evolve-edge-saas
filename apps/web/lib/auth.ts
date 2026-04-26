@@ -201,7 +201,7 @@ async function redirectToSignIn(error?: string): Promise<never> {
   }
 
   const destination = params.size > 0 ? `/sign-in?${params.toString()}` : "/sign-in";
-  redirect(destination);
+  redirect(destination as never);
 }
 
 export function sanitizeInternalRedirect(
@@ -527,7 +527,7 @@ export async function getCurrentSession(): Promise<AppSession> {
     await redirectToSignIn();
   }
 
-  return session;
+  return session as AppSession;
 }
 
 export async function getOptionalCurrentSession() {
@@ -548,7 +548,7 @@ export async function requireCurrentSession(options?: {
     redirect("/onboarding");
   }
 
-  return session;
+  return session as AppSession;
 }
 
 export async function requireOrganizationRole(
@@ -560,7 +560,7 @@ export async function requireOrganizationRole(
     redirect("/dashboard");
   }
 
-  return session;
+  return session as AppSession;
 }
 
 export function getSessionAuthorizationContext(session: AppSession) {
@@ -587,7 +587,7 @@ export async function requireOrganizationPermission(
     redirect("/dashboard");
   }
 
-  return session;
+  return session as AppSession;
 }
 
 export async function requirePlatformPermission(permission: PlatformPermission) {
@@ -597,7 +597,7 @@ export async function requirePlatformPermission(permission: PlatformPermission) 
     redirect("/dashboard");
   }
 
-  return session;
+  return session as AppSession;
 }
 
 export async function requireAdminSession() {
