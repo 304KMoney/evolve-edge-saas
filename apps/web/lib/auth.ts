@@ -558,8 +558,7 @@ async function resolveCurrentSession(options?: {
   const dbSession = await prisma.session.findFirst({
     where: {
       tokenHash: hashOpaqueToken(token),
-      expiresAt: { gt: new Date() },
-      revokedAt: null
+      expiresAt: { gt: new Date() }
     },
     include: {
       user: {
