@@ -35,6 +35,13 @@ type AssessmentListItem = Awaited<ReturnType<typeof prisma.assessment.findMany>>
 type DeliveryPackageListItem = Awaited<
   ReturnType<typeof getOrganizationReportPackages>
 >[number];
+type OptionalReportsDependencyKey =
+  | "delivery_packages"
+  | "billing_snapshot"
+  | "documents_processed_quota"
+  | "usage_metering"
+  | "activation"
+  | "ai_feedback";
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("en-US", {
@@ -54,6 +61,70 @@ function formatStatus(status: string) {
 
 function formatCompactStatus(status: string | null | undefined) {
   return status ? formatStatus(status).replace("Briefing ", "Briefing: ") : "Pending";
+}
+
+function isPendingReviewLikeStatus(status: string | null | undefined) {
+  return (
+    status === "PENDING" ||
+    status === "PENDING_REVIEW" ||
+    status === "GENERATED"
+  );
+}
+
+function buildOptionalReportsDependencyWarning(
+  dependency: OptionalReportsDependencyKey
+) {
+  switch (dependency) {
+    case "delivery_packages":
+      return "Delivery package status is temporarily unavailable.";
+    case "billing_snapshot":
+      return "Billing-linked report upgrade context is temporarily unavailable.";
+    case "documents_processed_quota":
+      return "Document processing quota status is temporarily unavailable.";
+    case "usage_metering":
+      return "Usage metering for reports is temporarily unavailable.";
+    case "activation":
+      return "Activation guidance is temporarily unavailable.";
+    case "ai_feedback":
+      return "Internal AI feedback metrics are temporarily unavailable.";
+    default:
+      return "A secondary report panel is temporarily unavailable.";
+  }
+}
+
+async function loadOptionalReportsDependency<T>(input: {
+  organizationId: string;
+  dependency: OptionalReportsDependencyKey;
+  load: () => Promise<T>;
+  fallback: T;
+}) {
+  try {
+    return {
+      value: await input.load(),
+      warning: null
+    };
+  } catch (error) {
+    if (isPrismaRuntimeCompatibilityError(error)) {
+      logPrismaRuntimeCompatibilityError(
+        `dashboard.reports.${input.dependency}`,
+        error,
+        {
+          organizationId: input.organizationId
+        }
+      );
+    } else {
+      logServerEvent("warn", "dashboard.reports.partial_dependency", {
+        organizationId: input.organizationId,
+        dependency: input.dependency,
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+
+    return {
+      value: input.fallback,
+      warning: buildOptionalReportsDependencyWarning(input.dependency)
+    };
+  }
 }
 
 function renderReportsFallback() {
@@ -112,6 +183,7 @@ export default async function ReportsPage({
   let reportUsage: ReturnType<typeof getUsageMetricSnapshot> = null;
   let aiRunUsage: ReturnType<typeof getUsageMetricSnapshot> = null;
   let upsellOffers: ReturnType<typeof getExpansionOffers> = [];
+  const partialDataWarnings: string[] = [];
   const canReviewReports = hasPermission(
     getSessionAuthorizationContext(session),
     "reports.review"
@@ -120,15 +192,7 @@ export default async function ReportsPage({
     null;
 
   try {
-    [
-      reports,
-      assessments,
-      deliveryPackages,
-      entitlements,
-      currentSubscription,
-      documentsProcessedQuota,
-      params
-    ] = await Promise.all([
+    [reports, assessments, entitlements, params] = await Promise.all([
       listDashboardReportSummaryViewsForAccessSession({
         accessSession
       }),
@@ -147,35 +211,9 @@ export default async function ReportsPage({
         },
         orderBy: { createdAt: "desc" }
       }),
-      getOrganizationReportPackages(organizationId, { limit: 50 }),
       getOrganizationEntitlements(organizationId),
-      getCurrentSubscription(organizationId),
-      getUsageRemaining(organizationId, "documents_processed"),
       searchParams
     ]);
-    const usageMetering = await getOrganizationUsageMeteringSnapshot(
-      organizationId,
-      entitlements.planCode
-    );
-    activation = await getOrganizationActivationSnapshot(
-      organizationId,
-      entitlements
-    );
-    if (canReviewReports) {
-      aiFeedbackSummary = await getOrganizationAiFeedbackSummary({
-        organizationId
-      });
-    }
-    reportUsage = getUsageMetricSnapshot(usageMetering, "reportsGenerated");
-    aiRunUsage = getUsageMetricSnapshot(usageMetering, "aiProcessingRuns");
-    upsellOffers = getExpansionOffers({
-      placement: "reports",
-      session,
-      entitlements,
-      usageMetering,
-      currentPlanCode: currentSubscription?.plan.code ?? entitlements.planCode,
-      hasStripeCustomer: Boolean(currentSubscription?.stripeCustomerId)
-    });
   } catch (error) {
     if (isPrismaRuntimeCompatibilityError(error)) {
       logPrismaRuntimeCompatibilityError("dashboard.reports", error, {
@@ -189,6 +227,100 @@ export default async function ReportsPage({
     }
 
     return renderReportsFallback();
+  }
+
+  const [
+    deliveryPackagesResult,
+    currentSubscriptionResult,
+    documentsProcessedQuotaResult,
+    usageMeteringResult,
+    activationResult,
+    aiFeedbackSummaryResult
+  ] = await Promise.all([
+    loadOptionalReportsDependency({
+      organizationId,
+      dependency: "delivery_packages",
+      load: () => getOrganizationReportPackages(organizationId, { limit: 50 }),
+      fallback: [] as DeliveryPackageListItem[]
+    }),
+    loadOptionalReportsDependency({
+      organizationId,
+      dependency: "billing_snapshot",
+      load: () => getCurrentSubscription(organizationId),
+      fallback: null as Awaited<ReturnType<typeof getCurrentSubscription>> | null
+    }),
+    loadOptionalReportsDependency({
+      organizationId,
+      dependency: "documents_processed_quota",
+      load: () => getUsageRemaining(organizationId, "documents_processed"),
+      fallback: null as Awaited<ReturnType<typeof getUsageRemaining>> | null
+    }),
+    loadOptionalReportsDependency({
+      organizationId,
+      dependency: "usage_metering",
+      load: () =>
+        getOrganizationUsageMeteringSnapshot(organizationId, entitlements.planCode),
+      fallback:
+        null as Awaited<ReturnType<typeof getOrganizationUsageMeteringSnapshot>> | null
+    }),
+    loadOptionalReportsDependency({
+      organizationId,
+      dependency: "activation",
+      load: () => getOrganizationActivationSnapshot(organizationId, entitlements),
+      fallback:
+        null as Awaited<ReturnType<typeof getOrganizationActivationSnapshot>> | null
+    }),
+    canReviewReports
+      ? loadOptionalReportsDependency({
+          organizationId,
+          dependency: "ai_feedback",
+          load: () =>
+            getOrganizationAiFeedbackSummary({
+              organizationId
+            }),
+          fallback:
+            null as Awaited<ReturnType<typeof getOrganizationAiFeedbackSummary>> | null
+        })
+      : Promise.resolve({
+          value: null as Awaited<ReturnType<typeof getOrganizationAiFeedbackSummary>> | null,
+          warning: null as string | null
+        })
+  ]);
+
+  deliveryPackages = deliveryPackagesResult.value;
+  currentSubscription = currentSubscriptionResult.value;
+  documentsProcessedQuota = documentsProcessedQuotaResult.value;
+  activation = activationResult.value;
+  aiFeedbackSummary = aiFeedbackSummaryResult.value;
+
+  partialDataWarnings.push(
+    ...[
+      deliveryPackagesResult.warning,
+      currentSubscriptionResult.warning,
+      documentsProcessedQuotaResult.warning,
+      usageMeteringResult.warning,
+      activationResult.warning,
+      aiFeedbackSummaryResult.warning
+    ].filter((warning): warning is string => Boolean(warning))
+  );
+
+  if (usageMeteringResult.value) {
+    reportUsage = getUsageMetricSnapshot(
+      usageMeteringResult.value,
+      "reportsGenerated"
+    );
+    aiRunUsage = getUsageMetricSnapshot(
+      usageMeteringResult.value,
+      "aiProcessingRuns"
+    );
+    upsellOffers = getExpansionOffers({
+      placement: "reports",
+      session,
+      entitlements,
+      usageMetering: usageMeteringResult.value,
+      currentPlanCode: currentSubscription?.plan.code ?? entitlements.planCode,
+      hasStripeCustomer: Boolean(currentSubscription?.stripeCustomerId)
+    });
   }
 
   const deliveryPackageByReportId = new Map(
@@ -210,13 +342,15 @@ export default async function ReportsPage({
     usageMetrics: [reportUsage, aiRunUsage].filter(
       (metric): metric is NonNullable<typeof metric> => Boolean(metric)
     ),
-    quotas: [
-      {
-        key: "documents_processed",
-        label: "Monthly documents processed",
-        snapshot: documentsProcessedQuota
-      }
-    ]
+    quotas: documentsProcessedQuota
+      ? [
+          {
+            key: "documents_processed" as const,
+            label: "Monthly documents processed",
+            snapshot: documentsProcessedQuota
+          }
+        ]
+      : []
   });
 
   return (
@@ -260,6 +394,17 @@ export default async function ReportsPage({
         {params.generated ? (
           <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-accent">
             A new report was generated and is now awaiting internal review.
+          </div>
+        ) : null}
+
+        {partialDataWarnings.length > 0 ? (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
+            <p className="font-medium text-ink">
+              Report records are available, but some secondary panels are limited right now.
+            </p>
+            <p className="mt-2 leading-6">
+              {partialDataWarnings.join(" ")}
+            </p>
           </div>
         ) : null}
 
@@ -371,7 +516,7 @@ export default async function ReportsPage({
           </section>
         ) : null}
 
-        {!activation.isActivated ? (
+        {activation && !activation.isActivated ? (
           <div className="mt-6">
             <ActivationTipCard
               title="This page is the activation milestone"
@@ -479,7 +624,7 @@ export default async function ReportsPage({
                           report.status === "APPROVED" ||
                           report.status === "READY"
                             ? "High"
-                            : report.status === "PENDING_REVIEW"
+                            : isPendingReviewLikeStatus(report.status)
                               ? "High, pending review"
                               : "In progress"}{" "}
                           | Last updated {formatDate(report.publishedAt ?? report.createdAt)}
@@ -539,6 +684,7 @@ export default async function ReportsPage({
           ) : null}
 
           {reports.length > 0 &&
+          activation &&
           !activation.supportingSignals.find((signal) => signal.key === "firstExecutiveSummaryViewed")?.completed ? (
             <ActivationTipCard
               title="Review the first report with stakeholders"

@@ -17,7 +17,7 @@ import {
   backfillAuditRequestedExecutionTargets,
   buildAuditRequestedPayload,
   buildN8nSignedHeaders,
-  getN8nWorkflowDestinationByName
+  requireN8nWorkflowDestinationByName
 } from "./n8n";
 import { logServerEvent, sendOperationalAlert } from "./monitoring";
 import { appendOperatorWorkflowEventRecord } from "./operator-workflow-event-records";
@@ -34,6 +34,10 @@ import {
   shouldSkipWorkflowReportReady,
   shouldSkipWorkflowStatusCallback
 } from "./workflow-callback-policy";
+import {
+  requireWorkflowCallbackSecret,
+  requireWorkflowWritebackSecret
+} from "./workflow-callback-secrets";
 import { resolveRecoveredWorkflowDispatchState } from "./workflow-dispatch-policy";
 
 type WorkflowDispatchDbClient = Prisma.TransactionClient | typeof prisma;
@@ -130,19 +134,6 @@ function readOptionalStringField(
   return typeof candidate === "string" && candidate.trim().length > 0
     ? candidate.trim()
     : null;
-}
-
-export function requireWorkflowCallbackSecret() {
-  return (
-    getOptionalEnv("N8N_CALLBACK_SHARED_SECRET") ??
-    requireEnv("N8N_CALLBACK_SECRET")
-  );
-}
-
-export function requireWorkflowWritebackSecret() {
-  // TODO: If we later need finer-grained separation, this helper is the
-  // server-only seam for rotating inbound writeback auth independently.
-  return getOptionalEnv("N8N_WRITEBACK_SECRET") ?? requireWorkflowCallbackSecret();
 }
 
 export function isAuthorizedWorkflowWritebackRequest(request: Request) {
@@ -434,10 +425,7 @@ async function dispatchWorkflow(dispatchId: string, db: WorkflowDispatchDbClient
     return { delivered: false, skipped: true as const };
   }
 
-  const destination = getN8nWorkflowDestinationByName("auditRequested");
-  if (!destination) {
-    throw new Error("Missing n8n destination configuration for auditRequested.");
-  }
+  const destination = requireN8nWorkflowDestinationByName("auditRequested");
 
   const claimed = await db.workflowDispatch.updateMany({
     where: {

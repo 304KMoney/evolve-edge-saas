@@ -247,6 +247,10 @@ The `report.generated` sync path also now carries:
 - `evolve_edge_risk_level`
 - `evolve_edge_top_concerns`
 
+`evolve_edge_report_delivered_at` is reserved for the later `report.delivered`
+event so CRM visibility does not imply customer delivery before the app-owned
+delivery step actually completes.
+
 ## Required environment variables
 
 ### Stripe
@@ -287,6 +291,10 @@ Those should not be used as the canonical first-customer configuration path.
 - optional:
   - `OPENAI_REASONING_MODEL`
   - `AI_EXECUTION_TIMEOUT_MS`
+
+If `OPENAI_REASONING_MODEL` is set, the reasoning-heavy LangGraph nodes use it
+for risk analysis, remediation roadmap generation, and final report synthesis.
+If it is unset, those nodes fall back to `OPENAI_STRONG_MODEL`.
 
 ### Deprecated Dify rollback
 

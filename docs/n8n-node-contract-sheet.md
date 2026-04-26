@@ -97,6 +97,9 @@ Recommended path:
 
 - whatever path your `auditRequested` destination points to in `N8N_WORKFLOW_DESTINATIONS`
 - if you are using the legacy single-webhook fallback, this is the value of `N8N_WEBHOOK_URL`
+- the legacy single-webhook fallback still exposes every app-known named n8n
+  workflow on that shared URL, so branch on `{{$json.destination.workflow}}`
+  when one webhook is serving multiple downstream automations
 
 Recommended webhook authentication:
 

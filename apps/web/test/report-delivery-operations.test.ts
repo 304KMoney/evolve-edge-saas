@@ -13,6 +13,7 @@ import {
 function clearDeliveryEnv() {
   delete process.env.EMAIL_FROM_ADDRESS;
   delete process.env.RESEND_API_KEY;
+  delete process.env.RESEND_WEBHOOK_SIGNING_SECRET;
   delete process.env.NOTIFICATION_DISPATCH_SECRET;
   delete process.env.CRON_SECRET;
 }
@@ -88,6 +89,7 @@ async function runReportDeliveryOperationsTests() {
     clearDeliveryEnv();
     process.env.EMAIL_FROM_ADDRESS = "Evolve Edge <ops@example.com>";
     process.env.RESEND_API_KEY = "re_test_123";
+    process.env.RESEND_WEBHOOK_SIGNING_SECRET = "resend_webhook_secret";
     process.env.NOTIFICATION_DISPATCH_SECRET = "notification_secret";
     process.env.CRON_SECRET = "cron_secret";
 
@@ -122,6 +124,10 @@ async function runReportDeliveryOperationsTests() {
 
   {
     clearDeliveryEnv();
+    process.env.EMAIL_FROM_ADDRESS = "Evolve Edge <ops@example.com>";
+    process.env.RESEND_API_KEY = "re_test_123";
+    process.env.NOTIFICATION_DISPATCH_SECRET = "notification_secret";
+    process.env.CRON_SECRET = "cron_secret";
     const snapshot = await getOrganizationDeliveryOperationsSnapshot({
       organizationId: "org_123",
       subscriptionAccessState: BillingAccessState.PAST_DUE,
@@ -147,6 +153,13 @@ async function runReportDeliveryOperationsTests() {
 
     assert.equal(snapshot.billing.eligible, false);
     assert.equal(snapshot.dispatch.configured, false);
+    assert.equal(
+      snapshot.dispatch.requiredEnv.some(
+        (entry) =>
+          entry.key === "RESEND_WEBHOOK_SIGNING_SECRET" && entry.configured === false
+      ),
+      true
+    );
     assert.equal(snapshot.emailQueue.counts.failed, 1);
     assert.match(snapshot.billing.message, /blocked/i);
   }

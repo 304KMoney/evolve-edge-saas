@@ -10,10 +10,10 @@ import {
 import {
   getAppUrl,
   getOptionalEnv,
-  getRuntimeEnvironment,
-  requireEnv
+  getRuntimeEnvironment
 } from "../../../../lib/runtime-config";
 import { logServerEvent, sendOperationalAlert } from "../../../../lib/monitoring";
+import { requireN8nWorkflowDestinationByName } from "../../../../lib/n8n";
 import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
 import { isAuthorizedBearerRequest } from "../../../../lib/security-auth";
 import {
@@ -25,6 +25,7 @@ import {
   readRequiredString,
   ValidationError
 } from "../../../../lib/security-validation";
+import { requireWorkflowCallbackSecret } from "../../../../lib/workflow-callback-secrets";
 
 function readOptionalBoolean(payload: Record<string, unknown>, field: string) {
   const value = payload[field];
@@ -219,8 +220,8 @@ export async function POST(request: Request) {
       source: route
     });
 
-    const webhookUrl = requireEnv("N8N_WEBHOOK_URL");
-    const callbackSharedSecret = requireEnv("N8N_CALLBACK_SHARED_SECRET");
+    const destination = requireN8nWorkflowDestinationByName("auditRequested");
+    const callbackSharedSecret = requireWorkflowCallbackSecret();
     logServerEvent("info", "automation.intake_to_n8n.dispatch_begin", {
       traceId,
       route,
@@ -231,11 +232,12 @@ export async function POST(request: Request) {
       metadata: {
         customerEmail: maskEmail(customerEmail),
         purchasedTier,
+        destination: destination.name,
         ...envPresence
       }
     });
 
-    const response = await fetch(webhookUrl, {
+    const response = await fetch(destination.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   assertHubSpotProjectionEvent,
+  buildHubSpotMilestoneProperties,
   getHubSpotDestinations,
   shouldSyncHubSpotEvent
 } from "../lib/hubspot";
@@ -37,6 +38,45 @@ function runHubSpotTests() {
 
   delete env.HUBSPOT_ACCESS_TOKEN;
   assert.equal(getHubSpotDestinations().length, 0);
+
+  const reportGeneratedMilestones = buildHubSpotMilestoneProperties(
+    "report.generated",
+    {
+      type: "report.generated",
+      occurredAt: new Date("2026-04-26T14:00:00.000Z"),
+      payload: {
+        riskLevel: "moderate",
+        topConcerns: ["Vendor review debt", "Access control drift"]
+      }
+    } as any
+  );
+  assert.equal(reportGeneratedMilestones.evolve_edge_report_generated, "true");
+  assert.equal(
+    "evolve_edge_report_delivered_at" in reportGeneratedMilestones,
+    false
+  );
+  assert.equal(reportGeneratedMilestones.evolve_edge_risk_level, "moderate");
+  assert.equal(
+    reportGeneratedMilestones.evolve_edge_top_concerns,
+    "Vendor review debt | Access control drift"
+  );
+
+  const reportDeliveredMilestones = buildHubSpotMilestoneProperties(
+    "report.delivered",
+    {
+      type: "report.delivered",
+      occurredAt: new Date("2026-04-26T15:00:00.000Z"),
+      payload: {
+        riskLevel: "moderate",
+        top_concerns: ["Vendor review debt"]
+      }
+    } as any
+  );
+  assert.equal(reportDeliveredMilestones.evolve_edge_report_generated, "true");
+  assert.equal(
+    reportDeliveredMilestones.evolve_edge_report_delivered_at,
+    "2026-04-26T15:00:00.000Z"
+  );
 
   if (originalSyncEnabled === undefined) {
     delete env.HUBSPOT_SYNC_ENABLED;

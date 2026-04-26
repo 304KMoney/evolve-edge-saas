@@ -2,14 +2,21 @@ import assert from "node:assert/strict";
 import { OpenAiLangGraphProvider } from "../src/server/ai/providers/openai-langgraph";
 import { createInMemoryAuditWorkflowCheckpointStore } from "../src/server/ai/workflows/audit/checkpoints";
 
-function createMockedProvider(overrides?: { timeoutMs?: number }) {
+function createMockedProvider(overrides?: {
+  timeoutMs?: number;
+  strongModel?: string;
+  reasoningModel?: string | null;
+}) {
   const { store } = createInMemoryAuditWorkflowCheckpointStore();
   const provider = new OpenAiLangGraphProvider({
     apiKey: "test-key",
     cheapModel: "gpt-4o-mini",
     model: "gpt-4o-2024-08-06",
-    strongModel: "o4-mini",
-    reasoningModel: "o4-mini",
+    strongModel: overrides?.strongModel ?? "o4-mini",
+    reasoningModel:
+      overrides?.reasoningModel === undefined
+        ? "o4-mini"
+        : overrides.reasoningModel,
     timeoutMs: overrides?.timeoutMs ?? 20000,
     maxInputChars: 24000,
     planInputCharLimits: {
@@ -109,7 +116,10 @@ function createMockedProvider(overrides?: { timeoutMs?: number }) {
 }
 
 async function runOpenAiLangGraphProviderTests() {
-  const provider = createMockedProvider();
+  const provider = createMockedProvider({
+    strongModel: "gpt-4.1",
+    reasoningModel: "o4-mini"
+  });
   const progressUpdates: string[] = [];
   const usedModels: string[] = [];
   const routedResponses = [
@@ -235,6 +245,119 @@ async function runOpenAiLangGraphProviderTests() {
     "gpt-4o-mini",
     "o4-mini",
     "o4-mini"
+  ]);
+
+  const fallbackProvider = createMockedProvider({
+    strongModel: "gpt-4.1",
+    reasoningModel: null
+  });
+  const fallbackModels: string[] = [];
+  const fallbackResponses = [
+    {
+      companyName: "Acme Health",
+      industry: "Healthcare",
+      companySize: "51-200",
+      summary: "Healthcare SaaS company",
+      operatingModel: "B2B SaaS",
+      businessPriorities: ["Governance"],
+      securityMaturitySignals: ["Some ownership exists"]
+    },
+    {
+      selectedFrameworks: ["SOC 2"],
+      prioritizedFrameworks: ["SOC 2"],
+      coverageSummary: "SOC 2 maps cleanly.",
+      mappings: [
+        {
+          framework: "SOC 2",
+          rationale: "Core trust requirement.",
+          applicableAreas: ["Access control"]
+        }
+      ]
+    },
+    {
+      summary: "Security policies and vendor reviews are incomplete.",
+      findings: [
+        {
+          title: "Policy gap",
+          severity: "High",
+          summary: "Formal security policies are incomplete.",
+          businessImpact: "Audit readiness is reduced.",
+          controlDomain: "governance",
+          impactedFrameworks: ["SOC 2"],
+          evidence: ["No policy package"],
+          tags: ["policy"]
+        }
+      ],
+      systemicThemes: ["Governance"],
+      notableStrengths: ["Leadership buy-in"],
+      riskFlags: {
+        noFormalSecurityPolicies: true,
+        noAiGovernance: false,
+        vendorRiskPresent: true,
+        sensitiveDataExposure: false
+      }
+    },
+    {
+      keyDrivers: ["Policy gap", "Vendor review risk"]
+    },
+    {
+      roadmapSummary: "Start with policy remediation.",
+      immediateActions: [
+        {
+          title: "Approve policies",
+          description: "Publish baseline policies.",
+          priority: "HIGH",
+          ownerRole: "Security Lead",
+          targetTimeline: "30 days"
+        }
+      ],
+      nearTermActions: [],
+      strategicActions: []
+    },
+    {
+      reportTitle: "Acme Health Audit",
+      reportSubtitle: "Scale plan",
+      executiveSummary: "The audit found governance gaps.",
+      detailedReport: "Detailed report body",
+      conclusion: "Resolve policy gaps first."
+    }
+  ];
+  (fallbackProvider as any).client = {
+    responses: {
+      create: async (input: Record<string, unknown>) => {
+        fallbackModels.push(String(input.model));
+        return {
+          output_text: JSON.stringify(fallbackResponses.shift() ?? {})
+        };
+      }
+    }
+  };
+  await fallbackProvider.executeAuditWorkflow({
+    orgId: "org_123",
+    assessmentId: "asm_fallback",
+    workflowDispatchId: "wd_fallback",
+    dispatchId: "disp_fallback",
+    customerEmail: "buyer@example.com",
+    companyName: "Acme Health",
+    industry: "Healthcare",
+    companySize: "51-200",
+    selectedFrameworks: ["SOC 2"],
+    assessmentAnswers: [
+      {
+        question: "Do you have formal security policies?",
+        answer: "No"
+      }
+    ],
+    evidenceSummary: "No policy packet was supplied.",
+    planTier: "scale"
+  });
+  assert.deepEqual(fallbackModels, [
+    "gpt-4o-mini",
+    "gpt-4o-mini",
+    "gpt-4.1",
+    "gpt-4o-mini",
+    "gpt-4.1",
+    "gpt-4.1"
   ]);
 
   const invalidProvider = createMockedProvider();

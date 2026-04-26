@@ -161,6 +161,7 @@ Callback durability notes:
 - status callbacks are state-aware and no-op when the same terminal outcome is already persisted
 - report-ready callbacks are state-aware and no-op when the same terminal payload is already persisted
 - report-writeback uses a separate receipt-backed milestone dedupe layer through `WorkflowWritebackReceipt`
+- report-writeback must now prove the resolved `Report` is still bound to the incoming `WorkflowDispatch` through app-owned linkage before mutating durable report state; matching bearer auth alone is not sufficient
 - stale `DISPATCHING` rows are now recovered by the scheduler back into retryable `PENDING` or terminal `FAILED`
 - report-writeback now also reconciles linked `CustomerRun` report-generation progression and delivered completion from the canonical `Report` record when the workflow callback is the first durable milestone update
 
