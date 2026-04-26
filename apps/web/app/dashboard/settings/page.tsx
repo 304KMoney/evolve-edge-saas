@@ -50,6 +50,7 @@ import { queueEmailNotification } from "../../../lib/email";
 import { getOrganizationEntitlements, requireEntitlement } from "../../../lib/entitlements";
 import { getExpansionOffers } from "../../../lib/expansion-engine";
 import { getOrganizationActivationSnapshot } from "../../../lib/activation";
+import { shouldBlockDemoExternalSideEffects } from "../../../lib/demo-mode";
 import { logServerEvent } from "../../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../../lib/product-analytics";
 import {
@@ -953,6 +954,7 @@ export default async function SettingsPage({
   const canViewUsageControls = canViewUsage(authz);
   const canManageInventoryControls = canManageInventoryWithContext(authz);
   const isWorkspaceOwner = session.organization!.role === "OWNER";
+  const billingActionsBlockedInDemo = shouldBlockDemoExternalSideEffects();
   const currentPlanCode = subscription?.plan.code ?? entitlements.planCode;
   const upsellOffers = getExpansionOffers({
     placement: "settings",
@@ -1123,15 +1125,24 @@ export default async function SettingsPage({
             {canManageBillingControls ? (
               <div className="mt-4 space-y-3">
                 {subscription?.stripeCustomerId ? (
-                  <form action="/api/billing/portal" method="post">
-                    <input type="hidden" name="source" value="settings-primary-billing" />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
+                  billingActionsBlockedInDemo ? (
+                    <Link
+                      href="/dashboard/settings?billing=demo-mode#billing-controls"
+                      className="inline-flex rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
                     >
-                      Open billing portal
-                    </button>
-                  </form>
+                      Billing disabled in demo
+                    </Link>
+                  ) : (
+                    <form action="/api/billing/portal" method="post">
+                      <input type="hidden" name="source" value="settings-primary-billing" />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
+                      >
+                        Open billing portal
+                      </button>
+                    </form>
+                  )
                 ) : null}
                 <div className="grid gap-3">
                   {plans.map((plan) => (
@@ -1182,6 +1193,13 @@ export default async function SettingsPage({
                               Manage in Stripe
                             </button>
                           </form>
+                        ) : billingActionsBlockedInDemo ? (
+                          <Link
+                            href="/dashboard/settings?billing=demo-mode#billing-controls"
+                            className="inline-flex items-center justify-center rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
+                          >
+                            Billing disabled in demo
+                          </Link>
                         ) : (
                           <form action="/api/billing/checkout" method="post">
                             <input type="hidden" name="planCode" value={plan.code} />

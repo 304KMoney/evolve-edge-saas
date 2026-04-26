@@ -5,6 +5,7 @@ import { requireCurrentSession } from "./auth";
 import { getOrganizationEntitlements } from "./entitlements";
 import { getCurrentSubscription } from "./billing";
 import { getMonitoringDashboardSnapshot } from "./continuous-monitoring";
+import { toCustomerAccessSession } from "./customer-access-session";
 import { isDemoModeEnabled } from "./demo-mode";
 import { getExpansionOffers } from "./expansion-engine";
 import { logServerEvent } from "./monitoring";
@@ -14,6 +15,7 @@ import {
   logPrismaRuntimeCompatibilityError
 } from "./prisma-runtime";
 import { buildProductSurfaceModel } from "./product-surface";
+import { listDashboardReportSummaryViewsForAccessSession } from "./report-records";
 import { getOrganizationRetentionSnapshot } from "./retention";
 import { getOrganizationUsageMeteringSnapshot } from "./usage-metering";
 import { getUsageRemaining } from "./usage-quotas";
@@ -292,6 +294,7 @@ const dashboardOrganizationInclude = {
 
 export async function getDashboardData(): Promise<DashboardData> {
   const session = await requireCurrentSession({ requireOrganization: true });
+  const accessSession = toCustomerAccessSession(session);
   const organizationId = session.organization!.id;
   const organizationName = session.organization!.name;
 
@@ -302,6 +305,9 @@ export async function getDashboardData(): Promise<DashboardData> {
   let auditsQuota: Awaited<ReturnType<typeof getUsageRemaining>>;
   let evidenceUploadsQuota: Awaited<ReturnType<typeof getUsageRemaining>>;
   let activation: Awaited<ReturnType<typeof getOrganizationActivationSnapshot>>;
+  let visibleReports: Awaited<
+    ReturnType<typeof listDashboardReportSummaryViewsForAccessSession>
+  > = [];
   let organization: Prisma.OrganizationGetPayload<{
     include: typeof dashboardOrganizationInclude;
   }> | null;
@@ -313,10 +319,13 @@ export async function getDashboardData(): Promise<DashboardData> {
       getCurrentSubscription(organizationId)
     ]);
     monitoring = await getMonitoringDashboardSnapshot(organizationId);
-    [usageMetering, auditsQuota, evidenceUploadsQuota] = await Promise.all([
+    [usageMetering, auditsQuota, evidenceUploadsQuota, visibleReports] = await Promise.all([
       getOrganizationUsageMeteringSnapshot(organizationId, entitlements.planCode),
       getUsageRemaining(organizationId, "audits"),
-      getUsageRemaining(organizationId, "evidence_uploads")
+      getUsageRemaining(organizationId, "evidence_uploads"),
+      listDashboardReportSummaryViewsForAccessSession({
+        accessSession
+      })
     ]);
     activation = await getOrganizationActivationSnapshot(organizationId, entitlements);
     organization = await prisma.organization.findUnique({
@@ -522,14 +531,14 @@ export async function getDashboardData(): Promise<DashboardData> {
         due: item.targetTimeline ?? "TBD",
         effort: item.effort ?? "Unknown"
       })) ?? [],
-    reports: reports.map((report) => ({
+    reports: visibleReports.map((report) => ({
       id: report.id,
       title: report.title,
       type:
         report.status === "DELIVERED"
           ? "Delivered report"
-          : report.pdfUrl
-            ? "Executive PDF"
+          : report.artifactAvailability.canDownload
+            ? "Executive artifact ready"
             : "Ready for delivery",
       date: formatDate(report.publishedAt ?? report.createdAt),
       href: `/dashboard/reports/${report.id}`

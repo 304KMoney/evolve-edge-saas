@@ -5,6 +5,7 @@ import { getSessionAuthorizationContext, requireCurrentSession } from "../../../
 import { canManageFindings } from "../../../lib/authorization";
 import { getCurrentSubscription } from "../../../lib/billing";
 import { getMonitoringDashboardSnapshot } from "../../../lib/continuous-monitoring";
+import { toCustomerAccessSession } from "../../../lib/customer-access-session";
 import { getOrganizationEntitlements } from "../../../lib/entitlements";
 import { logServerEvent } from "../../../lib/monitoring";
 import { buildProductSurfaceModel } from "../../../lib/product-surface";
@@ -16,6 +17,7 @@ import {
   getOrganizationUsageMeteringSnapshot,
   getUsageMetricSnapshot
 } from "../../../lib/usage-metering";
+import { listDashboardReportSummaryViewsForAccessSession } from "../../../lib/report-records";
 import { updateMonitoringFindingStatusAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -77,16 +79,23 @@ export default async function MonitoringPage({
   searchParams: Promise<{ updated?: string }>;
 }) {
   const session = await requireCurrentSession({ requireOrganization: true });
+  const accessSession = toCustomerAccessSession(session);
   let params: Awaited<typeof searchParams> = {};
   let monitoring: Awaited<ReturnType<typeof getMonitoringDashboardSnapshot>> | null = null;
+  let accessibleReports: Awaited<
+    ReturnType<typeof listDashboardReportSummaryViewsForAccessSession>
+  > = [];
   let entitlements: Awaited<ReturnType<typeof getOrganizationEntitlements>> | null = null;
   let currentSubscription: Awaited<ReturnType<typeof getCurrentSubscription>> | null = null;
   let monitoredAssetsUsage: ReturnType<typeof getUsageMetricSnapshot> = null;
 
   try {
     params = await searchParams;
-    [monitoring, entitlements, currentSubscription] = await Promise.all([
+    [monitoring, accessibleReports, entitlements, currentSubscription] = await Promise.all([
       getMonitoringDashboardSnapshot(session.organization!.id),
+      listDashboardReportSummaryViewsForAccessSession({
+        accessSession
+      }),
       getOrganizationEntitlements(session.organization!.id),
       getCurrentSubscription(session.organization!.id)
     ]);
@@ -112,6 +121,10 @@ export default async function MonitoringPage({
 
   const canManageFindingsControls = canManageFindings(
     getSessionAuthorizationContext(session)
+  );
+  const accessibleReportIds = new Set(accessibleReports.map((report) => report.id));
+  const visibleArchivedReports = monitoring.reports.filter((report) =>
+    accessibleReportIds.has(report.id)
   );
   const productSurface = buildProductSurfaceModel({
     area: "monitoring",
@@ -364,8 +377,8 @@ export default async function MonitoringPage({
           <article className="rounded-2xl border border-line bg-white p-6">
             <p className="text-sm font-medium text-steel">Report archive</p>
             <div className="mt-5 space-y-3">
-              {monitoring.reports.length > 0 ? (
-                monitoring.reports.map((report) => (
+              {visibleArchivedReports.length > 0 ? (
+                visibleArchivedReports.map((report) => (
                   <Link
                     key={report.id}
                     href={`/dashboard/reports/${report.id}`}
@@ -382,7 +395,7 @@ export default async function MonitoringPage({
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
-                  No reports are archived yet for this workspace.
+                  No report archive entries are available in this customer context yet.
                 </div>
               )}
             </div>
