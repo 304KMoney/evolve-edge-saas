@@ -4,7 +4,8 @@ import {
   prisma,
   verifyPassword
 } from "@evolve-edge/db";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { timingSafeEqual } from "node:crypto";
 import {
@@ -19,6 +20,8 @@ import {
   type OrganizationRole,
   type PlatformUserRole
 } from "./roles";
+import { consumeRateLimit } from "./security-rate-limit";
+import { requireActiveOrganization } from "./org-scope";
 import {
   getAuthMode,
   getOptionalEnv,
@@ -47,9 +50,13 @@ export type AppSession = {
 
 export const AUTH_SESSION_COOKIE = "evolve_edge_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
+const SESSION_INACTIVITY_TIMEOUT_SECONDS = 60 * 60 * 2;
 const MAX_ACTIVE_SESSIONS = 5;
 const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 const LOGIN_LOCKOUT_MINUTES = 15;
+const AUTH_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_RATE_LIMIT_MAX_REQUESTS = 10;
+const AUTH_RATE_LIMIT_ACTIONS = ["auth.sign_in_failed", "auth.sign_in_rate_limited"] as const;
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -110,13 +117,32 @@ export function buildCookieSettings() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: getRuntimeEnvironment() === "production",
+    secure: getRuntimeEnvironment() !== "development",
     path: "/",
     maxAge: SESSION_TTL_SECONDS
   };
 }
 
-export async function createUserSession(userId: string) {
+type CreateUserSessionContext = {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+};
+
+function trimSessionMetadata(value: string | null | undefined, maxLength: number) {
+  const normalized = value?.trim();
+  return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+export function getSessionInactivityTimeoutSeconds() {
+  const configured = Number(getOptionalEnv("SESSION_INACTIVITY_TIMEOUT_SECONDS") ?? "");
+  if (Number.isFinite(configured) && configured > 0) {
+    return Math.min(configured, SESSION_TTL_SECONDS);
+  }
+
+  return SESSION_INACTIVITY_TIMEOUT_SECONDS;
+}
+
+export async function createUserSession(userId: string, context?: CreateUserSessionContext) {
   await prisma.session.deleteMany({
     where: {
       userId,
@@ -130,12 +156,18 @@ export async function createUserSession(userId: string) {
     data: {
       userId,
       tokenHash: hashOpaqueToken(token),
-      expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * 1000)
+      expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * 1000),
+      lastAuthenticatedAt: new Date(),
+      ipAddress: trimSessionMetadata(context?.ipAddress, 128),
+      userAgent: trimSessionMetadata(context?.userAgent, 512)
     }
   });
 
   const activeSessions = await prisma.session.findMany({
-    where: { userId },
+    where: {
+      userId,
+      revokedAt: null
+    },
     orderBy: { createdAt: "desc" },
     select: { id: true }
   });
@@ -155,14 +187,35 @@ export async function createUserSession(userId: string) {
   return token;
 }
 
+export async function revokeAllUserSessions(
+  userId: string,
+  reason = "logout_everywhere"
+) {
+  await prisma.session.updateMany({
+    where: {
+      userId,
+      revokedAt: null
+    },
+    data: {
+      revokedAt: new Date(),
+      revokedReason: reason
+    }
+  });
+}
+
 export async function revokeSession(token: string | null | undefined) {
   if (!token) {
     return;
   }
 
-  await prisma.session.deleteMany({
+  await prisma.session.updateMany({
     where: {
-      tokenHash: hashOpaqueToken(token)
+      tokenHash: hashOpaqueToken(token),
+      revokedAt: null
+    },
+    data: {
+      revokedAt: new Date(),
+      revokedReason: "logout"
     }
   });
 }
@@ -177,6 +230,8 @@ export function getSignInErrorMessage(error?: string) {
       return "Your session expired. Please sign in again.";
     case "locked":
       return `This account is temporarily locked after repeated failed sign-in attempts. Try again in ${LOGIN_LOCKOUT_MINUTES} minutes.`;
+    case "rate_limited":
+      return "Sign-in is temporarily rate limited. Please wait a few minutes and try again.";
     default:
       return null;
   }
@@ -218,7 +273,27 @@ export function sanitizeInternalRedirect(
     return fallback;
   }
 
-  return trimmed;
+  try {
+    const url = new URL(trimmed, "https://evolve-edge.local");
+    const sensitiveSearchParams = [
+      "token",
+      "code",
+      "secret",
+      "signature",
+      "session",
+      "password",
+      "key",
+      "auth"
+    ];
+
+    for (const parameter of sensitiveSearchParams) {
+      url.searchParams.delete(parameter);
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return fallback;
+  }
 }
 
 export function shouldUsePreviewGuestSession(input: {
@@ -233,6 +308,60 @@ export function shouldUsePreviewGuestSession(input: {
   return requestPath.startsWith("/dashboard");
 }
 
+export function shouldLimitAuthenticationAttempt(input: {
+  recentPersistentFailures: number;
+  maxRequests: number;
+  localRateLimitLimited: boolean;
+}) {
+  return input.localRateLimitLimited || input.recentPersistentFailures >= input.maxRequests;
+}
+
+export async function consumeAuthenticationRateLimit(email: string) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    return { limited: false } as const;
+  }
+
+  const localRateLimit = consumeRateLimit({
+    storeKey: `auth:sign-in:${normalizedEmail}`,
+    maxRequests: AUTH_RATE_LIMIT_MAX_REQUESTS,
+    windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+    metadata: {
+      routeKey: "sign-in",
+      category: "auth",
+      email: normalizedEmail
+    }
+  });
+
+  const recentPersistentFailures = await prisma.auditLog.count({
+    where: {
+      action: {
+        in: [...AUTH_RATE_LIMIT_ACTIONS]
+      },
+      entityType: "user",
+      entityId: normalizedEmail,
+      createdAt: {
+        gte: new Date(Date.now() - AUTH_RATE_LIMIT_WINDOW_MS)
+      }
+    }
+  });
+
+  if (
+    shouldLimitAuthenticationAttempt({
+      recentPersistentFailures,
+      maxRequests: AUTH_RATE_LIMIT_MAX_REQUESTS,
+      localRateLimitLimited: localRateLimit.limited
+    })
+  ) {
+    return {
+      limited: true,
+      retryAfterSeconds: localRateLimit.limited ? localRateLimit.retryAfterSeconds : 60,
+      maxRequests: AUTH_RATE_LIMIT_MAX_REQUESTS
+    } as const;
+  }
+
+  return { limited: false } as const;
+}
 
 export async function authenticateUser(email: string, password: string) {
   const normalizedEmail = normalizeEmail(email);
@@ -350,8 +479,6 @@ async function resolvePreviewGuestSession(requestPath: string | null | undefined
 
   const organization = await prisma.organization.findFirst({
     where: {
-      deletedAt: null,
-      archivedAt: null,
       members: {
         some: {}
       }
@@ -446,7 +573,8 @@ async function resolveCurrentSession(options?: {
   const dbSession = await prisma.session.findFirst({
     where: {
       tokenHash: hashOpaqueToken(token),
-      expiresAt: { gt: new Date() }
+      expiresAt: { gt: new Date() },
+      revokedAt: null
     },
     include: {
       user: {
@@ -478,8 +606,24 @@ async function resolveCurrentSession(options?: {
     dbSession.user.passwordCredential?.passwordUpdatedAt &&
     dbSession.createdAt < dbSession.user.passwordCredential.passwordUpdatedAt
   ) {
-    await prisma.session.delete({
-      where: { id: dbSession.id }
+    await prisma.session.update({
+      where: { id: dbSession.id },
+      data: {
+        revokedAt: new Date(),
+        revokedReason: "password_updated"
+      }
+    });
+    await redirectToSignIn("expired");
+  }
+
+  const sessionLastSeenAt = dbSession.lastSeenAt ?? dbSession.lastAuthenticatedAt ?? dbSession.createdAt;
+  if (Date.now() - sessionLastSeenAt.getTime() > getSessionInactivityTimeoutSeconds() * 1000) {
+    await prisma.session.update({
+      where: { id: dbSession.id },
+      data: {
+        revokedAt: new Date(),
+        revokedReason: "inactive_timeout"
+      }
     });
     await redirectToSignIn("expired");
   }
@@ -493,6 +637,9 @@ async function resolveCurrentSession(options?: {
   });
 
   const membership = dbSession.user.memberships[0] ?? null;
+  if (membership) {
+    await requireActiveOrganization(membership.organization.id);
+  }
   const onboardingRequired =
     !membership ||
     !membership.organization.onboardingCompletedAt ||
@@ -548,7 +695,7 @@ export async function requireCurrentSession(options?: {
     redirect("/onboarding");
   }
 
-  return session as AppSession;
+  return session;
 }
 
 export async function requireOrganizationRole(
@@ -560,7 +707,7 @@ export async function requireOrganizationRole(
     redirect("/dashboard");
   }
 
-  return session as AppSession;
+  return session;
 }
 
 export function getSessionAuthorizationContext(session: AppSession) {
@@ -587,7 +734,7 @@ export async function requireOrganizationPermission(
     redirect("/dashboard");
   }
 
-  return session as AppSession;
+  return session;
 }
 
 export async function requirePlatformPermission(permission: PlatformPermission) {
@@ -597,7 +744,7 @@ export async function requirePlatformPermission(permission: PlatformPermission) 
     redirect("/dashboard");
   }
 
-  return session as AppSession;
+  return session;
 }
 
 export async function requireAdminSession() {
