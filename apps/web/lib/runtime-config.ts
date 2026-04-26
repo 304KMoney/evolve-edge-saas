@@ -192,6 +192,19 @@ export function getAuthMode() {
   return mode === "demo" ? "demo" : "password";
 }
 
+export function isPreviewGuestAccessEnabled() {
+  const configured = readEnv("PREVIEW_GUEST_ACCESS_ENABLED").toLowerCase();
+  if (configured === "true") {
+    return true;
+  }
+
+  if (configured === "false") {
+    return false;
+  }
+
+  return getRuntimeEnvironment() === "preview";
+}
+
 export function isPasswordAuthMode() {
   return getAuthMode() === "password";
 }

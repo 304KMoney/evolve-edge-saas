@@ -26,6 +26,7 @@ import {
   getLogLevel,
   getOpenAIModel,
   getOptionalJsonEnv,
+  isPreviewGuestAccessEnabled,
   getReportDownloadSigningSecret,
   getRuntimeConfigStatus,
   getSalesContactEmail,
@@ -67,6 +68,7 @@ function runRuntimeConfigTests() {
   delete process.env.LOG_LEVEL;
   delete process.env.REPORT_DOWNLOAD_SIGNING_SECRET;
   delete process.env.REPORT_DOWNLOAD_REQUIRE_AUTH;
+  delete process.env.PREVIEW_GUEST_ACCESS_ENABLED;
   delete process.env.AUTH_MODE;
   delete process.env.AUTH_SECRET;
   delete process.env.DATABASE_URL;
@@ -135,6 +137,7 @@ function runRuntimeConfigTests() {
   assert.equal(getAuditLogRetentionDays(), 90);
   assert.equal(getWorkflowTraceRetentionDays(), 30);
   assert.equal(getRuntimeEnvironment(), "development");
+  assert.equal(isPreviewGuestAccessEnabled(), false);
   assert.equal(isSignedReportAuthEnforced(), false);
   assert.equal(getSalesContactEmail(), "info@evolveedgeai.com");
   assert.equal(
@@ -202,10 +205,15 @@ function runRuntimeConfigTests() {
   assert.equal(getWorkflowTraceRetentionDays(), 45);
   assert.equal(isAiDebugModeEnabled(), true);
   assert.equal(isSignedReportAuthEnforced(), true);
+  assert.equal(isPreviewGuestAccessEnabled(), true);
 
   process.env.REPORT_DOWNLOAD_REQUIRE_AUTH = "";
   assert.equal(getRuntimeEnvironment(), "preview");
   assert.equal(isSignedReportAuthEnforced(), true);
+  process.env.PREVIEW_GUEST_ACCESS_ENABLED = "false";
+  assert.equal(isPreviewGuestAccessEnabled(), false);
+  process.env.PREVIEW_GUEST_ACCESS_ENABLED = "true";
+  assert.equal(isPreviewGuestAccessEnabled(), true);
 
 
   delete process.env.DIFY_API_BASE_URL;
@@ -292,6 +300,7 @@ function runRuntimeConfigTests() {
   delete process.env.LOG_LEVEL;
   delete process.env.REPORT_DOWNLOAD_SIGNING_SECRET;
   delete process.env.REPORT_DOWNLOAD_REQUIRE_AUTH;
+  delete process.env.PREVIEW_GUEST_ACCESS_ENABLED;
   delete process.env.AUTH_MODE;
   delete process.env.AUTH_SECRET;
   delete process.env.DATABASE_URL;
