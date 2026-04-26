@@ -596,7 +596,7 @@ async function resolveCurrentSession(options?: {
     await redirectToSignIn("expired");
   }
 
-  const sessionLastSeenAt = dbSession.lastSeenAt ?? dbSession.lastAuthenticatedAt ?? dbSession.createdAt;
+  const sessionLastSeenAt = dbSession.lastSeenAt ?? dbSession.createdAt;
   if (Date.now() - sessionLastSeenAt.getTime() > getSessionInactivityTimeoutSeconds() * 1000) {
     await prisma.session.delete({
       where: { id: dbSession.id },
