@@ -19,7 +19,12 @@ import {
   type OrganizationRole,
   type PlatformUserRole
 } from "./roles";
-import { getAuthMode, getOptionalEnv, getRuntimeEnvironment } from "./runtime-config";
+import {
+  getAuthMode,
+  getOptionalEnv,
+  getRuntimeEnvironment,
+  isPreviewGuestAccessEnabled
+} from "./runtime-config";
 
 export type AppSession = {
   user: {
@@ -216,6 +221,19 @@ export function sanitizeInternalRedirect(
   return trimmed;
 }
 
+export function shouldUsePreviewGuestSession(input: {
+  requestPath: string | null | undefined;
+  previewGuestAccessEnabled: boolean;
+}) {
+  if (!input.previewGuestAccessEnabled) {
+    return false;
+  }
+
+  const requestPath = sanitizeInternalRedirect(input.requestPath, "");
+  return requestPath.startsWith("/dashboard");
+}
+
+
 export async function authenticateUser(email: string, password: string) {
   const normalizedEmail = normalizeEmail(email);
   const user = await prisma.user.findUnique({
@@ -320,10 +338,75 @@ export async function authenticateUser(email: string, password: string) {
   return { user: bootstrapUser, error: null };
 }
 
+async function resolvePreviewGuestSession(requestPath: string | null | undefined) {
+  if (
+    !shouldUsePreviewGuestSession({
+      requestPath,
+      previewGuestAccessEnabled: isPreviewGuestAccessEnabled()
+    })
+  ) {
+    return null;
+  }
+
+  const organization = await prisma.organization.findFirst({
+    where: {
+      deletedAt: null,
+      archivedAt: null,
+      members: {
+        some: {}
+      }
+    },
+    include: {
+      members: {
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        include: {
+          user: true
+        }
+      }
+    },
+    orderBy: {
+      onboardingCompletedAt: "desc"
+    }
+  });
+
+  const membership = organization?.members[0];
+  if (!organization || !membership) {
+    return null;
+  }
+
+  return {
+    user: {
+      id: membership.user.id,
+      email: membership.user.email,
+      firstName: membership.user.firstName ?? "Demo",
+      lastName: membership.user.lastName ?? "Operator",
+      platformRole: membership.user.platformRole
+    },
+    organization: {
+      id: organization.id,
+      slug: organization.slug,
+      name: organization.name,
+      role: membership.role,
+      isBillingAdmin: membership.isBillingAdmin
+    },
+    onboardingRequired: false,
+    authMode: "demo" as const
+  } satisfies AppSession;
+}
+
 async function resolveCurrentSession(options?: {
   redirectOnMissing?: boolean;
 }): Promise<AppSession | null> {
+  const headerStore = await headers();
+  const requestPath = headerStore.get("x-request-path");
+
   if (!isPasswordAuthEnabled()) {
+    const previewGuestSession = await resolvePreviewGuestSession(requestPath);
+    if (previewGuestSession) {
+      return previewGuestSession;
+    }
+
     if (options?.redirectOnMissing ?? true) {
       await redirectToSignIn("config");
     }
@@ -333,6 +416,11 @@ async function resolveCurrentSession(options?: {
 
   const config = getPasswordAuthConfig();
   if (!config.isComplete) {
+    const previewGuestSession = await resolvePreviewGuestSession(requestPath);
+    if (previewGuestSession) {
+      return previewGuestSession;
+    }
+
     if (options?.redirectOnMissing ?? true) {
       await redirectToSignIn("config");
     }
@@ -343,6 +431,11 @@ async function resolveCurrentSession(options?: {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_SESSION_COOKIE)?.value;
   if (!token) {
+    const previewGuestSession = await resolvePreviewGuestSession(requestPath);
+    if (previewGuestSession) {
+      return previewGuestSession;
+    }
+
     if (options?.redirectOnMissing ?? true) {
       await redirectToSignIn();
     }
@@ -369,6 +462,11 @@ async function resolveCurrentSession(options?: {
   });
 
   if (!dbSession) {
+    const previewGuestSession = await resolvePreviewGuestSession(requestPath);
+    if (previewGuestSession) {
+      return previewGuestSession;
+    }
+
     if (options?.redirectOnMissing ?? true) {
       await redirectToSignIn("expired");
     }
