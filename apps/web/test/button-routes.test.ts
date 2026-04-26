@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import path from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 
 const appRoot = path.resolve(process.cwd(), "app");
 
@@ -9,16 +9,67 @@ function normalizeRoutePath(route: string) {
   return pathname === "/" ? "" : pathname.replace(/^\/+|\/+$/g, "");
 }
 
-function hasRouteImplementation(route: string) {
-  const normalized = normalizeRoutePath(route);
-  const routeDir = path.join(appRoot, normalized);
-
+function directoryHasRouteImplementation(routeDir: string) {
   return (
     existsSync(path.join(routeDir, "page.tsx")) ||
     existsSync(path.join(routeDir, "page.ts")) ||
     existsSync(path.join(routeDir, "route.ts")) ||
     existsSync(path.join(routeDir, "route.tsx"))
   );
+}
+
+function isRouteGroupSegment(segment: string) {
+  return /^\(.*\)$/.test(segment);
+}
+
+function isDynamicRouteSegment(segment: string) {
+  return /^\[\[?\.\.\..+\]?\]$/.test(segment) || /^\[[^\]]+\]$/.test(segment);
+}
+
+function hasRouteImplementationForSegments(
+  currentDir: string,
+  segments: string[]
+): boolean {
+  if (segments.length === 0) {
+    return directoryHasRouteImplementation(currentDir);
+  }
+
+  const [segment, ...rest] = segments;
+  const literalDir = path.join(currentDir, segment);
+
+  if (existsSync(literalDir) && hasRouteImplementationForSegments(literalDir, rest)) {
+    return true;
+  }
+
+  for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const candidateDir = path.join(currentDir, entry.name);
+
+    if (isRouteGroupSegment(entry.name)) {
+      if (hasRouteImplementationForSegments(candidateDir, segments)) {
+        return true;
+      }
+      continue;
+    }
+
+    if (isDynamicRouteSegment(entry.name)) {
+      if (hasRouteImplementationForSegments(candidateDir, rest)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function hasRouteImplementation(route: string) {
+  const normalized = normalizeRoutePath(route);
+  const segments = normalized === "" ? [] : normalized.split("/");
+
+  return hasRouteImplementationForSegments(appRoot, segments);
 }
 
 function runButtonRouteTests() {
@@ -31,6 +82,9 @@ function runButtonRouteTests() {
     "/dashboard/evidence",
     "/dashboard/programs",
     "/dashboard/reports",
+    "/dashboard/reports/access",
+    "/dashboard/reports/example-report-id",
+    "/dashboard/reports/example-report-id#delivery-operations",
     "/dashboard/roadmap",
     "/dashboard/billing",
     "/dashboard/demo",
@@ -40,6 +94,7 @@ function runButtonRouteTests() {
     "/dashboard/settings#trust-center",
     "/onboarding",
     "/contact-sales",
+    "/contact-sales?intent=premium-reports&source=reports",
     "/contact-sales?intent=report-access-support&source=report-access-state",
     "/contact-sales?intent=white-glove-onboarding&source=dashboard",
     "/sign-out"
