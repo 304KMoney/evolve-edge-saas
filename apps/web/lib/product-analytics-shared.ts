@@ -42,6 +42,7 @@ export type ProductAnalyticsEventMap = {
   "marketing.pricing_viewed": {
     location: "pricing-page";
     authenticated: boolean;
+    selectedPlanCode?: string | null;
   };
   "marketing.trust_center_viewed": {
     location: "trust-center";

@@ -4,13 +4,12 @@ import { ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
 import { MarketingShell } from "../../components/marketing-shell";
 import { getOptionalCurrentSession } from "../../lib/auth";
 import { getFoundingRiskAuditCallUrl, getSalesContactEmail } from "../../lib/runtime-config";
-import { FOUNDING_RISK_AUDIT } from "../../lib/pricing-content";
 import { submitContactSalesLeadAction } from "./actions";
 
 export const metadata: Metadata = {
   title: "Contact Evolve Edge | Evolve Edge",
   description:
-    "Book a call about the Founding Risk Audit or broader Evolve Edge AI risk and compliance engagements."
+    "Book an AI Security Readiness Call or contact Evolve Edge about premium AI security, compliance, and executive risk visibility engagements."
 };
 
 export const dynamic = "force-dynamic";
@@ -48,10 +47,10 @@ const defaultTrustBullets = [
   "Clear remediation roadmap, not just findings"
 ] as const;
 
-const foundingTrustBullets = [
-  "Fast-turnaround premium assessment",
-  "Leadership-ready report and live briefing",
-  "Focused on AI, confidentiality, governance, and compliance exposure"
+const readinessTrustBullets = [
+  "Premium readiness-led advisory motion",
+  "Leadership-ready reporting and briefing support",
+  "Focused on AI, security, compliance, and governance exposure"
 ] as const;
 
 const defaultNextSteps = [
@@ -60,10 +59,10 @@ const defaultNextSteps = [
   "You leave with a clear next-step recommendation"
 ] as const;
 
-const foundingNextSteps = [
-  "We confirm fit and scope for the Founding Risk Audit",
-  "We review your current AI usage, sensitive workflows, and business concerns",
-  "We recommend the fastest path to a high-trust executive-ready assessment"
+const readinessNextSteps = [
+  "We confirm fit, scope, and urgency for your environment",
+  "We review current AI usage, sensitive workflows, and leadership priorities",
+  "We recommend the right readiness engagement and next-step path"
 ] as const;
 
 export default async function ContactSalesPage({
@@ -84,39 +83,38 @@ export default async function ContactSalesPage({
   const hasExternalBookingUrl = /^https?:\/\//.test(bookingUrl);
   const bookingHref = hasExternalBookingUrl
     ? bookingUrl
-    : `mailto:${salesEmail}?subject=${encodeURIComponent("Book Executive Call")}`;
-  const isFoundingAuditIntent = intent.includes("founding-risk-audit");
+    : `mailto:${salesEmail}?subject=${encodeURIComponent("AI Security Readiness Call")}`;
+  const isReadinessIntent =
+    intent.includes("founding-risk-audit") || intent.includes("readiness");
   const primaryHref = session
     ? session.onboardingRequired
       ? "/onboarding"
       : "/dashboard/billing"
     : "/pricing";
-  const heroEyebrow = isFoundingAuditIntent ? FOUNDING_RISK_AUDIT.eyebrow : "Private walkthrough";
-  const heroTitle = isFoundingAuditIntent
-    ? `Apply for the ${FOUNDING_RISK_AUDIT.title}`
+  const heroEyebrow = isReadinessIntent ? "AI Security Readiness Call" : "Private walkthrough";
+  const heroTitle = isReadinessIntent
+    ? "Book an AI Security Readiness Call"
     : "Book a private Evolve Edge walkthrough";
-  const heroBody = isFoundingAuditIntent
-    ? `${FOUNDING_RISK_AUDIT.priceLabel} founding-client access for high-trust teams that need fast clarity on AI, confidentiality, governance, and compliance exposure.`
+  const heroBody = isReadinessIntent
+    ? "Start with a focused conversation about AI security, confidentiality, compliance readiness, and executive risk visibility so we can recommend the right engagement path."
     : "See how your team can identify AI security, compliance, and governance gaps faster, prioritize remediation, and deliver executive-ready reporting.";
-  const scheduleLabel = isFoundingAuditIntent ? "Founding client access" : "Schedule a call";
-  const formTitle = isFoundingAuditIntent
-    ? "Tell us about your current AI risk concerns"
+  const scheduleLabel = isReadinessIntent ? "Readiness call" : "Schedule a call";
+  const formTitle = isReadinessIntent
+    ? "Tell us about your current readiness concerns"
     : "Tell us what you need help understanding";
-  const formBody = isFoundingAuditIntent
-    ? "We will use this to confirm fit, understand your environment, and recommend the right audit scope."
+  const formBody = isReadinessIntent
+    ? "We will use this to understand your environment, leadership priorities, and the right scope for next steps."
     : "We will shape the conversation around your environment, stakeholders, and highest-priority risk questions.";
-  const submitLabel = isFoundingAuditIntent ? FOUNDING_RISK_AUDIT.ctas.apply : "Book a Call";
-  const messageLabel = isFoundingAuditIntent
-    ? "What is driving urgency right now?"
-    : "What do you want to discuss?";
-  const messagePlaceholder = isFoundingAuditIntent
-    ? "Tell us about your AI usage, sensitive workflows, top concerns, and what leadership needs clarity on."
+  const submitLabel = isReadinessIntent ? "Request the readiness call" : "Book a Call";
+  const messageLabel = isReadinessIntent ? "What is driving urgency right now?" : "What do you want to discuss?";
+  const messagePlaceholder = isReadinessIntent
+    ? "Tell us about your AI usage, sensitive workflows, diligence pressure, compliance goals, and what leadership needs clarity on."
     : "Tell us about your current environment, priorities, or the workflows you want to review.";
-  const successMessage = isFoundingAuditIntent
-    ? "Thanks. Your request is in, and we will follow up to confirm fit and next-step timing for the Founding Risk Audit."
+  const successMessage = isReadinessIntent
+    ? "Thanks. Your request is in, and we will follow up with the right next step for your readiness call."
     : "Thanks. Your request is in, and our team will follow up with the right next step.";
-  const trustBullets = isFoundingAuditIntent ? foundingTrustBullets : defaultTrustBullets;
-  const nextSteps = isFoundingAuditIntent ? foundingNextSteps : defaultNextSteps;
+  const trustBullets = isReadinessIntent ? readinessTrustBullets : defaultTrustBullets;
+  const nextSteps = isReadinessIntent ? readinessNextSteps : defaultNextSteps;
 
   return (
     <MarketingShell
@@ -183,9 +181,7 @@ export default async function ContactSalesPage({
             </div>
             <a
               href={`mailto:${salesEmail}?subject=${encodeURIComponent(
-                isFoundingAuditIntent
-                  ? "Founding Risk Audit"
-                  : "Evolve Edge walkthrough"
+                isReadinessIntent ? "AI Security Readiness Call" : "Evolve Edge walkthrough"
               )}`}
               className="inline-flex items-center rounded-full border border-line px-5 py-3 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
             >
@@ -193,7 +189,7 @@ export default async function ContactSalesPage({
             </a>
           </div>
 
-          {isFoundingAuditIntent ? (
+          {isReadinessIntent ? (
             <div className="mt-4">
               <a
                 href={bookingHref}
@@ -201,7 +197,9 @@ export default async function ContactSalesPage({
                 rel={hasExternalBookingUrl ? "noopener noreferrer" : undefined}
                 className="inline-flex items-center rounded-full border border-accent/20 bg-accent/5 px-5 py-3 text-sm font-semibold text-accent transition hover:border-accent/40 hover:bg-accent/10"
               >
-                {hasExternalBookingUrl ? "Book an Executive Call" : "Book an Executive Call by Email"}
+                {hasExternalBookingUrl
+                  ? "Book an AI Security Readiness Call"
+                  : "Book an AI Security Readiness Call by Email"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </a>
             </div>
@@ -216,7 +214,7 @@ export default async function ContactSalesPage({
               }`}
             >
               <p>{successMessage}</p>
-              {isFoundingAuditIntent ? (
+              {isReadinessIntent ? (
                 <div className="mt-4">
                   <a
                     href={bookingHref}
@@ -225,8 +223,8 @@ export default async function ContactSalesPage({
                     className="inline-flex items-center rounded-full border border-current/20 bg-white px-5 py-3 text-sm font-semibold transition hover:opacity-90"
                   >
                     {hasExternalBookingUrl
-                      ? "Book your executive call"
-                      : "Book your executive call by email"}
+                      ? "Book your readiness call"
+                      : "Book your readiness call by email"}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </a>
                 </div>

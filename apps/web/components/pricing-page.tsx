@@ -31,6 +31,8 @@ function PricingPlanAction({
     );
   }
 
+  const isDisabled = cta.kind === "checkout" ? cta.disabled : false;
+
   return (
     <form action={cta.action} method="post" className="w-full">
       {cta.kind === "checkout" ? (
@@ -38,7 +40,7 @@ function PricingPlanAction({
       ) : null}
       <button
         type="submit"
-        disabled={cta.disabled}
+        disabled={isDisabled}
         className="inline-flex w-full items-center justify-center rounded-full bg-[#0f172a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#111f36] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {cta.label}
