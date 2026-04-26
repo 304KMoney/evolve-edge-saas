@@ -139,7 +139,7 @@ function runRuntimeConfigTests() {
   assert.equal(getSalesContactEmail(), "info@evolveedgeai.com");
   assert.equal(
     getFoundingRiskAuditOfferUrl(),
-    "/contact?intent=founding-risk-audit&source=marketing-site"
+    "/pricing?plan=starter"
   );
   assert.equal(
     getFoundingRiskAuditCallUrl(),

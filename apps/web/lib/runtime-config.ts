@@ -164,7 +164,7 @@ export function getContactSalesUrl() {
 }
 
 export function getFoundingRiskAuditOfferUrl() {
-  return "/contact?intent=founding-risk-audit&source=marketing-site";
+  return "/pricing?plan=starter";
 }
 
 export function getFoundingRiskAuditCallUrl() {

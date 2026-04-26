@@ -9,6 +9,11 @@ import { publishDomainEvents } from "../../lib/domain-events";
 import { requireCurrentSession } from "../../lib/auth";
 import { queueEmailNotification } from "../../lib/email";
 import {
+  resolveCanonicalPlanCode,
+  resolveCanonicalPlanCodeFromRevenuePlanCode,
+  resolveRevenuePlanCodeForCommercialSelection
+} from "../../lib/commercial-catalog";
+import {
   captureLeadSubmission,
   markLeadConverted,
   readLeadAttributionFromCookies
@@ -50,9 +55,16 @@ export async function completeOnboardingAction(formData: FormData) {
   const leadIntent = String(formData.get("leadIntent") ?? "").trim();
   const leadPlanCode = String(formData.get("leadPlanCode") ?? "").trim();
   const sourcePath = String(formData.get("sourcePath") ?? "").trim() || "/onboarding";
-  const selectedPlanCode = getRevenuePlanDefinition(requestedPlanCode)
-    ? requestedPlanCode
-    : "";
+  const selectedPlanCode =
+    getRevenuePlanDefinition(requestedPlanCode)?.code ??
+    resolveRevenuePlanCodeForCommercialSelection(requestedPlanCode) ??
+    "";
+  const selectedCanonicalPlanCode =
+    resolveCanonicalPlanCode(leadPlanCode) ??
+    resolveCanonicalPlanCode(requestedPlanCode) ??
+    resolveCanonicalPlanCodeFromRevenuePlanCode(selectedPlanCode);
+  const selectedRequestedPlanCode =
+    leadPlanCode || selectedCanonicalPlanCode || selectedPlanCode || null;
 
   if (!accountName) {
     redirect("/onboarding?error=missing-account");
@@ -318,7 +330,7 @@ export async function completeOnboardingAction(formData: FormData) {
         teamSize: sizeBand || null,
         intent: leadIntent || "self-serve-onboarding",
         sourcePath,
-        requestedPlanCode: leadPlanCode || selectedPlanCode || null,
+        requestedPlanCode: selectedRequestedPlanCode,
         pricingContext: leadSource || null,
         userId: session.user.id,
         organizationId: organization.id,
@@ -342,7 +354,7 @@ export async function completeOnboardingAction(formData: FormData) {
         payload: {
           source: "onboarding_completion",
           intent: leadIntent || "self-serve-onboarding",
-          requestedPlanCode: leadPlanCode || selectedPlanCode || null,
+          requestedPlanCode: selectedRequestedPlanCode,
           companyName: accountName,
           deduped: false
         },
@@ -352,7 +364,7 @@ export async function completeOnboardingAction(formData: FormData) {
         organizationId: organization.id,
         userId: session.user.id,
         attribution,
-        billingPlanCode: leadPlanCode || selectedPlanCode || null
+        billingPlanCode: selectedRequestedPlanCode
       });
     }
 
@@ -360,7 +372,7 @@ export async function completeOnboardingAction(formData: FormData) {
       email: session.user.email,
       organizationId: organization.id,
       userId: session.user.id,
-      requestedPlanCode: leadPlanCode || selectedPlanCode || null,
+      requestedPlanCode: selectedRequestedPlanCode,
       actorLabel: session.user.email,
       requestContext,
       db: tx
@@ -372,7 +384,7 @@ export async function completeOnboardingAction(formData: FormData) {
         name: "signup.completed",
         payload: {
           organizationId: organization.id,
-          requestedPlanCode: leadPlanCode || selectedPlanCode || null
+          requestedPlanCode: selectedRequestedPlanCode
         },
         source: "onboarding",
         path: sourcePath,
@@ -380,7 +392,7 @@ export async function completeOnboardingAction(formData: FormData) {
         organizationId: organization.id,
         userId: session.user.id,
         attribution,
-        billingPlanCode: leadPlanCode || selectedPlanCode || null
+        billingPlanCode: selectedRequestedPlanCode
       });
     }
 
@@ -390,7 +402,7 @@ export async function completeOnboardingAction(formData: FormData) {
       payload: {
         organizationId: organization.id,
         frameworkCount: frameworkCodes.length,
-        requestedPlanCode: leadPlanCode || selectedPlanCode || null
+        requestedPlanCode: selectedRequestedPlanCode
       },
       source: "onboarding",
       path: sourcePath,
@@ -398,7 +410,7 @@ export async function completeOnboardingAction(formData: FormData) {
       organizationId: organization.id,
       userId: session.user.id,
       attribution,
-      billingPlanCode: leadPlanCode || selectedPlanCode || null
+      billingPlanCode: selectedRequestedPlanCode
     });
 
     await writeAuditLog(tx, {
