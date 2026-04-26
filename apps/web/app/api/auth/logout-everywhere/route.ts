@@ -21,14 +21,9 @@ export async function POST(request: Request) {
   }
 
   const session = await requireCurrentSession({ requireOrganization: true });
-  await prisma.session.updateMany({
+  await prisma.session.deleteMany({
     where: {
-      userId: session.user.id,
-      revokedAt: null
-    },
-    data: {
-      revokedAt: new Date(),
-      revokedReason: "logout_everywhere"
+      userId: session.user.id
     }
   });
 
