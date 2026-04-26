@@ -1,4 +1,4 @@
-import { Prisma, prisma } from "@evolve-edge/db";
+import { AssessmentStatus, Prisma, prisma } from "@evolve-edge/db";
 import type { DashboardData } from "../components/dashboard-shell";
 import { getOrganizationActivationSnapshot } from "./activation";
 import { requireCurrentSession } from "./auth";
@@ -8,6 +8,7 @@ import { getMonitoringDashboardSnapshot } from "./continuous-monitoring";
 import { isDemoModeEnabled } from "./demo-mode";
 import { getExpansionOffers } from "./expansion-engine";
 import { logServerEvent } from "./monitoring";
+import { requireActiveOrganization } from "./org-scope";
 import {
   isPrismaRuntimeCompatibilityError,
   logPrismaRuntimeCompatibilityError
@@ -306,6 +307,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   }> | null;
 
   try {
+    await requireActiveOrganization(organizationId);
     [entitlements, currentSubscription] = await Promise.all([
       getOrganizationEntitlements(organizationId),
       getCurrentSubscription(organizationId)
@@ -317,8 +319,10 @@ export async function getDashboardData(): Promise<DashboardData> {
       getUsageRemaining(organizationId, "evidence_uploads")
     ]);
     activation = await getOrganizationActivationSnapshot(organizationId, entitlements);
-    organization = await prisma.organization.findFirst({
-      where: { id: organizationId },
+    organization = await prisma.organization.findUnique({
+      where: {
+        id: organizationId
+      },
       include: dashboardOrganizationInclude
     });
   } catch (error) {
@@ -359,6 +363,22 @@ export async function getDashboardData(): Promise<DashboardData> {
   const currentPeriodEnd = subscription?.currentPeriodEnd;
   const primaryRecommendation = assessment?.recommendations[0];
   const latestNotification = organization.notifications[0];
+  const activeAssessmentNextStep = activeWorkflowPresentation?.nextStep ??
+    (assessment?.status === AssessmentStatus.INTAKE_SUBMITTED
+      ? "Wait for orchestration handoff confirmation before analysis begins."
+      : assessment?.analysisJobs[0]?.status === "RUNNING"
+        ? "Generate executive summary and publish findings package"
+        : assessment
+          ? "Complete intake sections and queue analysis"
+          : "Create your first live assessment");
+  const activeAssessmentEta = activeWorkflowPresentation?.eta ??
+    (assessment?.status === AssessmentStatus.INTAKE_SUBMITTED
+      ? "Awaiting handoff confirmation"
+      : assessment?.analysisJobs[0]?.status === "RUNNING"
+        ? "Ready in about 18 minutes"
+        : assessment
+          ? "Waiting for input completion"
+          : "No assessment in progress");
   const recommendedFocus =
     entitlements.workspaceMode === "INACTIVE"
       ? {
@@ -482,20 +502,8 @@ export async function getDashboardData(): Promise<DashboardData> {
       progress:
         activeWorkflowProgress?.progressPercent ??
         (assessment ? calculateAssessmentProgress(assessment.sections) : 0),
-      nextStep:
-        activeWorkflowPresentation?.nextStep ??
-        (assessment?.analysisJobs[0]?.status === "RUNNING"
-          ? "Generate executive summary and publish findings package"
-          : assessment
-            ? "Complete intake sections and queue analysis"
-            : "Create your first live assessment"),
-      eta:
-        activeWorkflowPresentation?.eta ??
-        (assessment?.analysisJobs[0]?.status === "RUNNING"
-          ? "Ready in about 18 minutes"
-          : assessment
-            ? "Waiting for input completion"
-            : "No assessment in progress")
+      nextStep: activeAssessmentNextStep,
+      eta: activeAssessmentEta
     },
     domainScores: buildDomainScores(assessment?.findings ?? []),
     findings:

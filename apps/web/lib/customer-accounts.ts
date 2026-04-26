@@ -14,6 +14,7 @@ import {
   prisma
 } from "@evolve-edge/db";
 import { publishDomainEvent } from "./domain-events";
+import { requireActiveOrganization } from "./org-scope";
 import { getPrimaryOwnerMembership } from "./roles";
 import {
   recordCustomerAccountTimelineEvent,
@@ -21,6 +22,17 @@ import {
 } from "./account-timeline";
 
 type CustomerAccountDbClient = Prisma.TransactionClient | typeof prisma;
+
+async function requireActiveCustomerAccountOrganization(
+  organizationId: string | null | undefined,
+  db: CustomerAccountDbClient
+) {
+  if (!organizationId) {
+    return null;
+  }
+
+  return requireActiveOrganization(organizationId, db);
+}
 
 export const CUSTOMER_LIFECYCLE_STAGE_ORDER = [
   CustomerLifecycleStage.LEAD,
@@ -521,6 +533,7 @@ export async function syncOrganizationCustomerAccount(
   }
 ) {
   const db = input?.db ?? prisma;
+  await requireActiveOrganization(organizationId, db);
   const organization = await db.organization.findUnique({
     where: { id: organizationId },
     include: {
@@ -844,6 +857,18 @@ export async function getCustomerAccountDetailSnapshot(
   customerAccountId: string,
   db: CustomerAccountDbClient = prisma
 ) {
+  const customerAccount = await db.customerAccount.findUnique({
+    where: { id: customerAccountId },
+    select: {
+      organizationId: true
+    }
+  });
+
+  if (!customerAccount) {
+    return null;
+  }
+
+  await requireActiveCustomerAccountOrganization(customerAccount.organizationId, db);
   await synchronizeCustomerAccountTimeline(customerAccountId, db);
 
   return db.customerAccount.findUnique({
