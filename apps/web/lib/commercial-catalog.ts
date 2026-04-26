@@ -277,6 +277,17 @@ export function resolveRevenuePlanCodeForCanonicalPlan(
   return getCanonicalCommercialPlanDefinition(planCode)?.publicRevenuePlanCode ?? null;
 }
 
+export function resolveRevenuePlanCodeForCommercialSelection(
+  value: string | null | undefined
+) {
+  const canonicalPlanCode =
+    resolvePublicCanonicalPlanCode(value) ??
+    resolveCanonicalPlanCode(value) ??
+    resolveCanonicalPlanCodeFromRevenuePlanCode(value);
+
+  return resolveRevenuePlanCodeForCanonicalPlan(canonicalPlanCode);
+}
+
 export function supportsStripeCheckoutForCanonicalPlan(
   planCode: CanonicalPlanCode | null | undefined
 ) {
