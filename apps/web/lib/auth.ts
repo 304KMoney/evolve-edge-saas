@@ -558,7 +558,8 @@ async function resolveCurrentSession(options?: {
   const dbSession = await prisma.session.findFirst({
     where: {
       tokenHash: hashOpaqueToken(token),
-      expiresAt: { gt: new Date() }
+      expiresAt: { gt: new Date() },
+      revokedAt: null
     },
     include: {
       user: {
@@ -579,14 +580,6 @@ async function resolveCurrentSession(options?: {
       return previewGuestSession;
     }
 
-    if (options?.redirectOnMissing ?? true) {
-      await redirectToSignIn("expired");
-    }
-
-    return null;
-  }
-
-  if (dbSession.revokedAt) {
     if (options?.redirectOnMissing ?? true) {
       await redirectToSignIn("expired");
     }
