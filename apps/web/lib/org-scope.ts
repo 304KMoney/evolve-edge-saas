@@ -34,24 +34,17 @@ export async function requireActiveOrganization(
   organizationId: string,
   db: Pick<typeof prisma, "organization"> = prisma
 ) {
-  const organization = await db.organization.findFirst({
+  const organization = await db.organization.findUnique({
     where: {
-      id: organizationId,
-      deletedAt: null
+      id: organizationId
     },
     select: {
-      id: true,
-      archivedAt: true,
-      deletedAt: true
+      id: true
     }
   });
 
   if (!organization) {
-    throw new OrganizationScopeError("Organization was not found or has been deleted.");
-  }
-
-  if (organization.archivedAt) {
-    throw new OrganizationScopeError("Organization is archived.");
+    throw new OrganizationScopeError("Organization was not found.");
   }
 
   return organization;
@@ -63,38 +56,8 @@ export async function softDeleteOrganizationData(input: {
   db?: typeof prisma;
 }) {
   assertOrgScope(input.organizationId, "organization deletion");
-  const db = input.db ?? prisma;
-  const now = new Date();
-
-  await db.$transaction(async (tx) => {
-    await tx.organization.update({
-      where: { id: input.organizationId },
-      data: {
-        archivedAt: now,
-        deletedAt: now
-      }
-    });
-
-    await tx.session.updateMany({
-      where: {
-        user: {
-          memberships: {
-            some: {
-              organizationId: input.organizationId
-            }
-          }
-        },
-        revokedAt: null
-      },
-      data: {
-        revokedAt: now,
-        revokedReason: "organization_deleted"
-      }
-    });
-  });
-
-  return {
-    organizationId: input.organizationId,
-    deletedAt: now
-  };
+  void input;
+  throw new OrganizationScopeError(
+    "Organization soft deletion is not supported by the current schema."
+  );
 }
