@@ -139,6 +139,18 @@ function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+function isActiveDashboardRoute(pathname: string, href: Route) {
+  if (pathname === href) {
+    return true;
+  }
+
+  if (href === "/dashboard") {
+    return pathname === "/dashboard";
+  }
+
+  return pathname.startsWith(`${href}/`);
+}
+
 export function DashboardShell({
   data,
   flashMessage
@@ -191,7 +203,7 @@ export function DashboardShell({
           <nav className="mt-8 space-y-2">
             {resolvedNavigation.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href;
+              const active = isActiveDashboardRoute(pathname, item.href);
 
               return (
                 <Link
@@ -221,7 +233,7 @@ export function DashboardShell({
               notes for your current assessments.
             </p>
             <Link
-              href="/dashboard/settings"
+              href={"/dashboard/settings#trust-center" as Route}
               className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#8debf4]"
             >
               Open trust center
@@ -384,7 +396,7 @@ export function DashboardShell({
                   </h2>
                 </div>
                 <Link
-                  href="/dashboard/settings"
+                  href={"/dashboard/settings#billing-controls" as Route}
                   className="text-sm font-semibold text-accent"
                 >
                   Open billing
@@ -709,7 +721,7 @@ export function DashboardShell({
               </div>
               <div className="mt-5">
                 <Link
-                  href="/dashboard/settings"
+                  href={"/dashboard/settings#inventory-registry" as Route}
                   className="inline-flex items-center gap-2 text-sm font-semibold text-accent"
                 >
                   Manage registry records

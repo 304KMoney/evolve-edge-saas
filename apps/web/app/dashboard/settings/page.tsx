@@ -81,7 +81,6 @@ function formatDate(date: Date) {
     year: "numeric"
   }).format(date);
 }
-
 function formatDateTime(date: Date | null | undefined) {
   if (!date) {
     return "Not set";
@@ -303,7 +302,11 @@ async function addMemberAction(formData: FormData) {
       entityId: `${session.organization!.id}:${user.id}`,
       metadata: {
         memberEmail: user.email,
-        role
+        previousRole: existingMembership?.role ?? null,
+        nextRole: role,
+        previousIsBillingAdmin: existingMembership?.isBillingAdmin ?? null,
+        nextIsBillingAdmin: isBillingAdmin,
+        isNewMember: !existingMembership
       },
       requestContext
     });
@@ -442,8 +445,10 @@ async function updateMemberRoleAction(formData: FormData) {
       entityType: "organizationMember",
       entityId: memberId,
       metadata: {
-        role,
-        affectedUserId: membership.userId
+        affectedUserId: membership.userId,
+        previousRole: membership.role,
+        nextRole: role,
+        isBillingAdmin: membership.isBillingAdmin
       },
       requestContext
     });
@@ -1074,7 +1079,7 @@ export default async function SettingsPage({
         ) : null}
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-line bg-mist p-5">
+          <div id="billing-controls" className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Plan</p>
             <p className="mt-2 text-xl font-semibold text-ink">
               {entitlements.planName}
@@ -1215,7 +1220,7 @@ export default async function SettingsPage({
             )}
           </div>
 
-          <div className="rounded-2xl border border-line bg-mist p-5">
+          <div id="billing-ownership" className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Billing ownership</p>
             <p className="mt-2 text-xl font-semibold text-ink">
               {billingAdminSnapshot.organization.billingOwnerName ?? "Not assigned"}
@@ -1315,7 +1320,7 @@ export default async function SettingsPage({
 
         {canViewUsageControls ? (
           <>
-            <div className="mt-6">
+            <div id="usage-and-limits" className="mt-6">
               <UsageMeterGrid
                 title="Usage and limits"
                 description="Current plan utilization across the main recurring SaaS resources in this workspace."
@@ -1363,8 +1368,8 @@ export default async function SettingsPage({
         ) : null}
 
         {canViewBillingControls ? (
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-line p-5">
+          <div id="trust-center" className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div id="entitlement-breakdown" className="rounded-2xl border border-line p-5">
               <p className="text-lg font-semibold text-ink">Entitlement breakdown</p>
               <p className="mt-2 text-sm text-steel">
                 Plan-derived feature access and limits, with active override sources shown inline.
@@ -1526,7 +1531,7 @@ export default async function SettingsPage({
         ) : null}
 
         {canManageMembers ? (
-          <div className="mt-8 grid gap-4 lg:grid-cols-2">
+          <div id="workspace-members" className="mt-8 grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-line bg-mist p-5">
               <p className="text-lg font-semibold text-ink">Add internal member</p>
               <form action={addMemberAction} className="mt-4 grid gap-3">
@@ -1729,7 +1734,7 @@ export default async function SettingsPage({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+        <div id="inventory-registry" className="mt-8 grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-lg font-semibold text-ink">Vendor registry</p>
             <p className="mt-2 text-sm text-steel">
@@ -1853,7 +1858,7 @@ export default async function SettingsPage({
           </div>
         </div>
 
-        <div className="mt-8 rounded-2xl border border-line bg-mist p-5">
+        <div id="outbound-webhooks" className="mt-8 rounded-2xl border border-line bg-mist p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-lg font-semibold text-ink">Outbound webhook deliveries</p>
@@ -1899,3 +1904,4 @@ export default async function SettingsPage({
     </main>
   );
 }
+
