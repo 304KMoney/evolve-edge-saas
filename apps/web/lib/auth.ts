@@ -184,13 +184,11 @@ export async function revokeAllUserSessions(
   userId: string,
   reason = "logout_everywhere"
 ) {
-  await prisma.session.updateMany({
+  void reason;
+
+  await prisma.session.deleteMany({
     where: {
       userId
-    },
-    data: {
-      revokedAt: new Date(),
-      revokedReason: reason
     }
   });
 }
@@ -200,13 +198,9 @@ export async function revokeSession(token: string | null | undefined) {
     return;
   }
 
-  await prisma.session.updateMany({
+  await prisma.session.deleteMany({
     where: {
       tokenHash: hashOpaqueToken(token)
-    },
-    data: {
-      revokedAt: new Date(),
-      revokedReason: "logout"
     }
   });
 }
@@ -604,24 +598,16 @@ async function resolveCurrentSession(options?: {
     dbSession.user.passwordCredential?.passwordUpdatedAt &&
     dbSession.createdAt < dbSession.user.passwordCredential.passwordUpdatedAt
   ) {
-    await prisma.session.update({
+    await prisma.session.delete({
       where: { id: dbSession.id },
-      data: {
-        revokedAt: new Date(),
-        revokedReason: "password_updated"
-      }
     });
     await redirectToSignIn("expired");
   }
 
   const sessionLastSeenAt = dbSession.lastSeenAt ?? dbSession.lastAuthenticatedAt ?? dbSession.createdAt;
   if (Date.now() - sessionLastSeenAt.getTime() > getSessionInactivityTimeoutSeconds() * 1000) {
-    await prisma.session.update({
+    await prisma.session.delete({
       where: { id: dbSession.id },
-      data: {
-        revokedAt: new Date(),
-        revokedReason: "inactive_timeout"
-      }
     });
     await redirectToSignIn("expired");
   }
