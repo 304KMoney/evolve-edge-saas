@@ -38,7 +38,10 @@ export default function FrameworkCoveragePage() {
               title: framework.name,
               body: framework.overview,
               eyebrow: framework.category,
-              href: `/frameworks/${framework.slug}` as Route
+              href: `/frameworks/${framework.slug}` as Route,
+              footer: framework.assetDownloads?.length
+                ? `${framework.assetDownloads.length} downloadable assets`
+                : undefined
             }))}
           />
         </AuthoritySection>

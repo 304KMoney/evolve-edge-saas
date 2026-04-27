@@ -9,6 +9,10 @@ import {
   sanitizeWorkflowValue,
 } from "../../observability/trace";
 import {
+  isPrismaRuntimeCompatibilityError,
+  logPrismaRuntimeCompatibilityError,
+} from "../../../../../lib/prisma-runtime";
+import {
   auditWorkflowStateSchema,
   buildInitialAuditWorkflowState,
   type AuditWorkflowState,
@@ -211,6 +215,15 @@ export function createPrismaAuditWorkflowCheckpointStore(
   db: CheckpointDbClient = prisma
 ): AuditWorkflowCheckpointStore {
   const analysisJobIdCache = new Map<string, string | null>();
+  const { store: fallbackStore } = createInMemoryAuditWorkflowCheckpointStore();
+  let persistenceUnavailable = false;
+
+  function disableDurablePersistence(error: unknown) {
+    persistenceUnavailable = true;
+    logPrismaRuntimeCompatibilityError("ai.workflow.checkpoints", error, {
+      fallback: "in_memory",
+    });
+  }
 
   async function resolveAnalysisJobId(workflowDispatchId: string) {
     if (analysisJobIdCache.has(workflowDispatchId)) {
@@ -235,32 +248,58 @@ export function createPrismaAuditWorkflowCheckpointStore(
 
   return {
     async writeCheckpoint(input) {
-      const checkpoint = await db.auditWorkflowCheckpoint.create({
-        data: {
-          analysisJobId: await resolveAnalysisJobId(input.workflowDispatchId),
-          workflowDispatchId: input.workflowDispatchId,
-          dispatchId: input.dispatchId,
-          orgId: input.orgId,
-          assessmentId: input.assessmentId,
-          nodeName: input.nodeName,
-          nodeOrder: nodeOrder(input.nodeName),
-          status: input.status,
-          stateSnapshot: toJsonValue(sanitizeCheckpointState(input.state)),
-          errorMessage: input.errorMessage
-            ? sanitizeWorkflowErrorMessage(input.errorMessage)
-            : null,
-        },
-      });
+      if (persistenceUnavailable) {
+        return fallbackStore.writeCheckpoint(input);
+      }
 
-      return mapCheckpointRecord(checkpoint);
+      try {
+        const checkpoint = await db.auditWorkflowCheckpoint.create({
+          data: {
+            analysisJobId: await resolveAnalysisJobId(input.workflowDispatchId),
+            workflowDispatchId: input.workflowDispatchId,
+            dispatchId: input.dispatchId,
+            orgId: input.orgId,
+            assessmentId: input.assessmentId,
+            nodeName: input.nodeName,
+            nodeOrder: nodeOrder(input.nodeName),
+            status: input.status,
+            stateSnapshot: toJsonValue(sanitizeCheckpointState(input.state)),
+            errorMessage: input.errorMessage
+              ? sanitizeWorkflowErrorMessage(input.errorMessage)
+              : null,
+          },
+        });
+
+        return mapCheckpointRecord(checkpoint);
+      } catch (error) {
+        if (!isPrismaRuntimeCompatibilityError(error)) {
+          throw error;
+        }
+
+        disableDurablePersistence(error);
+        return fallbackStore.writeCheckpoint(input);
+      }
     },
     async listCheckpoints(workflowDispatchId) {
-      const checkpoints = await db.auditWorkflowCheckpoint.findMany({
-        where: { workflowDispatchId },
-        orderBy: [{ createdAt: "asc" }, { nodeOrder: "asc" }],
-      });
+      if (persistenceUnavailable) {
+        return fallbackStore.listCheckpoints(workflowDispatchId);
+      }
 
-      return checkpoints.map(mapCheckpointRecord);
+      try {
+        const checkpoints = await db.auditWorkflowCheckpoint.findMany({
+          where: { workflowDispatchId },
+          orderBy: [{ createdAt: "asc" }, { nodeOrder: "asc" }],
+        });
+
+        return checkpoints.map(mapCheckpointRecord);
+      } catch (error) {
+        if (!isPrismaRuntimeCompatibilityError(error)) {
+          throw error;
+        }
+
+        disableDurablePersistence(error);
+        return fallbackStore.listCheckpoints(workflowDispatchId);
+      }
     },
   };
 }

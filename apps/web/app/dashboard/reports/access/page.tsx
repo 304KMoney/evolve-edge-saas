@@ -1,4 +1,14 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import {
+  getOptionalCurrentSession,
+  resolveScopedOrganizationSession
+} from "../../../../lib/auth";
+import { toCustomerAccessSession } from "../../../../lib/customer-access-session";
+import {
+  getDashboardReportDetailViewForAccessSession,
+  getReportAccessCandidateById
+} from "../../../../lib/report-records";
 
 const ACCESS_STATE_COPY = {
   unpaid: {
@@ -95,6 +105,33 @@ export default async function ReportAccessStatePage({
   const params = await searchParams;
   const reason = isAccessReason(params.reason) ? params.reason : "unauthorized";
   const copy = ACCESS_STATE_COPY[reason];
+  const reportId = params.reportId?.trim();
+
+  if (reportId) {
+    const [session, reportAccessCandidate] = await Promise.all([
+      getOptionalCurrentSession(),
+      getReportAccessCandidateById(reportId)
+    ]);
+
+    if (session && reportAccessCandidate) {
+      const scopedSession = await resolveScopedOrganizationSession({
+        session,
+        organizationId: reportAccessCandidate.organizationId,
+        permission: "reports.view"
+      });
+
+      if (scopedSession) {
+        const report = await getDashboardReportDetailViewForAccessSession({
+          reportId,
+          accessSession: toCustomerAccessSession(scopedSession)
+        });
+
+        if (report) {
+          redirect(`/dashboard/reports/${reportId}`);
+        }
+      }
+    }
+  }
 
   return (
     <main className="mx-auto min-h-screen max-w-4xl px-6 py-10">
@@ -103,9 +140,9 @@ export default async function ReportAccessStatePage({
         <h1 className="mt-2 text-3xl font-semibold text-ink">{copy.title}</h1>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-steel">{copy.body}</p>
 
-        {params.reportId ? (
+        {reportId ? (
           <div className="mt-6 rounded-2xl border border-line bg-mist p-4 text-sm text-steel">
-            Report reference: <span className="font-semibold text-ink">{params.reportId}</span>
+            Report reference: <span className="font-semibold text-ink">{reportId}</span>
           </div>
         ) : null}
 

@@ -14,6 +14,7 @@ function runAuthorityContentTests() {
   {
     const framework = getFrameworkCoverageEntryBySlug("soc-2");
     assert.equal(framework?.code, "SOC 2");
+    assert.equal(framework?.assetDownloads?.length, 2);
   }
 
   {

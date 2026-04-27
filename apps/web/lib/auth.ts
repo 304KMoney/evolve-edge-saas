@@ -128,6 +128,42 @@ type CreateUserSessionContext = {
   userAgent?: string | null;
 };
 
+type ScopedOrganizationMembershipRecord = {
+  organization: {
+    id: string;
+    slug: string;
+    name: string;
+    onboardingCompletedAt: Date | null;
+  };
+  role: string;
+  isBillingAdmin: boolean;
+};
+
+type ScopedOrganizationSessionDbClient = {
+  organizationMember: {
+    findUnique(args: {
+      where: {
+        organizationId_userId: {
+          organizationId: string;
+          userId: string;
+        };
+      };
+      select: {
+        role: true;
+        isBillingAdmin: true;
+        organization: {
+          select: {
+            id: true;
+            slug: true;
+            name: true;
+            onboardingCompletedAt: true;
+          };
+        };
+      };
+    }): Promise<ScopedOrganizationMembershipRecord | null>;
+  };
+};
+
 export function getSessionInactivityTimeoutSeconds() {
   const configured = Number(getOptionalEnv("SESSION_INACTIVITY_TIMEOUT_SECONDS") ?? "");
   if (Number.isFinite(configured) && configured > 0) {
@@ -290,7 +326,7 @@ export function shouldUsePreviewGuestSession(input: {
   }
 
   const requestPath = sanitizeInternalRedirect(input.requestPath, "");
-  return requestPath.startsWith("/dashboard");
+  return requestPath.startsWith("/dashboard") || requestPath.startsWith("/onboarding");
 }
 
 export function shouldLimitAuthenticationAttempt(input: {
@@ -711,6 +747,88 @@ export async function requireOrganizationPermission(
   }
 
   return session;
+}
+
+export async function resolveScopedOrganizationSession(input: {
+  session: AppSession;
+  organizationId: string;
+  permission: OrganizationPermission;
+  db?: ScopedOrganizationSessionDbClient;
+}) {
+  const organizationId = input.organizationId.trim();
+  if (!organizationId) {
+    return null;
+  }
+
+  if (input.session.organization?.id === organizationId) {
+    return hasPermission(getSessionAuthorizationContext(input.session), input.permission)
+      ? input.session
+      : null;
+  }
+
+  const membershipLookup = {
+    where: {
+      organizationId_userId: {
+        organizationId,
+        userId: input.session.user.id
+      }
+    },
+    select: {
+      role: true,
+      isBillingAdmin: true,
+      organization: {
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          onboardingCompletedAt: true
+        }
+      }
+    }
+  } as const;
+  const membership: ScopedOrganizationMembershipRecord | null = input.db
+    ? await input.db.organizationMember.findUnique(membershipLookup)
+    : await prisma.organizationMember.findUnique(membershipLookup);
+
+  if (!membership) {
+    return null;
+  }
+
+  const scopedSession: AppSession = {
+    ...input.session,
+    organization: {
+      id: membership.organization.id,
+      slug: membership.organization.slug,
+      name: membership.organization.name,
+      role: membership.role,
+      isBillingAdmin: membership.isBillingAdmin
+    },
+    onboardingRequired:
+      input.session.onboardingRequired &&
+      !membership.organization.onboardingCompletedAt
+  };
+
+  return hasPermission(getSessionAuthorizationContext(scopedSession), input.permission)
+    ? scopedSession
+    : null;
+}
+
+export async function requireOrganizationPermissionForOrganization(
+  permission: OrganizationPermission,
+  organizationId: string
+) {
+  const session = await requireCurrentSession();
+  const scopedSession = await resolveScopedOrganizationSession({
+    session,
+    organizationId,
+    permission
+  });
+
+  if (!scopedSession) {
+    redirect("/dashboard");
+  }
+
+  return scopedSession;
 }
 
 export async function requirePlatformPermission(permission: PlatformPermission) {

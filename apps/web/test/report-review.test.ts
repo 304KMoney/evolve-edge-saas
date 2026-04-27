@@ -50,7 +50,7 @@ async function runReportReviewTests() {
         })
       },
       domainEvent: {
-        create: async () => ({ id: "evt_123" })
+        upsert: async () => ({ id: "evt_123" })
       },
       aiWorkflowFeedback: {
         create: async ({ data }: { data: Record<string, unknown> }) => ({
@@ -95,6 +95,98 @@ async function runReportReviewTests() {
   }
 
   {
+    let updatedReportStatus: string | null = null;
+    let reportPackageUpdateCount = 0;
+    const recovered = await approveReportPackageQa({
+      packageId: "pkg_recover",
+      organizationId: "org_123",
+      actorUserId: "usr_123",
+      notes: "Retry approval sync after partial mutation.",
+      db: {
+        reportPackage: {
+          findFirst: async () => ({
+            id: "pkg_recover",
+            organizationId: "org_123",
+            assessmentId: "asm_123",
+            latestReportId: "rpt_recover",
+            latestReport: {
+              id: "rpt_recover",
+              status: ReportStatus.PENDING,
+              reportJson: {
+                workflowMetadata: {
+                  workflowDispatchId: "wd_recover"
+                }
+              }
+            },
+            deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
+            qaStatus: ReportPackageQaStatus.APPROVED,
+            requiresFounderReview: false,
+            founderReviewedAt: null,
+            reviewedAt: new Date("2026-04-26T21:17:00.000Z"),
+            reviewedByUserId: "usr_123",
+            qaNotes: "Original QA note"
+          }),
+          update: async ({ data }: { data: Record<string, unknown> }) => {
+            reportPackageUpdateCount += 1;
+            return {
+              id: "pkg_recover",
+              organizationId: "org_123",
+              assessmentId: "asm_123",
+              ...data
+            };
+          }
+        },
+        report: {
+          update: async ({ data }: { data: Record<string, unknown> }) => {
+            updatedReportStatus = String(data.status ?? "");
+            return {
+              id: "rpt_recover",
+              ...data
+            };
+          }
+        },
+        domainEvent: {
+          upsert: async () => ({ id: "evt_recover" })
+        },
+        aiWorkflowFeedback: {
+          create: async ({ data }: { data: Record<string, unknown> }) => ({
+            id: "fb_recover",
+            ...data
+          }),
+          count: async () => 1
+        },
+        customerRun: {
+          findFirst: async () => ({
+            id: "run_recover",
+            contextJson: null,
+            stepsJson: {},
+            reportId: "rpt_recover"
+          }),
+          findUnique: async () => ({
+            id: "run_recover",
+            contextJson: null,
+            stepsJson: {},
+            reportId: "rpt_recover"
+          }),
+          update: async ({ data }: { data: Record<string, unknown> }) => ({
+            id: "run_recover",
+            ...data
+          })
+        },
+        notification: {
+          create: async () => ({ id: "ntf_recover" })
+        }
+      } as any
+    });
+
+    assert.equal(recovered.qaStatus, ReportPackageQaStatus.APPROVED);
+    assert.equal(recovered.deliveryStatus, ReportPackageDeliveryStatus.REVIEWED);
+    assert.equal(recovered.qaNotes, "Retry approval sync after partial mutation.");
+    assert.equal(updatedReportStatus, ReportStatus.APPROVED);
+    assert.equal(reportPackageUpdateCount, 1);
+  }
+
+  {
     const db = {
       reportPackage: {
         findFirst: async () => ({
@@ -129,7 +221,7 @@ async function runReportReviewTests() {
         })
       },
       domainEvent: {
-        create: async () => ({ id: "evt_123" })
+        upsert: async () => ({ id: "evt_123" })
       },
       aiWorkflowFeedback: {
         create: async ({ data }: { data: Record<string, unknown> }) => ({
@@ -204,7 +296,7 @@ async function runReportReviewTests() {
           })
         },
         domainEvent: {
-          create: async () => ({ id: "evt_123" })
+          upsert: async () => ({ id: "evt_123" })
         },
         aiWorkflowFeedback: {
           create: async ({ data }: { data: Record<string, unknown> }) => ({

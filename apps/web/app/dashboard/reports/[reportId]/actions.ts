@@ -10,7 +10,7 @@ import {
 } from "@evolve-edge/db";
 import { redirect } from "next/navigation";
 import { getServerAuditRequestContext, writeAuditLog } from "../../../../lib/audit";
-import { requireOrganizationPermission } from "../../../../lib/auth";
+import { requireOrganizationPermissionForOrganization } from "../../../../lib/auth";
 import { syncOrganizationCustomerAccount } from "../../../../lib/customer-accounts";
 import { markCustomerRunDelivered } from "../../../../lib/customer-runs";
 import { publishDomainEvent } from "../../../../lib/domain-events";
@@ -33,6 +33,7 @@ import {
 import { appendOperatorWorkflowEventRecord } from "../../../../lib/operator-workflow-event-records";
 import { recordOperationalFinding } from "../../../../lib/operations-queues";
 import { trackProductAnalyticsEvent } from "../../../../lib/product-analytics";
+import { getReportAccessCandidateById } from "../../../../lib/report-records";
 import { queueReportRegeneration } from "../../../../lib/report-review";
 
 async function getReportAndPackage(reportId: string, organizationId: string) {
@@ -70,14 +71,30 @@ function redirectToReport(reportId: string, query: string) {
   redirect(`/dashboard/reports/${reportId}${query}`);
 }
 
+async function requireReportScopedPermission(
+  permission: "reports.review" | "organization.manage" | "reports.deliver",
+  reportId: string
+) {
+  const reportAccessCandidate = await getReportAccessCandidateById(reportId);
+  if (!reportAccessCandidate) {
+    redirect("/dashboard/reports?error=missing-report");
+  }
+
+  return requireOrganizationPermissionForOrganization(
+    permission,
+    reportAccessCandidate.organizationId
+  );
+}
+
 export async function approveReportPackageQaAction(formData: FormData) {
-  const session = await requireOrganizationPermission("reports.review");
   const reportId = String(formData.get("reportId") ?? "");
   const notes = String(formData.get("notes") ?? "");
 
   if (!reportId) {
     redirect("/dashboard/reports?error=missing-report");
   }
+
+  const session = await requireReportScopedPermission("reports.review", reportId);
 
   const result = await getReportAndPackage(reportId, session.organization!.id);
   if (!result) {
@@ -110,13 +127,14 @@ export async function approveReportPackageQaAction(formData: FormData) {
 }
 
 export async function requestReportPackageChangesAction(formData: FormData) {
-  const session = await requireOrganizationPermission("reports.review");
   const reportId = String(formData.get("reportId") ?? "");
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!reportId || !notes) {
     redirect("/dashboard/reports?error=missing-report");
   }
+
+  const session = await requireReportScopedPermission("reports.review", reportId);
 
   const result = await getReportAndPackage(reportId, session.organization!.id);
   if (!result) {
@@ -149,13 +167,14 @@ export async function requestReportPackageChangesAction(formData: FormData) {
 }
 
 export async function saveReportReviewNotesAction(formData: FormData) {
-  const session = await requireOrganizationPermission("reports.review");
   const reportId = String(formData.get("reportId") ?? "");
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!reportId || !notes) {
     redirect("/dashboard/reports?error=missing-report");
   }
+
+  const session = await requireReportScopedPermission("reports.review", reportId);
 
   const result = await getReportAndPackage(reportId, session.organization!.id);
   if (!result) {
@@ -187,13 +206,14 @@ export async function saveReportReviewNotesAction(formData: FormData) {
 }
 
 export async function requestReportRegenerationAction(formData: FormData) {
-  const session = await requireOrganizationPermission("reports.review");
   const reportId = String(formData.get("reportId") ?? "");
   const notes = String(formData.get("notes") ?? "");
 
   if (!reportId) {
     redirect("/dashboard/reports?error=missing-report");
   }
+
+  const session = await requireReportScopedPermission("reports.review", reportId);
 
   const result = await getReportAndPackage(reportId, session.organization!.id);
   if (!result) {
@@ -226,13 +246,14 @@ export async function requestReportRegenerationAction(formData: FormData) {
 }
 
 export async function completeFounderReviewAction(formData: FormData) {
-  const session = await requireOrganizationPermission("organization.manage");
   const reportId = String(formData.get("reportId") ?? "");
   const notes = String(formData.get("notes") ?? "");
 
   if (!reportId) {
     redirect("/dashboard/reports?error=missing-report");
   }
+
+  const session = await requireReportScopedPermission("organization.manage", reportId);
 
   const result = await getReportAndPackage(reportId, session.organization!.id);
   if (!result) {
@@ -264,7 +285,6 @@ export async function completeFounderReviewAction(formData: FormData) {
 }
 
 export async function markReportDeliveredAction(formData: FormData) {
-  const session = await requireOrganizationPermission("reports.deliver");
   const reportId = String(formData.get("reportId") ?? "");
   const notes = String(formData.get("notes") ?? "");
   const requestContext = await getServerAuditRequestContext();
@@ -272,6 +292,8 @@ export async function markReportDeliveredAction(formData: FormData) {
   if (!reportId) {
     redirect("/dashboard/reports?error=missing-report");
   }
+
+  const session = await requireReportScopedPermission("reports.deliver", reportId);
 
   const result = await getReportAndPackage(reportId, session.organization!.id);
   if (!result) {
@@ -425,13 +447,14 @@ export async function markReportDeliveredAction(formData: FormData) {
 }
 
 export async function bookReportBriefingAction(formData: FormData) {
-  const session = await requireOrganizationPermission("reports.deliver");
   const reportId = String(formData.get("reportId") ?? "");
   const notes = String(formData.get("notes") ?? "");
 
   if (!reportId) {
     redirect("/dashboard/reports?error=missing-report");
   }
+
+  const session = await requireReportScopedPermission("reports.deliver", reportId);
 
   const result = await getReportAndPackage(reportId, session.organization!.id);
   if (!result) {
@@ -489,13 +512,14 @@ export async function bookReportBriefingAction(formData: FormData) {
 }
 
 export async function completeReportBriefingAction(formData: FormData) {
-  const session = await requireOrganizationPermission("reports.deliver");
   const reportId = String(formData.get("reportId") ?? "");
   const notes = String(formData.get("notes") ?? "");
 
   if (!reportId) {
     redirect("/dashboard/reports?error=missing-report");
   }
+
+  const session = await requireReportScopedPermission("reports.deliver", reportId);
 
   const result = await getReportAndPackage(reportId, session.organization!.id);
   if (!result) {

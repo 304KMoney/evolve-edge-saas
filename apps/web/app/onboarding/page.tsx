@@ -33,12 +33,13 @@ export default async function OnboardingPage({
   }>;
 }) {
   const session = await getCurrentSession();
+  const allowPreviewGuestOnboarding = session.authMode === "demo";
   const frameworks =
     (await prisma.framework.findMany({
       orderBy: [{ category: "asc" }, { name: "asc" }]
     })) || [];
 
-  if (session.organization && !session.onboardingRequired) {
+  if (session.organization && !session.onboardingRequired && !allowPreviewGuestOnboarding) {
     redirect("/dashboard");
   }
 
