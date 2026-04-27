@@ -160,7 +160,9 @@ Set if the first-customer flow depends on them:
 - `APOLLO_API_BASE_URL`
 
 Apollo is currently optional enrichment-only for n8n/operator workflows. No
-app-owned launch-critical Apollo client is wired in this repo today.
+app-owned launch-critical Apollo client is wired in this repo today. The repo
+does include a project-scoped Codex MCP server that forwards the same Apollo
+env vars for operator prospecting and enrichment work.
 - `OPS_ALERT_WEBHOOK_URL`
 - `OPS_ALERT_WEBHOOK_SECRET`
 - `SENTRY_DSN`

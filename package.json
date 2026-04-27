@@ -25,5 +25,8 @@
   "devDependencies": {
     "turbo": "^2.9.5",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@sentry/nextjs": "10"
   }
 }

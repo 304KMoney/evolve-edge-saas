@@ -226,8 +226,8 @@ export function getIntegrationStatusSnapshot(): {
       configured: hasAllEnv(["APOLLO_API_KEY", "APOLLO_API_BASE_URL"]),
       required: false,
       notes: [
-        "Optional enrichment-only wiring for n8n/operator workflows.",
-        "No app-owned Apollo client or launch-critical repo workflow is currently wired.",
+        "Optional enrichment-only wiring for n8n/operator workflows and project-scoped Codex MCP use.",
+        "No app-owned Apollo client owns product logic or customer lifecycle state.",
         "Absence does not block app-owned routing or customer state."
       ]
     }
