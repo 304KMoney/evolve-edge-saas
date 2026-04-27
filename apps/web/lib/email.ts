@@ -14,6 +14,8 @@ type EmailTemplateKey =
   | "welcome"
   | "invite"
   | "member-joined"
+  | "pricing-access-guide"
+  | "pricing-access-credentials"
   | "report-ready"
   | "report-delivered"
   | "report-follow-up-3-day"
@@ -186,6 +188,69 @@ function renderEmailTemplate(
         text: [
           `You've successfully joined ${organizationName} on Evolve Edge.`,
           `Open workspace: ${dashboardUrl}`
+        ].join("\n\n")
+      };
+    }
+    case "pricing-access-guide": {
+      const planName = String(payload.planName ?? "your selected plan");
+      const companyName = String(payload.companyName ?? "your team");
+      const signInUrl = String(payload.signInUrl ?? `${getAppUrl()}/sign-in`);
+      const credentialsIssued = Boolean(payload.credentialsIssued);
+      const nextStep = String(
+        payload.nextStep ??
+          "Sign in with the credentials from the follow-up email and continue the guided setup flow."
+      );
+      const subject = `How to log in to Evolve Edge for ${planName}`;
+      const body = credentialsIssued
+        ? [
+            `We started the ${planName} workflow for ${companyName}.`,
+            "You will receive a second email with your temporary workspace credentials.",
+            nextStep
+          ]
+        : [
+            `We started the ${planName} workflow for ${companyName}.`,
+            "Use your existing workspace password to sign in.",
+            nextStep
+          ];
+
+      return {
+        subject,
+        html: renderLayout({
+          preview: subject,
+          heading: "Your access path is ready",
+          body,
+          ctaLabel: "Open sign in",
+          ctaUrl: signInUrl
+        }),
+        text: [...body, `Open sign in: ${signInUrl}`].join("\n\n")
+      };
+    }
+    case "pricing-access-credentials": {
+      const signInUrl = String(payload.signInUrl ?? `${getAppUrl()}/sign-in`);
+      const loginEmail = String(payload.loginEmail ?? "");
+      const temporaryPassword = String(payload.temporaryPassword ?? "");
+      const subject = "Your Evolve Edge login credentials";
+
+      return {
+        subject,
+        html: renderLayout({
+          preview: subject,
+          heading: "Temporary workspace credentials",
+          body: [
+            "Use these temporary credentials to sign in and continue your onboarding flow.",
+            `Email: ${loginEmail || "Use the email address that received this message."}`,
+            `Temporary password: ${temporaryPassword || "Open the secure sign-in link to continue."}`,
+            "For security, change the password during onboarding or from workspace settings after you sign in."
+          ],
+          ctaLabel: "Sign in",
+          ctaUrl: signInUrl
+        }),
+        text: [
+          "Use these temporary credentials to sign in and continue your onboarding flow.",
+          `Email: ${loginEmail || "Use the email address that received this message."}`,
+          `Temporary password: ${temporaryPassword || "Open the secure sign-in link to continue."}`,
+          "For security, change the password during onboarding or from workspace settings after you sign in.",
+          `Sign in: ${signInUrl}`
         ].join("\n\n")
       };
     }

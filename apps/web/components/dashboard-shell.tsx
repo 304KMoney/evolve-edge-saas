@@ -66,6 +66,14 @@ export type DashboardNotification = {
   actionUrl: string | null;
 };
 
+export type DashboardFrameworkResource = {
+  code: string;
+  title: string;
+  body: string;
+  href: string;
+  assetCount: number;
+};
+
 export type DashboardData = {
   organizationName: string;
   planName: string;
@@ -84,6 +92,7 @@ export type DashboardData = {
   roadmap: DashboardRoadmapItem[];
   reports: DashboardReport[];
   notifications: DashboardNotification[];
+  frameworkResources: DashboardFrameworkResource[];
   inventories: {
     vendorCount: number;
     modelCount: number;
@@ -385,6 +394,55 @@ export function DashboardShell({
               </article>
             </div>
           </section>
+
+          {data.frameworkResources.length > 0 ? (
+            <section className="mt-6 rounded-[24px] border border-line p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-steel">Framework Resources</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-ink">
+                    Downloadable framework assets
+                  </h2>
+                </div>
+                <Link
+                  href={"/dashboard/frameworks" as Route}
+                  className="text-sm font-semibold text-accent"
+                >
+                  Open frameworks
+                </Link>
+              </div>
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                {data.frameworkResources.map((resource) => (
+                  <article
+                    key={resource.href}
+                    className="rounded-2xl border border-line bg-mist p-5"
+                  >
+                    <p className="text-xs uppercase tracking-[0.18em] text-steel">
+                      {resource.code}
+                    </p>
+                    <h3 className="mt-3 text-xl font-semibold text-ink">
+                      {resource.title}
+                    </h3>
+                    <p className="mt-3 text-sm leading-6 text-steel">
+                      {resource.body}
+                    </p>
+                    <p className="mt-4 text-sm text-steel">
+                      {resource.assetCount} downloadable asset
+                      {resource.assetCount === 1 ? "" : "s"} available
+                    </p>
+                    <Link
+                      href={resource.href as Route}
+                      className="mt-5 inline-flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink"
+                    >
+                      Open assets
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {data.usageMetrics.length > 0 ? (
             <section className="mt-6 rounded-[24px] border border-line p-5">

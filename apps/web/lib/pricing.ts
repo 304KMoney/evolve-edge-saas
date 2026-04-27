@@ -1,4 +1,4 @@
-import { getOptionalCurrentSession, isPasswordAuthEnabled, sanitizeInternalRedirect } from "./auth";
+import { getOptionalCurrentSession, isPasswordAuthEnabled } from "./auth";
 import { getCurrentSubscription } from "./billing";
 import {
   CANONICAL_COMMERCIAL_PLAN_CATALOG,
@@ -13,6 +13,7 @@ import {
   getFoundingRiskAuditOfferUrl,
   getSalesContactEmail
 } from "./runtime-config";
+import { buildPricingAccessOnboardingPath, buildPricingAccessStartPath } from "./pricing-access";
 
 export type PricingPlanCard = {
   code: CanonicalPlanCode;
@@ -110,12 +111,6 @@ function buildPlanHeadline(planCode: CanonicalPlanCode) {
   }
 }
 
-function buildPricingRedirectForPlan(planCode: CanonicalPlanCode) {
-  return sanitizeInternalRedirect(
-    `/onboarding?plan=${encodeURIComponent(planCode)}&leadSource=pricing_plan_selection&leadIntent=launch-pricing&leadPlanCode=${encodeURIComponent(planCode)}`
-  );
-}
-
 function buildPricingCta(input: {
   planCode: CanonicalPlanCode;
   isAuthenticated: boolean;
@@ -147,16 +142,17 @@ function buildPricingCta(input: {
 
     return {
       kind: "link",
-      href: `/sign-in?redirectTo=${encodeURIComponent(buildPricingRedirectForPlan(plan.code))}`,
+      href: buildPricingAccessStartPath(plan.code),
       label: plan.ctaLabel,
-      helperText: "Sign in first, then we will carry the selected plan into onboarding or checkout."
+      helperText:
+        "We will email secure login instructions and temporary credentials so you can start onboarding without waiting on a manual handoff."
     };
   }
 
   if (input.onboardingRequired) {
     return {
       kind: "link",
-      href: buildPricingRedirectForPlan(plan.code),
+      href: buildPricingAccessOnboardingPath(plan.code),
       label: `Continue with ${plan.displayName}`,
       helperText: "Finish workspace setup and keep this plan selection attached to onboarding."
     };
