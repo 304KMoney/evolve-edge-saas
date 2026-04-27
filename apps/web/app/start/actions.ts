@@ -1,5 +1,6 @@
 "use server";
 
+import type { Route } from "next";
 import {
   Prisma,
   hashPassword,
@@ -53,7 +54,7 @@ function buildStartRedirect(input: {
     searchParams.set("delivery", input.delivery);
   }
 
-  return `/start?${searchParams.toString()}`;
+  return `/start?${searchParams.toString()}` as Route;
 }
 
 export async function requestPricingAccessAction(formData: FormData) {
