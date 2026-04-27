@@ -1,5 +1,3 @@
-import "server-only";
-
 import { getOptionalEnv, getRuntimeEnvironment } from "./runtime-config";
 
 export type StripeRuntimeMode = "test" | "live" | "unknown";

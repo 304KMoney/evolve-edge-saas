@@ -7,19 +7,30 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "integration:status": "tsx scripts/integration-status.ts",
     "preflight:first-customer:env": "tsx scripts/first-customer-env-status.ts",
     "preflight:first-customer": "tsx scripts/first-customer-preflight.ts",
-    "test": "tsx test/customer-runs.test.ts && tsx test/customer-accounts.test.ts && tsx test/operator-safeguards.test.ts && tsx test/authority-content.test.ts && tsx test/executive-delivery.test.ts && tsx test/continuous-monitoring.test.ts && tsx test/conversion-funnel.test.ts && tsx test/reliability.test.ts && tsx test/engagement-programs.test.ts && tsx test/evidence.test.ts && tsx test/framework-intelligence.test.ts && tsx test/roles.test.ts && tsx test/authorization.test.ts && tsx test/billing-admin.test.ts && tsx test/runtime-config.test.ts && tsx test/monitoring.test.ts && tsx test/report-generation-monitoring.test.ts && tsx test/security-validation.test.ts && tsx test/report-access.test.ts && tsx test/demo-mode.test.ts && tsx test/kpi-dashboard.test.ts && tsx test/account-timeline.test.ts && tsx test/event-replay.test.ts && tsx test/operations-queues.test.ts && tsx test/operations-findings.test.ts && tsx test/subscription-domain.test.ts && tsx test/entitlements.test.ts && tsx test/usage-quotas.test.ts && tsx test/stripe-lifecycle.test.ts && tsx test/product-surface.test.ts && tsx test/integration-contracts.test.ts && tsx test/dify-adapter.test.ts && tsx test/workflow-routing.test.ts && tsx test/commercial-catalog.test.ts && tsx test/commercial-routing.test.ts && tsx test/workflow-dispatch.test.ts && tsx test/site-sync-reference.test.ts && tsx test/delivery-state.test.ts && tsx test/delivery-reconciliation.test.ts && tsx test/delivery-mismatch-detection.test.ts",
+    "load:test:ai": "tsx scripts/load-test-ai-execution.ts",
+    "test": "tsx test/customer-runs.test.ts && tsx test/customer-accounts.test.ts && tsx test/operator-safeguards.test.ts && tsx test/authority-content.test.ts && tsx test/executive-delivery.test.ts && tsx test/report-review.test.ts && tsx test/continuous-monitoring.test.ts && tsx test/conversion-funnel.test.ts && tsx test/reliability.test.ts && tsx test/engagement-programs.test.ts && tsx test/evidence.test.ts && tsx test/framework-intelligence.test.ts && tsx test/roles.test.ts && tsx test/authorization.test.ts && tsx test/billing-admin.test.ts && tsx test/runtime-config.test.ts && tsx test/monitoring.test.ts && tsx test/report-generation-monitoring.test.ts && tsx test/report-access.test.ts && tsx test/report-view-model.test.ts && tsx test/security-validation.test.ts && tsx test/demo-mode.test.ts && tsx test/kpi-dashboard.test.ts && tsx test/account-timeline.test.ts && tsx test/event-replay.test.ts && tsx test/operations-queues.test.ts && tsx test/operations-findings.test.ts && tsx test/subscription-domain.test.ts && tsx test/entitlements.test.ts && tsx test/usage-quotas.test.ts && tsx test/stripe-lifecycle.test.ts && tsx test/product-surface.test.ts && tsx test/integration-contracts.test.ts && tsx test/dify-adapter.test.ts && tsx test/ai-execution-provider.test.ts && tsx test/openai-langgraph-provider.test.ts && tsx test/ai-execution-contracts.test.ts && tsx test/risk-scoring.test.ts && tsx test/ai-execute-route.test.ts && tsx test/ai-execute-route-auth.test.ts && tsx test/ai-execution-worker.test.ts && tsx test/ai-load-scaling.test.ts && tsx test/data-retention.test.ts && tsx test/workflow-observability.test.ts && tsx test/audit-workflow-checkpoints.test.ts && tsx test/workflow-trace-route.test.ts && tsx test/workflow-routing.test.ts && tsx test/commercial-catalog.test.ts && tsx test/commercial-routing.test.ts && tsx test/workflow-dispatch.test.ts && tsx test/site-sync-reference.test.ts && tsx test/delivery-state.test.ts && tsx test/delivery-reconciliation.test.ts && tsx test/delivery-mismatch-detection.test.ts && tsx test/ai-feedback.test.ts",
+    "test:ai": "tsx test/ai-workflow-node-regression.test.ts && tsx test/ai-evals.test.ts && tsx test/ai-feedback.test.ts",
+    "ai:eval": "tsx src/server/ai/evals/run-evals.ts",
+    "ai:eval:live": "tsx src/server/ai/evals/run-evals.ts --live",
     "env:parity:audit": "tsx scripts/env-parity-audit.ts"
   },
   "dependencies": {
+    "@langchain/core": "^0.3.66",
+    "@langchain/langgraph": "^0.2.74",
+    "@langchain/openai": "^0.4.0",
     "@evolve-edge/db": "workspace:*",
     "@sentry/nextjs": "^9.14.0",
     "lucide-react": "^0.511.0",
     "next": "^15.2.4",
+    "openai": "^5.10.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@prisma/nextjs-monorepo-workaround-plugin": "^6.19.0",

@@ -9,42 +9,17 @@ import { NextResponse } from "next/server";
 import { logAndCaptureServerError } from "../../../../lib/observability";
 import { sendOperationalAlert } from "../../../../lib/monitoring";
 import { recordOperationalFinding } from "../../../../lib/operations-queues";
+import {
+  buildResendNotificationStatusUpdate,
+  getResendFailureMessage,
+  isResendFailureEvent,
+  shouldSkipResendNotificationSideEffects
+} from "../../../../lib/resend-webhook";
 import { requireEnv } from "../../../../lib/runtime-config";
 import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
 import { verifySvixWebhookSignature } from "../../../../lib/security-webhooks";
 
 export const runtime = "nodejs";
-
-const PROCESSED_WEBHOOK_IDS = new Map<string, number>();
-const DEDUPE_TTL_MS = 1000 * 60 * 60 * 24;
-
-function hasRecentlyProcessedWebhook(messageId: string) {
-  const existing = PROCESSED_WEBHOOK_IDS.get(messageId);
-  if (!existing) {
-    return false;
-  }
-
-  if (Date.now() > existing + DEDUPE_TTL_MS) {
-    PROCESSED_WEBHOOK_IDS.delete(messageId);
-    return false;
-  }
-
-  return true;
-}
-
-function markWebhookProcessed(messageId: string) {
-  PROCESSED_WEBHOOK_IDS.set(messageId, Date.now());
-
-  if (PROCESSED_WEBHOOK_IDS.size > 5_000) {
-    const cutoff = Date.now() - DEDUPE_TTL_MS;
-    for (const [id, processedAt] of PROCESSED_WEBHOOK_IDS.entries()) {
-      if (processedAt < cutoff) {
-        PROCESSED_WEBHOOK_IDS.delete(id);
-      }
-    }
-  }
-}
-
 
 type ResendWebhookEvent = {
   type: string;
@@ -79,10 +54,6 @@ function readHeader(headers: Headers, key: string) {
   return value;
 }
 
-function isFailureEvent(eventType: string) {
-  return ["email.bounced", "email.complained", "email.delivery_delayed"].includes(eventType);
-}
-
 export async function POST(request: Request) {
   const route = "api.webhooks.resend";
   const rateLimited = applyRouteRateLimit(request, {
@@ -100,10 +71,6 @@ export async function POST(request: Request) {
     const timestamp = readHeader(request.headers, "svix-timestamp");
     const signature = readHeader(request.headers, "svix-signature");
 
-    if (hasRecentlyProcessedWebhook(messageId)) {
-      return NextResponse.json({ ok: true, deduped: true, messageId });
-    }
-
     verifySvixWebhookSignature({
       payload,
       messageId,
@@ -114,41 +81,61 @@ export async function POST(request: Request) {
 
     const event = parseResendEvent(payload);
     const providerMessageId = event.data?.email_id ?? null;
+    const failureMessage = isResendFailureEvent(event.type)
+      ? getResendFailureMessage({
+          eventType: event.type,
+          bounceMessage: event.data?.bounce?.message ?? null
+        })
+      : null;
     const notification = providerMessageId
       ? await prisma.emailNotification.findFirst({
           where: { providerMessageId },
           orderBy: { createdAt: "desc" }
         })
       : null;
+    const deduped = shouldSkipResendNotificationSideEffects({
+      eventType: event.type,
+      notification,
+      failureMessage
+    });
+
+    if (deduped) {
+      return NextResponse.json({
+        ok: true,
+        deduped: true,
+        eventType: event.type,
+        messageId,
+        providerMessageId
+      });
+    }
 
     if (event.type === "email.delivered" && notification) {
-      if (notification.status !== EmailNotificationStatus.SENT) {
+      const updateData = buildResendNotificationStatusUpdate({
+        eventType: event.type,
+        notification
+      });
+
+      if (notification.status !== EmailNotificationStatus.SENT && updateData) {
         await prisma.emailNotification.update({
           where: { id: notification.id },
-          data: {
-            status: EmailNotificationStatus.SENT,
-            sentAt: notification.sentAt ?? new Date(),
-            failedAt: null,
-            lastError: null
-          }
+          data: updateData
         });
       }
 
-      markWebhookProcessed(messageId);
       return NextResponse.json({ ok: true, eventType: event.type, messageId });
     }
 
-    if (isFailureEvent(event.type)) {
-      if (notification) {
+    if (isResendFailureEvent(event.type)) {
+      const updateData = buildResendNotificationStatusUpdate({
+        eventType: event.type,
+        notification,
+        failureMessage
+      });
+
+      if (notification && updateData) {
         await prisma.emailNotification.update({
           where: { id: notification.id },
-          data: {
-            status: EmailNotificationStatus.FAILED,
-            failedAt: new Date(),
-            lastError:
-              event.data?.bounce?.message?.slice(0, 1000) ??
-              `Resend reported ${event.type}`
-          }
+          data: updateData
         });
       }
 
@@ -160,7 +147,7 @@ export async function POST(request: Request) {
           severity: OperationsQueueSeverity.HIGH,
           sourceSystem: OperationsQueueSourceSystem.APP,
           sourceRecordType: "emailWebhook",
-          sourceRecordId: messageId,
+          sourceRecordId: providerMessageId ?? messageId,
           title: "Transactional email delivery failed",
           summary:
             "Resend reported a bounced/failed customer notification. Review recipient validity and provider event details.",
@@ -190,11 +177,9 @@ export async function POST(request: Request) {
         }
       });
 
-      markWebhookProcessed(messageId);
       return NextResponse.json({ ok: true, eventType: event.type, messageId });
     }
 
-    markWebhookProcessed(messageId);
     return NextResponse.json({ ok: true, ignored: true, eventType: event.type, messageId });
   } catch (error) {
     await logAndCaptureServerError({

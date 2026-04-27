@@ -1,5 +1,3 @@
-import "server-only";
-
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { ReportStatus } from "@evolve-edge/db";
 import { getReportDownloadSigningSecret, isSignedReportAuthEnforced } from "./runtime-config";

@@ -52,9 +52,11 @@ export type DashboardRoadmapItem = {
 };
 
 export type DashboardReport = {
+  id: string;
   title: string;
   type: string;
   date: string;
+  href: string;
 };
 
 export type DashboardNotification = {
@@ -62,6 +64,14 @@ export type DashboardNotification = {
   body: string;
   date: string;
   actionUrl: string | null;
+};
+
+export type DashboardFrameworkResource = {
+  code: string;
+  title: string;
+  body: string;
+  href: string;
+  assetCount: number;
 };
 
 export type DashboardData = {
@@ -82,6 +92,7 @@ export type DashboardData = {
   roadmap: DashboardRoadmapItem[];
   reports: DashboardReport[];
   notifications: DashboardNotification[];
+  frameworkResources: DashboardFrameworkResource[];
   inventories: {
     vendorCount: number;
     modelCount: number;
@@ -137,7 +148,28 @@ function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
-export function DashboardShell({ data }: { data: DashboardData }) {
+function isActiveDashboardRoute(pathname: string, href: Route) {
+  if (pathname === href) {
+    return true;
+  }
+
+  if (href === "/dashboard") {
+    return pathname === "/dashboard";
+  }
+
+  return pathname.startsWith(`${href}/`);
+}
+
+export function DashboardShell({
+  data,
+  flashMessage
+}: {
+  data: DashboardData;
+  flashMessage?: {
+    title: string;
+    body: string;
+  } | null;
+}) {
   const pathname = usePathname();
   const resolvedNavigation = data.isDemoMode
     ? [
@@ -180,7 +212,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
           <nav className="mt-8 space-y-2">
             {resolvedNavigation.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href;
+              const active = isActiveDashboardRoute(pathname, item.href);
 
               return (
                 <Link
@@ -210,7 +242,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               notes for your current assessments.
             </p>
             <Link
-              href="/dashboard/settings"
+              href={"/dashboard/settings#trust-center" as Route}
               className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#8debf4]"
             >
               Open trust center
@@ -248,13 +280,24 @@ export function DashboardShell({ data }: { data: DashboardData }) {
                 Notifications
               </Link>
               <Link
-                href="/dashboard/assessments"
+                href="/dashboard/assessments/start"
                 className="rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-4 py-2 text-sm font-semibold text-[#05111d]"
               >
                 Start Reassessment
               </Link>
             </div>
           </header>
+
+          {flashMessage ? (
+            <section className="mt-6 rounded-[24px] border border-emerald-200 bg-emerald-50 p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
+                {flashMessage.title}
+              </p>
+              <p className="mt-2 text-sm leading-7 text-ink">
+                {flashMessage.body}
+              </p>
+            </section>
+          ) : null}
 
           <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {data.metrics.map((metric) => (
@@ -352,6 +395,55 @@ export function DashboardShell({ data }: { data: DashboardData }) {
             </div>
           </section>
 
+          {data.frameworkResources.length > 0 ? (
+            <section className="mt-6 rounded-[24px] border border-line p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-steel">Framework Resources</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-ink">
+                    Downloadable framework assets
+                  </h2>
+                </div>
+                <Link
+                  href={"/dashboard/frameworks" as Route}
+                  className="text-sm font-semibold text-accent"
+                >
+                  Open frameworks
+                </Link>
+              </div>
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                {data.frameworkResources.map((resource) => (
+                  <article
+                    key={resource.href}
+                    className="rounded-2xl border border-line bg-mist p-5"
+                  >
+                    <p className="text-xs uppercase tracking-[0.18em] text-steel">
+                      {resource.code}
+                    </p>
+                    <h3 className="mt-3 text-xl font-semibold text-ink">
+                      {resource.title}
+                    </h3>
+                    <p className="mt-3 text-sm leading-6 text-steel">
+                      {resource.body}
+                    </p>
+                    <p className="mt-4 text-sm text-steel">
+                      {resource.assetCount} downloadable asset
+                      {resource.assetCount === 1 ? "" : "s"} available
+                    </p>
+                    <Link
+                      href={resource.href as Route}
+                      className="mt-5 inline-flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink"
+                    >
+                      Open assets
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {data.usageMetrics.length > 0 ? (
             <section className="mt-6 rounded-[24px] border border-line p-5">
               <div className="flex items-center justify-between gap-4">
@@ -362,7 +454,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
                   </h2>
                 </div>
                 <Link
-                  href="/dashboard/settings"
+                  href={"/dashboard/settings#billing-controls" as Route}
                   className="text-sm font-semibold text-accent"
                 >
                   Open billing
@@ -586,8 +678,8 @@ export function DashboardShell({ data }: { data: DashboardData }) {
                 {data.reports.length > 0 ? (
                   data.reports.map((report) => (
                     <Link
-                      key={report.title}
-                      href="/dashboard/reports"
+                      key={report.id}
+                      href={report.href as Route}
                       className="flex items-center justify-between rounded-2xl border border-line bg-mist p-4 transition hover:border-accent"
                     >
                       <div>
@@ -687,7 +779,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               </div>
               <div className="mt-5">
                 <Link
-                  href="/dashboard/settings"
+                  href={"/dashboard/settings#inventory-registry" as Route}
                   className="inline-flex items-center gap-2 text-sm font-semibold text-accent"
                 >
                   Manage registry records

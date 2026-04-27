@@ -1,0 +1,163 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deployment target"
+        required: true
+        default: "preview"
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+      AUTH_SECRET: ${{ secrets.CI_AUTH_SECRET }}
+      AUTH_ACCESS_EMAIL: ${{ secrets.CI_AUTH_ACCESS_EMAIL }}
+      AUTH_ACCESS_PASSWORD: ${{ secrets.CI_AUTH_ACCESS_PASSWORD }}
+      OUTBOUND_DISPATCH_SECRET: ${{ secrets.CI_OUTBOUND_DISPATCH_SECRET }}
+      AI_EXECUTION_PROVIDER: ${{ secrets.CI_AI_EXECUTION_PROVIDER }}
+      AI_EXECUTION_DISPATCH_SECRET: ${{ secrets.CI_AI_EXECUTION_DISPATCH_SECRET }}
+      OPENAI_API_KEY: ${{ secrets.CI_OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ secrets.CI_OPENAI_MODEL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate required CI environment
+        run: pnpm ci:env:validate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: AI regression tests
+        run: pnpm test:ai
+
+      - name: AI eval harness (mocked)
+        run: pnpm ai:eval
+
+  deploy_preview:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: preview
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      AUTH_SECRET: ${{ secrets.PREVIEW_AUTH_SECRET }}
+      AUTH_ACCESS_EMAIL: ${{ secrets.PREVIEW_AUTH_ACCESS_EMAIL }}
+      AUTH_ACCESS_PASSWORD: ${{ secrets.PREVIEW_AUTH_ACCESS_PASSWORD }}
+      OUTBOUND_DISPATCH_SECRET: ${{ secrets.PREVIEW_OUTBOUND_DISPATCH_SECRET }}
+      AI_EXECUTION_PROVIDER: ${{ secrets.PREVIEW_AI_EXECUTION_PROVIDER }}
+      AI_EXECUTION_DISPATCH_SECRET: ${{ secrets.PREVIEW_AI_EXECUTION_DISPATCH_SECRET }}
+      OPENAI_API_KEY: ${{ secrets.PREVIEW_OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ secrets.PREVIEW_OPENAI_MODEL }}
+      NEXT_PUBLIC_APP_URL: ${{ secrets.PREVIEW_NEXT_PUBLIC_APP_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate preview deployment environment
+        run: pnpm ci:env:validate:preview
+
+      - name: Pull Vercel preview environment
+        run: pnpm dlx vercel@latest pull --yes --environment=preview --token="${VERCEL_TOKEN}"
+
+      - name: Build preview deployment
+        run: pnpm dlx vercel@latest build --token="${VERCEL_TOKEN}"
+
+      - name: Deploy preview
+        run: pnpm dlx vercel@latest deploy --prebuilt --token="${VERCEL_TOKEN}"
+
+  deploy_production:
+    if: ${{ github.event.inputs.target == 'production' }}
+    needs:
+      - validate
+      - deploy_preview
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      AUTH_SECRET: ${{ secrets.PRODUCTION_AUTH_SECRET }}
+      AUTH_ACCESS_EMAIL: ${{ secrets.PRODUCTION_AUTH_ACCESS_EMAIL }}
+      AUTH_ACCESS_PASSWORD: ${{ secrets.PRODUCTION_AUTH_ACCESS_PASSWORD }}
+      OUTBOUND_DISPATCH_SECRET: ${{ secrets.PRODUCTION_OUTBOUND_DISPATCH_SECRET }}
+      AI_EXECUTION_PROVIDER: ${{ secrets.PRODUCTION_AI_EXECUTION_PROVIDER }}
+      AI_EXECUTION_DISPATCH_SECRET: ${{ secrets.PRODUCTION_AI_EXECUTION_DISPATCH_SECRET }}
+      OPENAI_API_KEY: ${{ secrets.PRODUCTION_OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ secrets.PRODUCTION_OPENAI_MODEL }}
+      NEXT_PUBLIC_APP_URL: ${{ secrets.PRODUCTION_NEXT_PUBLIC_APP_URL }}
+      N8N_WORKFLOW_DESTINATIONS: ${{ secrets.PRODUCTION_N8N_WORKFLOW_DESTINATIONS }}
+      N8N_CALLBACK_SHARED_SECRET: ${{ secrets.PRODUCTION_N8N_CALLBACK_SHARED_SECRET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate production deployment environment
+        run: pnpm ci:env:validate:production
+
+      - name: Pull Vercel production environment
+        run: pnpm dlx vercel@latest pull --yes --environment=production --token="${VERCEL_TOKEN}"
+
+      - name: Build production deployment
+        run: pnpm dlx vercel@latest build --prod --token="${VERCEL_TOKEN}"
+
+      - name: Deploy production
+        run: pnpm dlx vercel@latest deploy --prebuilt --prod --token="${VERCEL_TOKEN}"

@@ -1,21 +1,29 @@
-import { Prisma, prisma } from "@evolve-edge/db";
+import { AssessmentStatus, Prisma, prisma } from "@evolve-edge/db";
 import type { DashboardData } from "../components/dashboard-shell";
+import { FRAMEWORK_COVERAGE_ENTRIES } from "./authority-content";
 import { getOrganizationActivationSnapshot } from "./activation";
 import { requireCurrentSession } from "./auth";
 import { getOrganizationEntitlements } from "./entitlements";
 import { getCurrentSubscription } from "./billing";
 import { getMonitoringDashboardSnapshot } from "./continuous-monitoring";
+import { toCustomerAccessSession } from "./customer-access-session";
 import { isDemoModeEnabled } from "./demo-mode";
 import { getExpansionOffers } from "./expansion-engine";
 import { logServerEvent } from "./monitoring";
+import { requireActiveOrganization } from "./org-scope";
 import {
   isPrismaRuntimeCompatibilityError,
   logPrismaRuntimeCompatibilityError
 } from "./prisma-runtime";
 import { buildProductSurfaceModel } from "./product-surface";
+import { listDashboardReportSummaryViewsForAccessSession } from "./report-records";
 import { getOrganizationRetentionSnapshot } from "./retention";
 import { getOrganizationUsageMeteringSnapshot } from "./usage-metering";
 import { getUsageRemaining } from "./usage-quotas";
+import {
+  getAuditWorkflowProgressPresentation,
+  parseAuditWorkflowProgress
+} from "./customer-runs";
 
 function formatDate(date: Date | null | undefined) {
   if (!date) return "Draft";
@@ -92,6 +100,67 @@ function calculateAssessmentProgress(sections: Array<{ status: string }>) {
   return Math.round((completedWeight / sections.length) * 100);
 }
 
+function readAssessmentWorkflowProgress(contextJson: Prisma.JsonValue | null | undefined) {
+  if (!contextJson || typeof contextJson !== "object" || Array.isArray(contextJson)) {
+    return null;
+  }
+
+  return parseAuditWorkflowProgress(
+    (contextJson as Record<string, unknown>).workflowProgress
+  );
+}
+
+function normalizeFrameworkKey(value: string | null | undefined) {
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function resolveFrameworkResourceSelections(
+  selections: Array<{ code: string; name: string }>
+) {
+  const matched = new Map<
+    string,
+    {
+      code: string;
+      title: string;
+      body: string;
+      href: string;
+      assetCount: number;
+    }
+  >();
+
+  for (const selection of selections) {
+    const selectionKeys = [
+      normalizeFrameworkKey(selection.code),
+      normalizeFrameworkKey(selection.name)
+    ];
+    const resource = FRAMEWORK_COVERAGE_ENTRIES.find((entry) => {
+      const entryKeys = [
+        normalizeFrameworkKey(entry.slug),
+        normalizeFrameworkKey(entry.code),
+        normalizeFrameworkKey(entry.name)
+      ];
+
+      return selectionKeys.some((selectionKey) =>
+        entryKeys.some((entryKey) => entryKey.length > 0 && entryKey === selectionKey)
+      );
+    });
+
+    if (!resource || !resource.assetDownloads?.length) {
+      continue;
+    }
+
+    matched.set(resource.slug, {
+      code: resource.code,
+      title: resource.featuredAsset?.title ?? resource.name,
+      body: resource.featuredAsset?.body ?? resource.overview,
+      href: `/frameworks/${resource.slug}`,
+      assetCount: resource.assetDownloads.length
+    });
+  }
+
+  return Array.from(matched.values());
+}
+
 function buildFallbackDashboardData(organizationName: string): DashboardData {
   return {
     organizationName,
@@ -112,6 +181,7 @@ function buildFallbackDashboardData(organizationName: string): DashboardData {
     roadmap: [],
     reports: [],
     notifications: [],
+    frameworkResources: [],
     inventories: {
       vendorCount: 0,
       modelCount: 0,
@@ -259,6 +329,13 @@ const dashboardOrganizationInclude = {
       analysisJobs: {
         orderBy: { createdAt: "desc" },
         take: 1
+      },
+      customerRuns: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          contextJson: true
+        }
       }
     }
   },
@@ -270,6 +347,7 @@ const dashboardOrganizationInclude = {
 
 export async function getDashboardData(): Promise<DashboardData> {
   const session = await requireCurrentSession({ requireOrganization: true });
+  const accessSession = toCustomerAccessSession(session);
   const organizationId = session.organization!.id;
   const organizationName = session.organization!.name;
 
@@ -280,24 +358,33 @@ export async function getDashboardData(): Promise<DashboardData> {
   let auditsQuota: Awaited<ReturnType<typeof getUsageRemaining>>;
   let evidenceUploadsQuota: Awaited<ReturnType<typeof getUsageRemaining>>;
   let activation: Awaited<ReturnType<typeof getOrganizationActivationSnapshot>>;
+  let visibleReports: Awaited<
+    ReturnType<typeof listDashboardReportSummaryViewsForAccessSession>
+  > = [];
   let organization: Prisma.OrganizationGetPayload<{
     include: typeof dashboardOrganizationInclude;
   }> | null;
 
   try {
+    await requireActiveOrganization(organizationId);
     [entitlements, currentSubscription] = await Promise.all([
       getOrganizationEntitlements(organizationId),
       getCurrentSubscription(organizationId)
     ]);
     monitoring = await getMonitoringDashboardSnapshot(organizationId);
-    [usageMetering, auditsQuota, evidenceUploadsQuota] = await Promise.all([
+    [usageMetering, auditsQuota, evidenceUploadsQuota, visibleReports] = await Promise.all([
       getOrganizationUsageMeteringSnapshot(organizationId, entitlements.planCode),
       getUsageRemaining(organizationId, "audits"),
-      getUsageRemaining(organizationId, "evidence_uploads")
+      getUsageRemaining(organizationId, "evidence_uploads"),
+      listDashboardReportSummaryViewsForAccessSession({
+        accessSession
+      })
     ]);
     activation = await getOrganizationActivationSnapshot(organizationId, entitlements);
-    organization = await prisma.organization.findFirst({
-      where: { id: organizationId },
+    organization = await prisma.organization.findUnique({
+      where: {
+        id: organizationId
+      },
       include: dashboardOrganizationInclude
     });
   } catch (error) {
@@ -323,15 +410,43 @@ export async function getDashboardData(): Promise<DashboardData> {
   const assessment = organization.assessments[0];
   const reports = organization.reports;
   const frameworks = organization.frameworkSelections.map((item) => item.framework.name);
+  const frameworkResources = resolveFrameworkResourceSelections(
+    organization.frameworkSelections.map((item) => ({
+      code: item.framework.code,
+      name: item.framework.name
+    }))
+  );
   const vendorNames = organization.vendors.map((vendor) => vendor.name);
   const modelNames = organization.models.map((model) => model.name);
   const monitoredAssetsCount = organization._count.vendors + organization._count.models;
   const findingsCount = assessment?.findings.length ?? 0;
   const criticalFindings =
     assessment?.findings.filter((finding) => finding.severity === "CRITICAL").length ?? 0;
+  const activeWorkflowProgress = assessment
+    ? readAssessmentWorkflowProgress(assessment.customerRuns[0]?.contextJson ?? null)
+    : null;
+  const activeWorkflowPresentation = activeWorkflowProgress
+    ? getAuditWorkflowProgressPresentation(activeWorkflowProgress.status)
+    : null;
   const currentPeriodEnd = subscription?.currentPeriodEnd;
   const primaryRecommendation = assessment?.recommendations[0];
   const latestNotification = organization.notifications[0];
+  const activeAssessmentNextStep = activeWorkflowPresentation?.nextStep ??
+    (assessment?.status === AssessmentStatus.INTAKE_SUBMITTED
+      ? "Wait for orchestration handoff confirmation before analysis begins."
+      : assessment?.analysisJobs[0]?.status === "RUNNING"
+        ? "Generate executive summary and publish findings package"
+        : assessment
+          ? "Complete intake sections and queue analysis"
+          : "Create your first live assessment");
+  const activeAssessmentEta = activeWorkflowPresentation?.eta ??
+    (assessment?.status === AssessmentStatus.INTAKE_SUBMITTED
+      ? "Awaiting handoff confirmation"
+      : assessment?.analysisJobs[0]?.status === "RUNNING"
+        ? "Ready in about 18 minutes"
+        : assessment
+          ? "Waiting for input completion"
+          : "No assessment in progress");
   const recommendedFocus =
     entitlements.workspaceMode === "INACTIVE"
       ? {
@@ -362,7 +477,9 @@ export async function getDashboardData(): Promise<DashboardData> {
               "Open the roadmap to assign ownership and due dates for this action.",
             primaryHref: "/dashboard/roadmap",
             primaryLabel: "Open Roadmap",
-            secondaryHref: "/dashboard/assessments",
+            secondaryHref: assessment
+              ? `/dashboard/assessments/${assessment.id}`
+              : "/dashboard/assessments",
             secondaryLabel: "Review Assessment"
           }
         : latestNotification
@@ -446,20 +563,15 @@ export async function getDashboardData(): Promise<DashboardData> {
     ],
     activeAssessment: {
       name: assessment?.name ?? "No active assessment",
-      status: assessment?.status.replaceAll("_", " ") ?? "Not started",
-      progress: assessment ? calculateAssessmentProgress(assessment.sections) : 0,
-      nextStep:
-        assessment?.analysisJobs[0]?.status === "RUNNING"
-          ? "Generate executive summary and publish findings package"
-          : assessment
-            ? "Complete intake sections and queue analysis"
-            : "Create your first live assessment",
-      eta:
-        assessment?.analysisJobs[0]?.status === "RUNNING"
-          ? "Ready in about 18 minutes"
-          : assessment
-            ? "Waiting for input completion"
-            : "No assessment in progress"
+      status:
+        activeWorkflowProgress?.label ??
+        assessment?.status.replaceAll("_", " ") ??
+        "Not started",
+      progress:
+        activeWorkflowProgress?.progressPercent ??
+        (assessment ? calculateAssessmentProgress(assessment.sections) : 0),
+      nextStep: activeAssessmentNextStep,
+      eta: activeAssessmentEta
     },
     domainScores: buildDomainScores(assessment?.findings ?? []),
     findings:
@@ -478,15 +590,17 @@ export async function getDashboardData(): Promise<DashboardData> {
         due: item.targetTimeline ?? "TBD",
         effort: item.effort ?? "Unknown"
       })) ?? [],
-    reports: reports.map((report) => ({
+    reports: visibleReports.map((report) => ({
+      id: report.id,
       title: report.title,
       type:
         report.status === "DELIVERED"
           ? "Delivered report"
-          : report.pdfUrl
-            ? "Executive PDF"
+          : report.artifactAvailability.canDownload
+            ? "Executive artifact ready"
             : "Ready for delivery",
-      date: formatDate(report.publishedAt ?? report.createdAt)
+      date: formatDate(report.publishedAt ?? report.createdAt),
+      href: `/dashboard/reports/${report.id}`
     })),
     notifications: organization.notifications.map((notification) => ({
       title: notification.title,
@@ -494,6 +608,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       date: formatDate(notification.createdAt),
       actionUrl: notification.actionUrl
     })),
+    frameworkResources,
     usageMetrics: usageMetering.metrics.filter((metric) =>
       ["activeAssessments", "reportsGenerated", "monitoredAssets", "seats"].includes(
         metric.key

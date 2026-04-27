@@ -23,32 +23,21 @@ export async function publishDomainEvent(
   db: EventStoreClient,
   event: DomainEventInput
 ) {
-  try {
-    return await db.domainEvent.create({
-      data: {
-        type: event.type,
-        aggregateType: event.aggregateType,
-        aggregateId: event.aggregateId,
-        orgId: event.orgId ?? null,
-        userId: event.userId ?? null,
-        idempotencyKey: event.idempotencyKey,
-        occurredAt: event.occurredAt ?? new Date(),
-        payload: event.payload,
-        status: event.status ?? "PENDING"
-      }
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      return db.domainEvent.findUnique({
-        where: { idempotencyKey: event.idempotencyKey }
-      });
+  return db.domainEvent.upsert({
+    where: { idempotencyKey: event.idempotencyKey },
+    update: {},
+    create: {
+      type: event.type,
+      aggregateType: event.aggregateType,
+      aggregateId: event.aggregateId,
+      orgId: event.orgId ?? null,
+      userId: event.userId ?? null,
+      idempotencyKey: event.idempotencyKey,
+      occurredAt: event.occurredAt ?? new Date(),
+      payload: event.payload,
+      status: event.status ?? "PENDING"
     }
-
-    throw error;
-  }
+  });
 }
 
 export async function publishDomainEvents(

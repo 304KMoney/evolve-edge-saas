@@ -139,6 +139,10 @@ Replayable when:
 - its destination is currently configured
 - replay is still within guardrail limits
 
+Operational note:
+
+- the replay helper now enforces the same rule as the replay UI: `DELIVERED` and in-flight `PROCESSING` delivery rows are blocked even if a low-level helper is called directly
+
 ## Replay Guardrails
 
 ### Eligibility Rules
@@ -311,6 +315,12 @@ Run:
 
 - replay is blocked
 - current processor remains authoritative
+
+### Duplicate Workflow Callbacks
+
+- workflow status and report-ready callbacks are handled as state-aware no-ops when the same terminal outcome is already stored
+- report writeback milestones are deduplicated through durable `WorkflowWritebackReceipt` rows
+- operators should treat repeated identical callbacks as expected duplicate delivery noise, not as replay candidates
 
 ### Poison Event / Invalid Stored Payload
 

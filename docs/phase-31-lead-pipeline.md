@@ -385,6 +385,30 @@ Use n8n for:
 
 Do not use n8n as the primary system of record for the lead itself.
 
+### Apollo recommendation
+
+If Apollo is used, keep it inside the sales-enrichment lane only.
+
+Recommended pattern:
+
+- `lead.captured` enters the app-owned lead pipeline first
+- the app stores the canonical lead record and emits the domain event
+- `leadPipeline` in n8n optionally calls Apollo for enrichment or prospect research
+- n8n can project useful enrichment into HubSpot, Slack, or operator notifications
+- Apollo must not become the source of truth for lead capture, lifecycle stage, plan intent, or customer status
+
+Recommended Apollo use cases:
+
+- account and contact enrichment for founder or SDR follow-up
+- prospect list building outside the product signup flow
+- outbound sequencing inputs for sales operations
+
+Avoid:
+
+- using Apollo as the canonical lead database
+- letting Apollo decide conversion state or provisioning
+- writing Apollo-derived commercial logic back into product routing without app-owned validation
+
 ## Exact files changed
 
 - `packages/db/prisma/schema.prisma`

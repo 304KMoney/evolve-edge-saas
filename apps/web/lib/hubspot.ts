@@ -43,6 +43,7 @@ const HUBSPOT_SYNC_EVENT_TYPES = new Set([
   "onboarding.completed",
   "assessment.created",
   "report.generated",
+  "report.delivered",
   "customer_account.stage_changed",
   "subscription.created",
   "subscription.updated"
@@ -69,12 +70,30 @@ function getHubSpotAccessToken() {
   return token && token.length > 0 ? token : null;
 }
 
+function isHubSpotSyncEnabled() {
+  const configured = getOptionalEnv("HUBSPOT_SYNC_ENABLED")?.toLowerCase();
+
+  if (configured === "false") {
+    return false;
+  }
+
+  if (configured === "true") {
+    return true;
+  }
+
+  return Boolean(getHubSpotAccessToken());
+}
+
 function getHubSpotApiBaseUrl() {
   return getOptionalEnv("HUBSPOT_API_BASE_URL") ?? "https://api.hubapi.com";
 }
 
 export function getHubSpotDestinations(): HubSpotDestination[] {
   if (shouldBlockDemoExternalSideEffects()) {
+    return [];
+  }
+
+  if (!isHubSpotSyncEnabled()) {
     return [];
   }
 
@@ -109,6 +128,7 @@ function getLifecycleStage(eventType: string) {
     case "assessment.created":
       return "assessment_started";
     case "report.generated":
+    case "report.delivered":
       return "value_realized";
     case "customer_account.stage_changed":
       return "customer_lifecycle_updated";
@@ -120,7 +140,7 @@ function getLifecycleStage(eventType: string) {
   }
 }
 
-function buildMilestoneProperties(eventType: string, event: DomainEvent) {
+export function buildHubSpotMilestoneProperties(eventType: string, event: DomainEvent) {
   const occurredAt = event.occurredAt.toISOString();
   const payload = readPayloadRecord(event.payload);
   const rawTopConcerns = Array.isArray(payload.topConcerns)
@@ -134,9 +154,9 @@ function buildMilestoneProperties(eventType: string, event: DomainEvent) {
     .join(" | ");
 
   return {
-    evolve_edge_last_event_type: event.type,
-    evolve_edge_last_event_at: occurredAt,
-    evolve_edge_last_product_milestone: event.type,
+    [HUBSPOT_COMPANY_PROPERTY_MAP.lastEventType]: event.type,
+    [HUBSPOT_COMPANY_PROPERTY_MAP.lastEventAt]: occurredAt,
+    [HUBSPOT_COMPANY_PROPERTY_MAP.lastMilestone]: event.type,
     ...(eventType === "customer_account.stage_changed"
       ? {
           evolve_edge_customer_stage:
@@ -150,21 +170,29 @@ function buildMilestoneProperties(eventType: string, event: DomainEvent) {
         }
       : {}),
     ...(eventType === "org.created"
-      ? { evolve_edge_onboarding_started_at: occurredAt }
+      ? { [HUBSPOT_COMPANY_PROPERTY_MAP.onboardingStartedAt]: occurredAt }
       : {}),
     ...(eventType === "onboarding.completed"
-      ? { evolve_edge_onboarding_completed_at: occurredAt }
+      ? { [HUBSPOT_COMPANY_PROPERTY_MAP.onboardingCompletedAt]: occurredAt }
       : {}),
     ...(eventType === "assessment.created"
-      ? { evolve_edge_first_assessment_created_at: occurredAt }
+      ? { [HUBSPOT_COMPANY_PROPERTY_MAP.firstAssessmentCreatedAt]: occurredAt }
       : {}),
     ...(eventType === "report.generated"
       ? {
-          evolve_edge_report_delivered_at: occurredAt,
-          evolve_edge_report_generated: "true",
-          evolve_edge_risk_level:
+          [HUBSPOT_COMPANY_PROPERTY_MAP.reportGenerated]: "true",
+          [HUBSPOT_COMPANY_PROPERTY_MAP.riskLevel]:
             typeof payload.riskLevel === "string" ? payload.riskLevel : "",
-          evolve_edge_top_concerns: topConcerns
+          [HUBSPOT_COMPANY_PROPERTY_MAP.topConcerns]: topConcerns
+        }
+      : {}),
+    ...(eventType === "report.delivered"
+      ? {
+          [HUBSPOT_COMPANY_PROPERTY_MAP.reportDeliveredAt]: occurredAt,
+          [HUBSPOT_COMPANY_PROPERTY_MAP.reportGenerated]: "true",
+          [HUBSPOT_COMPANY_PROPERTY_MAP.riskLevel]:
+            typeof payload.riskLevel === "string" ? payload.riskLevel : "",
+          [HUBSPOT_COMPANY_PROPERTY_MAP.topConcerns]: topConcerns
         }
       : {}),
     ...(eventType === "lead.captured"
@@ -359,7 +387,7 @@ async function upsertCompanyForEvent(event: DomainEvent, timeoutMs: number) {
     [HUBSPOT_COMPANY_PROPERTY_MAP.postureScore]:
       organization.currentPostureScore?.toString() ?? "",
     [HUBSPOT_COMPANY_PROPERTY_MAP.lifecycleStage]: getLifecycleStage(event.type),
-    ...buildMilestoneProperties(event.type, event)
+    ...buildHubSpotMilestoneProperties(event.type, event)
   });
 
   const company = existingCompanyId
@@ -524,6 +552,78 @@ async function upsertPrimaryContactForEvent(
   return contact.id;
 }
 
+async function resolveDealIdForEvent(event: DomainEvent) {
+  const payload = readPayloadRecord(event.payload);
+  const payloadDealId = readPayloadString(payload, "crmDealId", "hubspotDealId");
+  if (payloadDealId) {
+    return payloadDealId;
+  }
+
+  const customerAccountId = readPayloadString(payload, "customerAccountId");
+  if (customerAccountId) {
+    const customerAccount = await prisma.customerAccount.findUnique({
+      where: { id: customerAccountId },
+      select: { crmDealId: true }
+    });
+    if (customerAccount?.crmDealId) {
+      return customerAccount.crmDealId;
+    }
+  }
+
+  if (!event.orgId) {
+    return null;
+  }
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: event.orgId },
+    include: {
+      customerAccount: {
+        select: { crmDealId: true }
+      }
+    }
+  });
+
+  return organization?.customerAccount?.crmDealId ?? null;
+}
+
+function getDealStageForEvent(event: DomainEvent) {
+  if (event.type === "report.delivered") {
+    const configured = getOptionalEnv("HUBSPOT_REPORT_DELIVERED_DEAL_STAGE_ID");
+    return configured && configured.trim().length > 0 ? configured.trim() : null;
+  }
+
+  return null;
+}
+
+async function syncDealForEvent(event: DomainEvent, timeoutMs: number) {
+  const dealStage = getDealStageForEvent(event);
+  if (!dealStage) {
+    return null;
+  }
+
+  const dealId = await resolveDealIdForEvent(event);
+  if (!dealId) {
+    return null;
+  }
+
+  await hubspotRequest<HubSpotUpsertResponse>(
+    `/crm/v3/objects/deals/${dealId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        properties: {
+          dealstage: dealStage,
+          evolve_edge_last_event_type: event.type,
+          evolve_edge_last_event_at: event.occurredAt.toISOString()
+        }
+      })
+    },
+    timeoutMs
+  );
+
+  return dealId;
+}
+
 export async function syncDomainEventToHubSpot(input: {
   event: DomainEvent;
   timeoutMs?: number;
@@ -547,13 +647,14 @@ export async function syncDomainEventToHubSpot(input: {
       companyId,
       timeoutMs
     );
+    const dealId = await syncDealForEvent(input.event, timeoutMs);
 
     logServerEvent("info", "hubspot.sync.completed", {
       traceId: input.traceId ?? (requestId || null),
       route: "hubspot.sync",
       customer_email: maskEmail(customerEmail) || null,
       hubspot_contact_id: contactId,
-      hubspot_deal_id: null,
+      hubspot_deal_id: dealId,
       request_id: requestId || null,
       status: "synced",
       source: "hubspot.sync",
@@ -566,6 +667,7 @@ export async function syncDomainEventToHubSpot(input: {
     return {
       companyId,
       contactId,
+      dealId,
       customerEmail: customerEmail || null
     };
   } catch (error) {

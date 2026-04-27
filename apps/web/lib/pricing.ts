@@ -1,4 +1,4 @@
-import { getOptionalCurrentSession, isPasswordAuthEnabled, sanitizeInternalRedirect } from "./auth";
+import { getOptionalCurrentSession, isPasswordAuthEnabled } from "./auth";
 import { getCurrentSubscription } from "./billing";
 import {
   CANONICAL_COMMERCIAL_PLAN_CATALOG,
@@ -7,9 +7,13 @@ import {
   resolveCanonicalPlanCode,
   resolveCanonicalPlanCodeFromRevenuePlanCode
 } from "./commercial-catalog";
-import { EntitlementSnapshot, getOrganizationEntitlements } from "./entitlements";
 import { canManageBilling } from "./roles";
-import { getFoundingRiskAuditUrl, getSalesContactEmail } from "./runtime-config";
+import {
+  getFoundingRiskAuditCallUrl,
+  getFoundingRiskAuditOfferUrl,
+  getSalesContactEmail
+} from "./runtime-config";
+import { buildPricingAccessOnboardingPath, buildPricingAccessStartPath } from "./pricing-access";
 
 export type PricingPlanCard = {
   code: CanonicalPlanCode;
@@ -60,7 +64,6 @@ export type PricingPageData = {
     currentPlanCode: CanonicalPlanCode | null;
     currentPlanName: string | null;
   };
-  currentEntitlements: EntitlementSnapshot | null;
   ctasByPlanCode: Record<CanonicalPlanCode, PricingCta>;
   salesEmail: string;
   marketingLinks: {
@@ -108,12 +111,6 @@ function buildPlanHeadline(planCode: CanonicalPlanCode) {
   }
 }
 
-function buildPricingRedirectForPlan(planCode: CanonicalPlanCode) {
-  return sanitizeInternalRedirect(
-    `/onboarding?plan=${encodeURIComponent(planCode)}&leadSource=pricing_plan_selection&leadIntent=launch-pricing&leadPlanCode=${encodeURIComponent(planCode)}`
-  );
-}
-
 function buildPricingCta(input: {
   planCode: CanonicalPlanCode;
   isAuthenticated: boolean;
@@ -145,16 +142,17 @@ function buildPricingCta(input: {
 
     return {
       kind: "link",
-      href: `/sign-in?redirectTo=${encodeURIComponent(buildPricingRedirectForPlan(plan.code))}`,
+      href: buildPricingAccessStartPath(plan.code),
       label: plan.ctaLabel,
-      helperText: "Sign in first, then we will carry the selected plan into onboarding or checkout."
+      helperText:
+        "We will email secure login instructions and temporary credentials so you can start onboarding without waiting on a manual handoff."
     };
   }
 
   if (input.onboardingRequired) {
     return {
       kind: "link",
-      href: buildPricingRedirectForPlan(plan.code),
+      href: buildPricingAccessOnboardingPath(plan.code),
       label: `Continue with ${plan.displayName}`,
       helperText: "Finish workspace setup and keep this plan selection attached to onboarding."
     };
@@ -215,9 +213,6 @@ export async function getPricingPageData(): Promise<PricingPageData> {
   const currentSubscription = workspaceOrganization
     ? await getCurrentSubscription(workspaceOrganization.id)
     : null;
-  const currentEntitlements = workspaceOrganization
-    ? await getOrganizationEntitlements(workspaceOrganization.id)
-    : null;
   const currentPlanCode =
     resolveCanonicalPlanCode(currentSubscription?.plan.code ?? null) ??
     resolveCanonicalPlanCodeFromRevenuePlanCode(currentSubscription?.plan.code ?? null);
@@ -268,12 +263,11 @@ export async function getPricingPageData(): Promise<PricingPageData> {
           ? getCanonicalCommercialPlanDefinition(currentPlanCode)?.displayName ?? null
           : null
     },
-    currentEntitlements,
     ctasByPlanCode,
     salesEmail: getSalesContactEmail(),
     marketingLinks: {
-      foundingRiskAuditHref: getFoundingRiskAuditUrl(),
-      foundingRiskAuditCallHref: getFoundingRiskAuditUrl()
+      foundingRiskAuditHref: getFoundingRiskAuditOfferUrl(),
+      foundingRiskAuditCallHref: getFoundingRiskAuditCallUrl()
     }
   };
 }

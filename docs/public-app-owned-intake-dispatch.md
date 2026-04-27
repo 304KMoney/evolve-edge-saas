@@ -59,4 +59,12 @@ This app-owned route fixes that by creating canonical state in Neon before n8n s
 
 - Use `/api/automation/intake-to-app-dispatch` when callbacks must update app state.
 - Keep `/api/automation/intake-to-n8n` only for compatibility until downstream callers are migrated.
+- The legacy `/api/automation/intake-to-n8n` forwarder now resolves outbound
+  callback auth through the same app-owned callback secret helper as the main
+  workflow dispatch path, so either `N8N_CALLBACK_SECRET` or
+  `N8N_CALLBACK_SHARED_SECRET` can back that compatibility route.
+- The legacy `/api/automation/intake-to-n8n` forwarder also resolves its
+  outbound `auditRequested` target through the shared workflow destination
+  config, so environments that cut over to `N8N_WORKFLOW_DESTINATIONS` do not
+  need to keep `N8N_WEBHOOK_URL` alive just for that compatibility path.
 - n8n should carry `workflow_dispatch_id` / `dispatch_id` through execution and post it back as `dispatchId` in callback payloads.

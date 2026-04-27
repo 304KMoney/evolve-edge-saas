@@ -1,6 +1,10 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import {
+  buildWorkflowWritebackDuplicateBody,
+  buildWorkflowWritebackErrorBody
+} from "./workflow-writeback-response-contract";
 
 export type WorkflowWritebackErrorClass =
   | "retryable"
@@ -14,30 +18,6 @@ export type WorkflowWritebackErrorCode =
   | "persistence_failure";
 
 export type WorkflowWritebackOutcomeCode = "duplicate_callback";
-
-type WorkflowWritebackErrorDescriptor = {
-  ok: false;
-  error: {
-    code: WorkflowWritebackErrorCode;
-    class: WorkflowWritebackErrorClass;
-    retryable: boolean;
-    operatorVisible: boolean;
-    message: string;
-  };
-};
-
-type WorkflowWritebackIgnoredDescriptor = {
-  ok: true;
-  accepted: true;
-  deduplicated: true;
-  outcome: {
-    code: WorkflowWritebackOutcomeCode;
-    class: "ignore_safely";
-    retryable: false;
-    operatorVisible: false;
-    message: string;
-  };
-};
 
 export class WorkflowWritebackRouteError extends Error {
   constructor(
@@ -100,18 +80,16 @@ export function persistenceWritebackError(message: string) {
 export function toWorkflowWritebackErrorResponse(
   error: WorkflowWritebackRouteError
 ) {
-  const body: WorkflowWritebackErrorDescriptor = {
-    ok: false,
-    error: {
+  return NextResponse.json(
+    buildWorkflowWritebackErrorBody({
       code: error.code,
-      class: error.errorClass,
+      errorClass: error.errorClass,
       retryable: error.retryable,
       operatorVisible: error.operatorVisible,
       message: error.message
-    }
-  };
-
-  return NextResponse.json(body, { status: error.status });
+    }),
+    { status: error.status }
+  );
 }
 
 export function workflowWritebackDuplicateResponse(input: {
@@ -120,28 +98,5 @@ export function workflowWritebackDuplicateResponse(input: {
   reportId: string;
   reportReference: string | null;
 }) {
-  const body: WorkflowWritebackIgnoredDescriptor & {
-    dispatchId: string;
-    correlationId: string;
-    reportId: string;
-    reportReference: string | null;
-  } = {
-    ok: true,
-    accepted: true,
-    deduplicated: true,
-    dispatchId: input.dispatchId,
-    correlationId: input.correlationId,
-    reportId: input.reportId,
-    reportReference: input.reportReference,
-    outcome: {
-      code: "duplicate_callback",
-      class: "ignore_safely",
-      retryable: false,
-      operatorVisible: false,
-      message:
-        "This workflow writeback milestone was already processed and was ignored safely."
-    }
-  };
-
-  return NextResponse.json(body, { status: 200 });
+  return NextResponse.json(buildWorkflowWritebackDuplicateBody(input), { status: 200 });
 }

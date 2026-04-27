@@ -9,17 +9,24 @@ import {
 } from "@evolve-edge/db";
 import { requireCurrentSession } from "../../../lib/auth";
 import { getServerAuditRequestContext, writeAuditLog } from "../../../lib/audit";
+import { createOrReuseAssessmentWorkspace } from "../../../lib/assessment-start";
 import { syncOrganizationCustomerAccount } from "../../../lib/customer-accounts";
-import { calculateWeightedProgress } from "../../../lib/conversion-funnel";
+import {
+  calculateWeightedProgress,
+  hasSavedAssessmentIntakeDraft
+} from "../../../lib/conversion-funnel";
 import {
   createCustomerRunForAssessment,
   markCustomerRunQueuedForAnalysis
 } from "../../../lib/customer-runs";
 import { publishDomainEvent } from "../../../lib/domain-events";
-import { getDifyWorkflowVersion } from "../../../lib/dify";
+import { getAiExecutionWorkflowVersion } from "../../../lib/ai-execution";
 import { requireAssessmentCreationAccess } from "../../../lib/entitlement-guards";
 import { getOrganizationEntitlements, requireEntitlement } from "../../../lib/entitlements";
+import { sendOperationalAlert } from "../../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../../lib/product-analytics";
+import { ensurePendingAssessmentReport } from "../../../lib/report-records";
+import { getAiExecutionProvider } from "../../../lib/runtime-config";
 import { buildUsageThresholdEvents } from "../../../lib/usage";
 import {
   getOrganizationUsageMeteringSnapshot,
@@ -30,192 +37,28 @@ import {
   recordUsageEvent,
   requireQuota
 } from "../../../lib/usage-quotas";
+import { dispatchWebhookDeliveriesForEvent } from "../../../lib/webhook-dispatcher";
 import { computeAndPersistWorkflowRoutingDecision } from "../../../lib/workflow-routing";
-
-const DEFAULT_ASSESSMENT_SECTIONS = [
-  { key: "company-profile", title: "Company Profile" },
-  { key: "ai-usage", title: "AI Usage Inventory" },
-  { key: "data-handling", title: "Data Handling & Privacy" },
-  { key: "controls-and-policies", title: "Controls & Policies" }
-];
 
 export async function createAssessmentAction(formData: FormData) {
   const session = await requireCurrentSession({ requireOrganization: true });
-  const organizationId = session.organization!.id;
   const name = String(formData.get("name") ?? "").trim();
-  const requestContext = await getServerAuditRequestContext();
 
   if (!name) {
     redirect("/dashboard/assessments?error=missing-name");
   }
 
-  const entitlements = await requireAssessmentCreationAccess(
-    organizationId,
-    "/dashboard/assessments?error=limit"
-  );
-  await requireQuota(organizationId, "audits", {
-    failureRedirect: "/dashboard/assessments",
-    failureMessage:
-      "Monthly audit quota reached. Upgrade required to create another assessment."
-  });
-
-  let assessmentId = "";
+  const requestContext = await getServerAuditRequestContext();
 
   try {
-    const assessment = await prisma.$transaction(async (tx) => {
-      const existingAssessmentCount = await tx.assessment.count({
-        where: { organizationId }
-      });
-
-      const createdAssessment = await tx.assessment.create({
-        data: {
-          organizationId,
-          createdByUserId: session.user.id,
-          name,
-          status: AssessmentStatus.INTAKE_IN_PROGRESS,
-          sections: {
-            create: DEFAULT_ASSESSMENT_SECTIONS.map((section, index) => ({
-              key: section.key,
-              title: section.title,
-              status: index === 0 ? "in_progress" : "not_started",
-              orderIndex: index + 1
-            }))
-          }
-        }
-      });
-
-      await recordUsageEvent(
-        {
-          organizationId,
-          meterKey: "audits",
-          idempotencyKey: `usage:audits:${createdAssessment.id}`,
-          source: "assessment.create",
-          sourceRecordType: "assessment",
-          sourceRecordId: createdAssessment.id,
-          metadata: {
-            assessmentId: createdAssessment.id,
-            assessmentName: createdAssessment.name
-          }
-        },
-        tx
-      );
-
-      await tx.notification.create({
-        data: {
-          organizationId,
-          type: "assessment.created",
-          title: "Assessment created",
-          body: `${name} was created and is ready for intake.`,
-          actionUrl: `/dashboard/assessments/${createdAssessment.id}`
-        }
-      });
-
-      await publishDomainEvent(tx, {
-        type: "assessment.created",
-        aggregateType: "assessment",
-        aggregateId: createdAssessment.id,
-        orgId: organizationId,
-        userId: session.user.id,
-        idempotencyKey: `assessment.created:${createdAssessment.id}`,
-        payload: {
-          assessmentId: createdAssessment.id,
-          organizationId,
-          userId: session.user.id,
-          name,
-          status: createdAssessment.status,
-          isFirstAssessment: existingAssessmentCount === 0
-        } satisfies Prisma.InputJsonValue
-      });
-
-      if (existingAssessmentCount === 0) {
-        await trackProductAnalyticsEvent({
-          db: tx,
-          name: "product.first_assessment_created",
-          payload: {
-            assessmentId: createdAssessment.id,
-            assessmentName: createdAssessment.name
-          },
-          source: "assessment-create",
-          path: "/dashboard/assessments",
-          session,
-          organizationId,
-          userId: session.user.id,
-          billingPlanCode: entitlements.planCode
-        });
-      }
-
-      const usageEvents = buildUsageThresholdEvents({
-        metric: "active_assessments",
-        used: existingAssessmentCount + 1,
-        limit: entitlements.activeAssessmentsLimit,
-        organizationId
-      });
-
-      for (const event of usageEvents) {
-        await publishDomainEvent(tx, event);
-
-        const thresholdPercent =
-          typeof event.payload === "object" &&
-          event.payload &&
-          "thresholdPercent" in event.payload
-            ? Number((event.payload as Record<string, unknown>).thresholdPercent)
-            : 0;
-
-        if (thresholdPercent >= 100) {
-          await trackProductAnalyticsEvent({
-            db: tx,
-            name: "usage.limit_reached",
-            payload: {
-              metric: "active_assessments",
-              thresholdPercent,
-              limit: entitlements.activeAssessmentsLimit,
-              used: existingAssessmentCount + 1
-            },
-            source: "assessment-create",
-            path: "/dashboard/assessments",
-            session,
-            organizationId,
-            userId: session.user.id,
-            billingPlanCode: entitlements.planCode
-          });
-        }
-      }
-
-      await writeAuditLog(tx, {
-        organizationId,
-        userId: session.user.id,
-        actorLabel: session.user.email,
-        action: "assessment.created",
-        entityType: "assessment",
-        entityId: createdAssessment.id,
-        metadata: {
-          name,
-          isFirstAssessment: existingAssessmentCount === 0
-        },
-        requestContext
-      });
-
-      await createCustomerRunForAssessment({
-        db: tx,
-        organizationId,
-        initiatedByUserId: session.user.id,
-        assessmentId: createdAssessment.id,
-        source: "workspace_assessment_create",
-        contextJson: {
-          assessmentName: createdAssessment.name
-        }
-      });
-
-      await syncOrganizationCustomerAccount(organizationId, {
-        db: tx,
-        actorUserId: session.user.id,
-        actorLabel: session.user.email,
-        reason: "Assessment creation started the intake lifecycle."
-      });
-
-      return createdAssessment;
+    const result = await createOrReuseAssessmentWorkspace({
+      session,
+      requestContext,
+      name,
+      reuseExisting: false
     });
-    assessmentId = assessment.id;
+
+    redirect(`/dashboard/assessments/${result.assessmentId}?created=1`);
   } catch (error) {
     redirect(
       `/dashboard/assessments?error=${encodeURIComponent(
@@ -223,8 +66,6 @@ export async function createAssessmentAction(formData: FormData) {
       )}` as never
     );
   }
-
-  redirect(`/dashboard/assessments/${assessmentId}?created=1`);
 }
 
 export async function saveAssessmentSectionAction(formData: FormData) {
@@ -233,7 +74,11 @@ export async function saveAssessmentSectionAction(formData: FormData) {
   const assessmentId = String(formData.get("assessmentId") ?? "");
   const sectionId = String(formData.get("sectionId") ?? "");
   const notes = String(formData.get("notes") ?? "").trim();
-  const status = String(formData.get("status") ?? "in_progress");
+  const requestedStatus = String(formData.get("status") ?? "in_progress");
+  const status =
+    requestedStatus === "not_started" && notes.length > 0
+      ? "in_progress"
+      : requestedStatus;
   const requestContext = await getServerAuditRequestContext();
 
   const section = await prisma.assessmentSection.findFirst({
@@ -365,13 +210,15 @@ export async function submitAssessmentAction(formData: FormData) {
     redirect("/dashboard/assessments?error=missing-assessment");
   }
 
+  if (!hasSavedAssessmentIntakeDraft(assessment.sections)) {
+    redirect(`/dashboard/assessments/${assessment.id}?error=incomplete`);
+  }
+
   const completedSections = assessment.sections.filter(
     (section) => section.status === "completed"
   ).length;
 
-  if (completedSections === 0) {
-    redirect(`/dashboard/assessments/${assessment.id}?error=incomplete`);
-  }
+  let submittedEventId: string | null = null;
 
   await prisma.$transaction(async (tx) => {
     const routingDecision = await computeAndPersistWorkflowRoutingDecision({
@@ -387,6 +234,12 @@ export async function submitAssessmentAction(formData: FormData) {
         assessmentId: assessment.id
       }
     });
+    const canonicalPlanCode =
+      entitlements.planCode === "enterprise"
+        ? "enterprise"
+        : entitlements.planCode === "scale"
+          ? "scale"
+          : "starter";
 
     await tx.assessment.update({
       where: { id: assessment.id },
@@ -396,19 +249,36 @@ export async function submitAssessmentAction(formData: FormData) {
       }
     });
 
+    const report = await ensurePendingAssessmentReport({
+      db: tx,
+      organizationId: session.organization!.id,
+      assessmentId: assessment.id,
+      assessmentName: assessment.name,
+      createdByUserId: session.user.id,
+      organizationNameSnapshot: session.organization?.name ?? null,
+      customerEmailSnapshot: session.user.email ?? null,
+      selectedPlan: canonicalPlanCode
+    });
+
+    let queuedAnalysisJobId =
+      assessment.analysisJobs[0]?.status === JobStatus.FAILED ||
+      assessment.analysisJobs[0]?.status === JobStatus.CANCELED
+        ? null
+        : (assessment.analysisJobs[0]?.id ?? null);
+
     if (
       !assessment.analysisJobs[0] ||
       assessment.analysisJobs[0].status === JobStatus.FAILED ||
       assessment.analysisJobs[0].status === JobStatus.CANCELED
     ) {
-      await tx.analysisJob.create({
+      const analysisJob = await tx.analysisJob.create({
         data: {
           assessmentId: assessment.id,
-          provider: "dify",
+          provider: getAiExecutionProvider(),
           status: JobStatus.QUEUED,
           jobType: "assessment_analysis",
-          contractVersion: "assessment-analysis.v1",
-          workflowVersion: getDifyWorkflowVersion(),
+          contractVersion: "assessment-analysis.v2",
+          workflowVersion: getAiExecutionWorkflowVersion(),
           inputPayload: {
             assessmentId: assessment.id,
             organizationId: session.organization!.id,
@@ -422,6 +292,7 @@ export async function submitAssessmentAction(formData: FormData) {
           }
         }
       });
+      queuedAnalysisJobId = analysisJob.id;
 
       const usageEvents = buildUsageThresholdEvents({
         metric: getUsageThresholdEventMetricKey("aiProcessingRuns"),
@@ -460,6 +331,51 @@ export async function submitAssessmentAction(formData: FormData) {
         }
       }
     }
+
+    const submittedEvent = await publishDomainEvent(tx, {
+      type: "assessment.submitted",
+      aggregateType: "assessment",
+      aggregateId: assessment.id,
+      orgId: session.organization!.id,
+      userId: session.user.id,
+      idempotencyKey: `assessment.submitted:${assessment.id}:${report.id}`,
+      payload: {
+        assessmentId: assessment.id,
+        assessmentName: assessment.name,
+        organizationId: session.organization!.id,
+        userId: session.user.id,
+        reportId: report.id,
+        reportTitle: report.title,
+        reportStatus: report.status,
+        selectedPlan: canonicalPlanCode,
+        completedSections,
+        totalSections: assessment.sections.length,
+        submittedAt: new Date().toISOString(),
+        workflowRoutingDecisionId: routingDecision.id,
+        workflowRouting:
+          routingDecision.workflowHints &&
+          typeof routingDecision.workflowHints === "object" &&
+          !Array.isArray(routingDecision.workflowHints)
+            ? routingDecision.workflowHints
+            : undefined,
+        workflowRoutingReasonCodes:
+          Array.isArray(routingDecision.reasonCodes) ? routingDecision.reasonCodes : [],
+        analysisJobId: queuedAnalysisJobId,
+        sections: assessment.sections.map((section) => ({
+          id: section.id,
+          key: section.key,
+          title: section.title,
+          status: section.status,
+          responses:
+            section.responses &&
+            typeof section.responses === "object" &&
+            !Array.isArray(section.responses)
+              ? section.responses
+              : {}
+        }))
+      } satisfies Prisma.InputJsonValue
+    });
+    submittedEventId = submittedEvent?.id ?? null;
 
     await tx.notification.create({
       data: {
@@ -512,5 +428,21 @@ export async function submitAssessmentAction(formData: FormData) {
     });
   });
 
-  redirect(`/dashboard/assessments/${assessment.id}?submitted=1`);
+  if (submittedEventId) {
+    try {
+      await dispatchWebhookDeliveriesForEvent(submittedEventId);
+    } catch (error) {
+      await sendOperationalAlert({
+        source: "assessment.submit",
+        title: "Assessment submission n8n dispatch failed",
+        metadata: {
+          assessmentId,
+          domainEventId: submittedEventId,
+          message: error instanceof Error ? error.message : "Unknown error"
+        }
+      });
+    }
+  }
+
+  redirect(`/dashboard?queued=analysis&assessment=${assessment.id}`);
 }

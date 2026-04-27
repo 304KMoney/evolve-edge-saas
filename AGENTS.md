@@ -12,7 +12,9 @@ Treat these boundaries as non-negotiable unless a user explicitly asks for an ar
 - Neon/Postgres is the canonical persistence layer.
 - Stripe is billing authority and payment-event source only.
 - n8n is orchestration and async execution only.
-- Dify is AI execution only.
+- LangGraph is workflow orchestration only.
+- OpenAI is model execution only.
+- Dify is deprecated and retained only as a temporary rollback path where compatibility code still exists.
 - HubSpot is CRM projection only.
 - Hostinger is brochure and top-of-funnel presentation only.
 
@@ -20,7 +22,7 @@ This means:
 
 - Pricing, plans, entitlements, workflow routing, audit lifecycle state, delivery state, report metadata, and customer-visible status must be owned by the app and stored in Neon.
 - n8n must never become the pricing engine, entitlement engine, or routing policy engine.
-- Dify outputs must be validated and normalized by the backend before they affect platform state.
+- AI outputs must be validated and normalized by the backend before they affect platform state.
 - HubSpot must not become the source of truth for billing, entitlements, workflow routing, or audit status.
 - Hostinger must not own checkout logic, dashboard logic, intake logic, or canonical pricing rules.
 
@@ -59,6 +61,9 @@ Touch these carefully and read surrounding code first:
 - `apps/web/lib/commercial-routing.ts`
 - `apps/web/lib/workflow-routing.ts`
 - `apps/web/lib/workflow-dispatch.ts`
+- `apps/web/lib/ai-execution.ts`
+- `apps/web/src/server/ai/providers/openai-langgraph.ts`
+- `apps/web/src/server/ai/workflows/audit/graph.ts`
 - `apps/web/lib/dify.ts`
 - `apps/web/lib/hubspot.ts`
 - `packages/db/prisma/schema.prisma`
@@ -69,7 +74,7 @@ Touch these carefully and read surrounding code first:
 - Prefer backend validation over trust in third-party payloads.
 - Fail closed when commercial mappings or required identifiers are missing.
 - Keep n8n payloads normalized and execution-oriented.
-- Keep Dify inputs bounded and Dify outputs normalized through a dedicated backend-owned contract.
+- Keep LangGraph/OpenAI inputs bounded and all AI outputs normalized through a dedicated backend-owned contract.
 - Keep HubSpot sync scoped to projection/update behavior only.
 - Avoid scattering state transitions across many layers when a service module can own them centrally.
 
@@ -86,7 +91,7 @@ For critical flows, add or update tests around:
 - Stripe mapping and webhook behavior
 - entitlement and routing computation
 - n8n payload normalization
-- Dify validation/normalization
+- AI provider validation/normalization
 - HubSpot bounded sync behavior
 - reconciliation and delivery-state progression
 

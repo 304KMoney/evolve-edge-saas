@@ -1,4 +1,7 @@
+import { loadScriptEnv } from "./load-script-env";
 import { getFirstCustomerLaunchEnvironmentChecklist } from "../lib/launch-preflight";
+
+loadScriptEnv();
 
 const checklist = getFirstCustomerLaunchEnvironmentChecklist();
 let requiredConfigured = 0;

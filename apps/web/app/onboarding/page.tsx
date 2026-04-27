@@ -4,6 +4,12 @@ import { getWorkspaceLaunchProgress } from "../../lib/conversion-funnel";
 import { completeOnboardingAction } from "./actions";
 import { redirect } from "next/navigation";
 import { getRevenuePlanDefinition } from "../../lib/revenue-catalog";
+import {
+  getCanonicalCommercialPlanDefinition,
+  resolveCanonicalPlanCode,
+  resolveCanonicalPlanCodeFromRevenuePlanCode,
+  resolveRevenuePlanCodeForCommercialSelection
+} from "../../lib/commercial-catalog";
 
 const FALLBACK_FRAMEWORKS = [
   { id: "soc2", code: "soc2", name: "SOC 2", category: "Security" },
@@ -27,24 +33,33 @@ export default async function OnboardingPage({
   }>;
 }) {
   const session = await getCurrentSession();
+  const allowPreviewGuestOnboarding = session.authMode === "demo";
   const frameworks =
     (await prisma.framework.findMany({
       orderBy: [{ category: "asc" }, { name: "asc" }]
     })) || [];
 
-  if (session.organization && !session.onboardingRequired) {
+  if (session.organization && !session.onboardingRequired && !allowPreviewGuestOnboarding) {
     redirect("/dashboard");
   }
 
   const params = await searchParams;
-  const selectedPlanCode = getRevenuePlanDefinition(params.plan ?? "")
-    ? String(params.plan)
-    : "";
-  const selectedPlan = selectedPlanCode
-    ? getRevenuePlanDefinition(selectedPlanCode)
-    : null;
+  const selectedRevenuePlanCode =
+    getRevenuePlanDefinition(params.plan ?? "")?.code ??
+    resolveRevenuePlanCodeForCommercialSelection(params.plan ?? "") ??
+    "";
+  const selectedCanonicalPlanCode =
+    resolveCanonicalPlanCode(params.plan ?? "") ??
+    resolveCanonicalPlanCodeFromRevenuePlanCode(selectedRevenuePlanCode);
+  const selectedPlan =
+    getCanonicalCommercialPlanDefinition(selectedCanonicalPlanCode) ??
+    (selectedRevenuePlanCode ? getRevenuePlanDefinition(selectedRevenuePlanCode) : null);
+  const selectedPlanName =
+    getCanonicalCommercialPlanDefinition(selectedCanonicalPlanCode)?.displayName ??
+    getRevenuePlanDefinition(selectedRevenuePlanCode)?.name ??
+    null;
   const launchProgress = getWorkspaceLaunchProgress({
-    selectedPlanName: selectedPlan?.name ?? null,
+    selectedPlanName,
     firstAssessmentName: "Initial AI Governance Assessment"
   });
 
@@ -85,7 +100,7 @@ export default async function OnboardingPage({
         </div>
         {selectedPlan ? (
           <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-accent">
-            Your pricing selection will start this workspace on <strong>{selectedPlan.name}</strong> after onboarding.
+            Your pricing selection will start this workspace on <strong>{selectedPlanName}</strong> after onboarding so your first assessment, reporting flow, and executive roadmap guidance match the selected commercial path.
           </div>
         ) : null}
 
@@ -97,10 +112,14 @@ export default async function OnboardingPage({
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <form action={completeOnboardingAction} className="grid gap-5">
-          <input type="hidden" name="planCode" value={selectedPlanCode} />
+          <input type="hidden" name="planCode" value={selectedRevenuePlanCode} />
           <input type="hidden" name="leadSource" value={params.leadSource ?? ""} />
           <input type="hidden" name="leadIntent" value={params.leadIntent ?? ""} />
-          <input type="hidden" name="leadPlanCode" value={params.leadPlanCode ?? selectedPlanCode} />
+          <input
+            type="hidden"
+            name="leadPlanCode"
+            value={params.leadPlanCode ?? selectedCanonicalPlanCode ?? selectedRevenuePlanCode}
+          />
           <input type="hidden" name="sourcePath" value="/onboarding" />
           <div className="grid gap-5 md:grid-cols-2">
             <label className="block">
@@ -268,11 +287,11 @@ export default async function OnboardingPage({
 
             <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-accent">
               {selectedPlan
-                ? `Your selected ${selectedPlan.name} plan will carry into the workspace, and the post-onboarding guidance will adapt to that plan's report and assessment access.`
+                ? `Your selected ${selectedPlanName} plan will carry into the workspace, and the post-onboarding guidance will adapt to that plan's report and assessment access.`
                 : "Post-onboarding guidance will adapt to the live plan state, usage state, and any existing assessments or reports already in the workspace."}
             </div>
             <div className="mt-4 rounded-2xl border border-line bg-white p-4 text-sm text-steel">
-              Setup is intentionally short so operators can move from signup into a real assessment quickly. Intake drafts save inside the assessment workflow after the workspace is created.
+              Setup is intentionally short so operators can move from signup into a real assessment quickly. Intake drafts save inside the assessment workflow after the workspace is created, and the workspace can then expand into deeper reporting, roadmap, and recurring oversight based on fit.
             </div>
           </aside>
         </div>

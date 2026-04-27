@@ -22,10 +22,10 @@ compatibility-only and should not be treated as the canonical go-live path.
 - `RESEND_API_KEY`
 - `EMAIL_FROM_ADDRESS`
 - `NOTIFICATION_DISPATCH_SECRET`
-- `DIFY_API_BASE_URL`
-- `DIFY_API_KEY`
-- `DIFY_WORKFLOW_ID`
-- `DIFY_DISPATCH_SECRET`
+- `AI_EXECUTION_PROVIDER=openai_langgraph`
+- `AI_EXECUTION_DISPATCH_SECRET`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
 - `CRON_SECRET`
 - `OPS_READINESS_SECRET`
 - `OPS_ALERT_WEBHOOK_URL` (optional)
@@ -35,7 +35,7 @@ compatibility-only and should not be treated as the canonical go-live path.
 
 - Stripe webhook: `/api/stripe/webhook`
 - Domain event dispatcher: `/api/internal/domain-events/dispatch`
-- Dify analysis dispatcher: `/api/internal/analysis/dispatch`
+- AI execution trigger: `/api/internal/ai/execute`
 - Notification dispatcher: `/api/internal/notifications/dispatch`
 - Renewal reminder queue: `/api/internal/notifications/renewals`
 - Scheduled jobs runner: `/api/internal/jobs/run`
@@ -52,12 +52,14 @@ compatibility-only and should not be treated as the canonical go-live path.
 ### n8n / outbound delivery failures
 - Check failed webhook deliveries in `/admin`
 - Validate `N8N_WORKFLOW_DESTINATIONS`
+- Confirm `N8N_WORKFLOW_DESTINATIONS` includes the live `auditRequested`
+  destination used by the paid customer flow
 - Run the dispatcher manually with `POST /api/internal/domain-events/dispatch`
 
-### Dify analysis failures
+### AI execution failures
 - Check failed analysis jobs in `/admin`
-- Validate Dify credentials and workflow configuration
-- Re-run analysis safely with `POST /api/internal/analysis/dispatch`
+- Validate OpenAI/LangGraph credentials and workflow configuration
+- Re-run queued analysis safely with `POST /api/internal/jobs/run?job=retry-ai-analysis`
 
 ### Cron / scheduled job failures
 - Check recent job runs in `/admin`
@@ -69,15 +71,17 @@ compatibility-only and should not be treated as the canonical go-live path.
 - Validate email provider env vars
 - Re-run `POST /api/internal/notifications/dispatch`
 - Re-run `POST /api/internal/notifications/renewals`
+- Confirm `GET /api/internal/jobs/run?job=dispatch-email-notifications` is scheduled in Vercel cron and authorized by `CRON_SECRET`
 
 ## Go-live verification checklist
 
 - Sign-in works
 - Onboarding completes
 - Assessment creation and submit works
-- Dify analysis dispatch works
+- OpenAI/LangGraph analysis dispatch works
 - Report generation works
-- Report delivery works
+- Report delivery works for paid orgs only
+- Customer delivery email and queued follow-ups appear in `EmailNotification`
 - Stripe webhook processes successfully
 - n8n deliveries succeed
 - Scheduled jobs route runs cleanly
@@ -113,6 +117,8 @@ environment.
 5. n8n webhook expectation
    - Verify the configured n8n workflow destinations are the production
      destinations intended for launch.
+   - Expected: the config includes a valid `auditRequested` destination, not
+     just unrelated workflows such as `leadPipeline`.
    - Expected: live webhook execution succeeds end to end and callback/writeback
      behavior remains healthy.
 
@@ -127,7 +133,7 @@ No-go rule for fulfillment:
 - Missing or incorrect webhook secret
 - Missing Stripe price mapping
 - Broken n8n destination URL or signature mismatch
-- Dify timeout or invalid structured output
+- OpenAI timeout or invalid structured output
 - Notification provider misconfiguration
 - Cron secret mismatch or Vercel cron not deployed
 - Failed scheduled jobs causing retries to accumulate
@@ -137,6 +143,6 @@ No-go rule for fulfillment:
 - Product truth stays in the app database
 - Stripe remains billing truth
 - n8n remains orchestration only
-- Dify remains AI analysis only
+- OpenAI/LangGraph remain AI execution only
 - HubSpot remains CRM visibility only
 - `/admin` is the first-line operational console

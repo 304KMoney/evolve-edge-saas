@@ -804,7 +804,13 @@ export async function getKpiDashboardSnapshot(
     db.report.findMany({
       where: {
         status: {
-          in: [ReportStatus.READY, ReportStatus.DELIVERED, ReportStatus.SUPERSEDED]
+          in: [
+            ReportStatus.APPROVED,
+            ReportStatus.PENDING_REVIEW,
+            ReportStatus.READY,
+            ReportStatus.DELIVERED,
+            ReportStatus.SUPERSEDED
+          ]
         },
         ...(orgScopeWhere ? { organizationId: orgScopeWhere } : {}),
         OR: [

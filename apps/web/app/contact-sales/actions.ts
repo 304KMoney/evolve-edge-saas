@@ -19,7 +19,7 @@ import { logServerEvent } from "../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../lib/product-analytics";
 import {
   getAppUrl,
-  getFoundingRiskAuditUrl,
+  getFoundingRiskAuditCallUrl,
   getOptionalEnv
 } from "../../lib/runtime-config";
 import { dispatchWebhookDeliveriesForEvent } from "../../lib/webhook-dispatcher";
@@ -69,7 +69,7 @@ function buildContactRedirect(input: {
 }
 
 function buildBookingRedirectUrl() {
-  const bookingUrl = getFoundingRiskAuditUrl();
+  const bookingUrl = getFoundingRiskAuditCallUrl();
   return /^https?:\/\//.test(bookingUrl) ? bookingUrl : null;
 }
 
@@ -545,7 +545,7 @@ export async function submitContactSalesLeadAction(formData: FormData) {
     const workflowSummaryStatus = workflowStatus === "dispatched" ? "dispatched" : inboundWorkflowStatus;
     const overallStatus =
       hubspotStatus === "failed" || workflowStatus === "failed"
-        ? "failed"
+        ? "partial"
         : "success";
 
     logServerEvent("info", "contact_sales.submit.final_response", {
@@ -602,29 +602,12 @@ export async function submitContactSalesLeadAction(formData: FormData) {
       redirect(bookingRedirectUrl as never);
     }
 
-    if (overallStatus === "failed") {
-      redirect(
-        buildContactRedirect({
-          intent,
-          source,
-          status: "failed",
-          error: "submission-failed",
-          hubspot: hubspotStatus,
-          workflow: workflowSummaryStatus,
-          traceId
-        })
-      );
-    }
-
     redirect(
       buildContactRedirect({
         intent,
         source,
         status: "success",
-        submission: "received",
-        hubspot: hubspotStatus,
-        workflow: workflowSummaryStatus,
-        traceId
+        submission: "received"
       })
     );
   } catch (error) {

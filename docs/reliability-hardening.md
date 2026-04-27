@@ -55,6 +55,73 @@ Behavioral change:
 
 - retryable failures such as timeouts, network failures, `429`, and `5xx` continue retrying
 - non-retryable failures such as `400`, `401`, `403`, and `404` stop retrying sooner and surface as review-required failures
+- replay attempts are now blocked for deliveries already in `DELIVERED` or `PROCESSING`, so manual replay cannot force duplicate outbound side effects through the same delivery row
+
+### Inbound workflow callback hardening
+
+Files:
+
+- `apps/web/lib/workflow-dispatch.ts`
+- `apps/web/lib/workflow-callback-policy.ts`
+- `apps/web/lib/workflow-writeback-receipts.ts`
+
+Current callback durability model:
+
+- workflow status callbacks are state-backed and no-op when the same terminal outcome already exists on `WorkflowDispatch`
+- report-ready callbacks are state-backed and no-op when the same final report-ready payload already exists on `WorkflowDispatch`
+- report-writeback callbacks are receipt-backed through `WorkflowWritebackReceipt`, which gives them a durable callback milestone dedupe boundary
+- report-writeback now also reconciles `CustomerRun` progression from the canonical `Report` link, so workflow-driven report generation and report-generation failure do not rely only on dashboard-side mutations
+
+Behavioral change:
+
+- duplicate `succeeded` or identical `failed` status callbacks no longer re-emit operator events, audit logs, or delivery-state churn
+- duplicate report-ready callbacks no longer republish `report.ready` or replay the same operator-ready event when the stored terminal payload already matches
+- duplicate report-writeback milestones continue returning a safe duplicate response instead of replaying writeback side effects
+- status and report-ready callback routes now also return an explicit `deduplicated: true` response body for those safe no-op repeats
+- report-writeback can now move a customer run into report-generated progression, report-generation action-required state, or final delivered completion when the workflow callback becomes the canonical source of that milestone
+
+### Operator visibility hardening
+
+Files:
+
+- `apps/web/lib/fulfillment-visibility.ts`
+- `apps/web/lib/fulfillment-health.ts`
+- `apps/web/lib/admin-console.ts`
+
+Added:
+
+- shared fulfillment visibility summaries that compare `DeliveryStateRecord`, `WorkflowDispatch`, `CustomerRun`, and the latest outbound `WebhookDelivery` state
+- explicit drift detection for:
+  - delivered requests whose customer run is still open
+  - failed dispatch or delivery state that has not moved the run into operator attention
+  - delivery progress that has no linked customer run
+  - blocked outbound CRM delivery without a matching run-level warning
+- recovery summaries when retries have already succeeded and the canonical state is no longer blocked
+
+Behavioral change:
+
+- `/api/fulfillment/health` now includes reconciliation counts plus recent attention and recovery records instead of only raw pipeline counts
+- `/admin` now shows a fulfillment drift and recovery panel so operators can see cross-record disagreement without opening raw rows first
+- `/admin/accounts/[organizationId]` now shows the same fulfillment drift and recovery summary for a single workspace so launch triage can stay on the account detail page
+
+### Workflow dispatch recovery hardening
+
+Files:
+
+- `apps/web/lib/workflow-dispatch.ts`
+- `apps/web/lib/workflow-dispatch-policy.ts`
+
+Added:
+
+- stale `DISPATCHING` workflow recovery into retryable `PENDING` or terminal `FAILED`
+- operator-visible findings when stale dispatches exhaust recovery attempts
+- dispatcher result counters for recovered stale dispatches and review-required outcomes
+
+Behavioral change:
+
+- workflow handoffs that remain stuck in `DISPATCHING` past the stale timeout are no longer left indefinitely in-flight
+- recoverable stale dispatches re-enter the normal retry path
+- exhausted stale dispatches fail visibly instead of silently lingering between app routing and n8n acknowledgement
 
 ### HubSpot sync hardening
 
@@ -129,6 +196,7 @@ Current handling:
 - stale processing recovery
 - retry classification
 - failed-delivery visibility in app surfaces
+- replay blocked for already delivered or in-flight delivery rows
 
 ### Dify
 
@@ -165,6 +233,7 @@ Optional tuning variables now supported:
 
 - `WEBHOOK_DELIVERY_STALE_MINUTES`
 - `DIFY_ANALYSIS_STALE_MINUTES`
+- `WORKFLOW_DISPATCH_STALE_MINUTES`
 
 If unset, safe defaults are used.
 
@@ -193,6 +262,22 @@ Covers:
 4. Re-run the scheduled webhook dispatcher after the fix.
 5. Treat rows that exhausted retries as review-required until delivery is confirmed manually.
 
+### If workflow callbacks appear duplicated
+
+1. Check `WorkflowDispatch.status`, `externalExecutionId`, `responsePayload`, and `lastError`.
+2. If the callback matches the already-persisted terminal state, expect the app to no-op safely instead of replaying downstream side effects.
+3. For report writeback, check the corresponding `WorkflowWritebackReceipt` milestone behavior before assuming the callback was dropped.
+4. Only replay from operator tooling after confirming the callback represented a genuinely missing state transition rather than a duplicate delivery.
+5. If report generation progressed, failed, or reached delivered state through workflow writeback, confirm the linked `CustomerRun` now reflects that same milestone instead of assuming the run must be repaired separately.
+6. If `/admin` or `/api/fulfillment/health` shows fulfillment drift, trust the canonical source named in the finding before replaying multiple systems at once.
+
+### If workflow dispatch looks stuck
+
+1. Check `WorkflowDispatch.status`, `attemptCount`, `lastAttemptAt`, `lastError`, and the linked `RoutingSnapshot.status`.
+2. If the row remains `DISPATCHING` past the stale timeout, expect the scheduled dispatcher to recover it automatically into `PENDING` or terminal `FAILED`.
+3. If recovery exhausted attempts, review the generated queue finding before replaying the handoff.
+4. Confirm the n8n destination URL and callback secret configuration before forcing another dispatch attempt.
+
 ### If Dify analysis is stuck
 
 1. Check the latest `AnalysisJob` row and the corresponding customer run.
@@ -214,6 +299,10 @@ Covers:
 3. Simulate a `401` or `403` external failure and confirm it becomes review-required instead of endlessly retrying.
 4. Force a webhook delivery into stale `PROCESSING` state and confirm the dispatcher recovers it.
 5. Force an analysis job into stale `RUNNING` state and confirm the Dify dispatcher requeues it or marks it terminal when retries are exhausted.
+6. Send the same workflow terminal callback twice and confirm the second callback is treated as a safe no-op.
+7. Force a workflow dispatch into stale `DISPATCHING` state and confirm the dispatcher recovers it or marks it terminal after retries are exhausted.
+8. Seed one recovered run and one drifted delivery record, then confirm `/api/fulfillment/health` and `/admin` surface both conditions without opening raw tables.
+9. Open `/admin/accounts/[organizationId]` for a seeded workspace and confirm the account page shows the same fulfillment attention or recovery context as the global admin surface.
 
 ## Future SLO / SLA Recommendations
 

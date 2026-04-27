@@ -1,4 +1,7 @@
+import { loadScriptEnv } from "./load-script-env";
 import { runFirstCustomerLaunchPreflight } from "../lib/launch-preflight";
+
+loadScriptEnv();
 
 const result = runFirstCustomerLaunchPreflight();
 

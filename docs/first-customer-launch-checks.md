@@ -60,6 +60,11 @@ dashboard report access.
   Expected: a ready report is visible in `/dashboard/reports`, the detail page
   reflects durable status and artifact state, download behaves correctly, and
   unauthorized access still fails closed.
+- Verify report grant and writeback linkage behavior manually.
+  Expected: when durable `CustomerAccessGrantRecord` rows exist, dashboard
+  access is limited to the granted report or organization scope, and workflow
+  report writeback still resolves correctly when n8n sends an external
+  `report_reference` instead of the app-owned report id.
 - Verify operator visibility in the app.
   Expected: operators can inspect reconciliation, access-grant, report, and
   delivery progression from durable records and workflow events, see

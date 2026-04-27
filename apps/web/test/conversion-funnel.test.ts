@@ -29,6 +29,28 @@ function runConversionFunnelTests() {
   }
 
   {
+    const summary = getAssessmentIntakeProgress([
+      { title: "Company Profile", status: "in_progress" },
+      { title: "AI Usage Inventory", status: "not_started" }
+    ]);
+
+    assert.equal(summary.isReadyForSubmission, false);
+  }
+
+  {
+    const summary = getAssessmentIntakeProgress([
+      {
+        title: "Company Profile",
+        status: "in_progress",
+        responses: { notes: "" }
+      },
+      { title: "AI Usage Inventory", status: "not_started" }
+    ]);
+
+    assert.equal(summary.isReadyForSubmission, true);
+  }
+
+  {
     const progress = getWorkspaceLaunchProgress({
       selectedPlanName: "Growth Annual",
       firstAssessmentName: "Initial AI Governance Assessment"

@@ -5,8 +5,12 @@ import {
   applyCrmSyncResultToSteps,
   applyDeliveryCompletedToSteps,
   applyQueuedForAnalysisToSteps,
+  applyReportGenerationFailureToSteps,
   applyReportGeneratedToSteps,
+  buildAuditWorkflowProgress,
   createInitialCustomerRunSteps,
+  getAuditWorkflowProgressPresentation,
+  parseAuditWorkflowProgress,
   retryCustomerRun,
   summarizeCustomerRun
 } from "../lib/customer-runs";
@@ -48,6 +52,20 @@ async function runCustomerRunTests() {
   }
 
   {
+    const steps = applyReportGenerationFailureToSteps(
+      applyQueuedForAnalysisToSteps(createInitialCustomerRunSteps()),
+      "Workflow report generation failed"
+    );
+    const summary = summarizeCustomerRun(steps);
+
+    assert.equal(steps.analysis.status, "completed");
+    assert.equal(steps.reportGeneration.status, "failed");
+    assert.equal(summary.status, "ACTION_REQUIRED");
+    assert.equal(summary.currentStep, "REPORT_GENERATION");
+    assert.equal(summary.lastError, "Workflow report generation failed");
+  }
+
+  {
     const steps = applyCrmSyncResultToSteps(
       applyReportGeneratedToSteps(
         applyQueuedForAnalysisToSteps(createInitialCustomerRunSteps())
@@ -77,6 +95,26 @@ async function runCustomerRunTests() {
     assert.equal(summary.status, "COMPLETED");
     assert.equal(summary.currentStep, "DELIVERY");
     assert.ok(summary.completedAt instanceof Date);
+  }
+
+  {
+    const progress = buildAuditWorkflowProgress({
+      status: "mapping_frameworks",
+      workflowDispatchId: "wd_123",
+      dispatchId: "disp_123"
+    });
+    const parsed = parseAuditWorkflowProgress(progress);
+
+    assert.equal(parsed?.status, "mapping_frameworks");
+    assert.equal(parsed?.workflowDispatchId, "wd_123");
+    assert.equal(parsed?.dispatchId, "disp_123");
+    assert.equal(parsed?.progressPercent, 34);
+  }
+
+  {
+    const presentation = getAuditWorkflowProgressPresentation("pending_review");
+    assert.match(presentation.label, /Pending Review/i);
+    assert.equal(presentation.progressPercent, 97);
   }
 
   {

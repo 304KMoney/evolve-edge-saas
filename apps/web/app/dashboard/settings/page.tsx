@@ -50,6 +50,7 @@ import { queueEmailNotification } from "../../../lib/email";
 import { getOrganizationEntitlements, requireEntitlement } from "../../../lib/entitlements";
 import { getExpansionOffers } from "../../../lib/expansion-engine";
 import { getOrganizationActivationSnapshot } from "../../../lib/activation";
+import { shouldBlockDemoExternalSideEffects } from "../../../lib/demo-mode";
 import { logServerEvent } from "../../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../../lib/product-analytics";
 import {
@@ -81,7 +82,6 @@ function formatDate(date: Date) {
     year: "numeric"
   }).format(date);
 }
-
 function formatDateTime(date: Date | null | undefined) {
   if (!date) {
     return "Not set";
@@ -303,7 +303,11 @@ async function addMemberAction(formData: FormData) {
       entityId: `${session.organization!.id}:${user.id}`,
       metadata: {
         memberEmail: user.email,
-        role
+        previousRole: existingMembership?.role ?? null,
+        nextRole: role,
+        previousIsBillingAdmin: existingMembership?.isBillingAdmin ?? null,
+        nextIsBillingAdmin: isBillingAdmin,
+        isNewMember: !existingMembership
       },
       requestContext
     });
@@ -442,8 +446,10 @@ async function updateMemberRoleAction(formData: FormData) {
       entityType: "organizationMember",
       entityId: memberId,
       metadata: {
-        role,
-        affectedUserId: membership.userId
+        affectedUserId: membership.userId,
+        previousRole: membership.role,
+        nextRole: role,
+        isBillingAdmin: membership.isBillingAdmin
       },
       requestContext
     });
@@ -948,6 +954,7 @@ export default async function SettingsPage({
   const canViewUsageControls = canViewUsage(authz);
   const canManageInventoryControls = canManageInventoryWithContext(authz);
   const isWorkspaceOwner = session.organization!.role === "OWNER";
+  const billingActionsBlockedInDemo = shouldBlockDemoExternalSideEffects();
   const currentPlanCode = subscription?.plan.code ?? entitlements.planCode;
   const upsellOffers = getExpansionOffers({
     placement: "settings",
@@ -1074,7 +1081,7 @@ export default async function SettingsPage({
         ) : null}
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-line bg-mist p-5">
+          <div id="billing-controls" className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Plan</p>
             <p className="mt-2 text-xl font-semibold text-ink">
               {entitlements.planName}
@@ -1118,15 +1125,24 @@ export default async function SettingsPage({
             {canManageBillingControls ? (
               <div className="mt-4 space-y-3">
                 {subscription?.stripeCustomerId ? (
-                  <form action="/api/billing/portal" method="post">
-                    <input type="hidden" name="source" value="settings-primary-billing" />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
+                  billingActionsBlockedInDemo ? (
+                    <Link
+                      href="/dashboard/settings?billing=demo-mode#billing-controls"
+                      className="inline-flex rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
                     >
-                      Open billing portal
-                    </button>
-                  </form>
+                      Billing disabled in demo
+                    </Link>
+                  ) : (
+                    <form action="/api/billing/portal" method="post">
+                      <input type="hidden" name="source" value="settings-primary-billing" />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
+                      >
+                        Open billing portal
+                      </button>
+                    </form>
+                  )
                 ) : null}
                 <div className="grid gap-3">
                   {plans.map((plan) => (
@@ -1177,6 +1193,13 @@ export default async function SettingsPage({
                               Manage in Stripe
                             </button>
                           </form>
+                        ) : billingActionsBlockedInDemo ? (
+                          <Link
+                            href="/dashboard/settings?billing=demo-mode#billing-controls"
+                            className="inline-flex items-center justify-center rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
+                          >
+                            Billing disabled in demo
+                          </Link>
                         ) : (
                           <form action="/api/billing/checkout" method="post">
                             <input type="hidden" name="planCode" value={plan.code} />
@@ -1215,7 +1238,7 @@ export default async function SettingsPage({
             )}
           </div>
 
-          <div className="rounded-2xl border border-line bg-mist p-5">
+          <div id="billing-ownership" className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Billing ownership</p>
             <p className="mt-2 text-xl font-semibold text-ink">
               {billingAdminSnapshot.organization.billingOwnerName ?? "Not assigned"}
@@ -1315,7 +1338,7 @@ export default async function SettingsPage({
 
         {canViewUsageControls ? (
           <>
-            <div className="mt-6">
+            <div id="usage-and-limits" className="mt-6">
               <UsageMeterGrid
                 title="Usage and limits"
                 description="Current plan utilization across the main recurring SaaS resources in this workspace."
@@ -1363,8 +1386,8 @@ export default async function SettingsPage({
         ) : null}
 
         {canViewBillingControls ? (
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-line p-5">
+          <div id="trust-center" className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div id="entitlement-breakdown" className="rounded-2xl border border-line p-5">
               <p className="text-lg font-semibold text-ink">Entitlement breakdown</p>
               <p className="mt-2 text-sm text-steel">
                 Plan-derived feature access and limits, with active override sources shown inline.
@@ -1526,7 +1549,7 @@ export default async function SettingsPage({
         ) : null}
 
         {canManageMembers ? (
-          <div className="mt-8 grid gap-4 lg:grid-cols-2">
+          <div id="workspace-members" className="mt-8 grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-line bg-mist p-5">
               <p className="text-lg font-semibold text-ink">Add internal member</p>
               <form action={addMemberAction} className="mt-4 grid gap-3">
@@ -1729,7 +1752,7 @@ export default async function SettingsPage({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+        <div id="inventory-registry" className="mt-8 grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-lg font-semibold text-ink">Vendor registry</p>
             <p className="mt-2 text-sm text-steel">
@@ -1853,7 +1876,7 @@ export default async function SettingsPage({
           </div>
         </div>
 
-        <div className="mt-8 rounded-2xl border border-line bg-mist p-5">
+        <div id="outbound-webhooks" className="mt-8 rounded-2xl border border-line bg-mist p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-lg font-semibold text-ink">Outbound webhook deliveries</p>
@@ -1899,3 +1922,4 @@ export default async function SettingsPage({
     </main>
   );
 }
+

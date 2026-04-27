@@ -19,6 +19,10 @@ import {
 } from "./commercial-catalog";
 import { listDeliveryMismatchFindings } from "./delivery-mismatch-detection";
 import { getFeatureFlags } from "./feature-flags";
+import {
+  buildFulfillmentVisibilitySummary,
+  listFulfillmentVisibilityEntries
+} from "./fulfillment-visibility";
 import { getOpsReadinessSnapshot } from "./ops-readiness";
 import { getPrimaryOwnerMembership } from "./roles";
 import { getOutboundWebhookDestinations } from "./webhook-dispatcher";
@@ -81,7 +85,8 @@ export async function getAdminConsoleScaleSnapshot(input: {
     recentLeadSubmissions,
     analyticsCounts,
     recentDeliveryOpsQueueItems,
-    rawGlobalMismatchFindings
+    rawGlobalMismatchFindings,
+    fulfillmentVisibilityEntries
   ] =
     await Promise.all([
       db.organization.findMany({
@@ -225,8 +230,16 @@ export async function getAdminConsoleScaleSnapshot(input: {
       listDeliveryMismatchFindings({
         db,
         limit: 80
+      }),
+      listFulfillmentVisibilityEntries({
+        db,
+        q: input.q,
+        limit: 16
       })
     ]);
+  const fulfillmentVisibilitySummary = buildFulfillmentVisibilitySummary(
+    fulfillmentVisibilityEntries
+  );
 
   const recentGlobalMismatchFindings = rawGlobalMismatchFindings
     .filter((finding) =>
@@ -311,9 +324,17 @@ export async function getAdminConsoleScaleSnapshot(input: {
     globalOpsDashboard: {
       counts: {
         recentMismatchFindings: recentGlobalMismatchFindings.length,
-        recentDeliveryOpsFindings: recentDeliveryOpsQueueItems.length
+        recentDeliveryOpsFindings: recentDeliveryOpsQueueItems.length,
+        recentFulfillmentAttentionFindings:
+          fulfillmentVisibilitySummary.counts.attention,
+        recentFulfillmentRecovered:
+          fulfillmentVisibilitySummary.counts.recovered
       },
       recentMismatchFindings: recentGlobalMismatchFindings,
+      recentFulfillmentAttentionFindings:
+        fulfillmentVisibilitySummary.recentAttention,
+      recentFulfillmentRecovered:
+        fulfillmentVisibilitySummary.recentRecovered,
       recentDeliveryOpsFindings: recentDeliveryOpsQueueItems.map((finding) => ({
         id: finding.id,
         organizationId: finding.organizationId,
@@ -330,15 +351,17 @@ export async function getAdminConsoleScaleSnapshot(input: {
         sourceRecordId: finding.sourceRecordId,
         lastDetectedAt: finding.lastDetectedAt
       }))
-      },
-      configSummary: {
-        authMode: getAuthMode(),
-        stripeConfigured: hasStripeBillingConfig(),
-        adminEmailCount: getOptionalListEnv("INTERNAL_ADMIN_EMAILS").length,
-        webhookDestinationsConfigured: webhookDestinations.length,
+    },
+    configSummary: {
+      authMode: getAuthMode(),
+      stripeConfigured: hasStripeBillingConfig(),
+      adminEmailCount: getOptionalListEnv("INTERNAL_ADMIN_EMAILS").length,
+      webhookDestinationsConfigured: webhookDestinations.length,
       opsAlertsConfigured: Boolean(getOptionalEnv("OPS_ALERT_WEBHOOK_URL")),
       cronConfigured: Boolean(getOptionalEnv("CRON_SECRET")),
-      outboundDispatchConfigured: Boolean(getOptionalEnv("OUTBOUND_DISPATCH_SECRET")),
+      outboundDispatchConfigured: Boolean(
+        getOptionalEnv("OUTBOUND_DISPATCH_SECRET")
+      ),
       featureFlags
     },
     growthSummary: {

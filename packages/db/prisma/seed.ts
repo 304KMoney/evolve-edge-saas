@@ -1184,7 +1184,7 @@ async function main() {
     create: {
       id: "job_demo_q2_analysis",
       assessmentId: assessment.id,
-      provider: "dify",
+      provider: "openai_langgraph",
       status: JobStatus.RUNNING,
       jobType: "report_generation",
       inputPayload: {

@@ -3,17 +3,43 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
 import { MarketingShell } from "../../components/marketing-shell";
 import { getOptionalCurrentSession } from "../../lib/auth";
-import { getRuntimeEnvironment, getSalesContactEmail } from "../../lib/runtime-config";
-import { FOUNDING_RISK_AUDIT } from "../../lib/pricing-content";
+import { getFoundingRiskAuditCallUrl, getSalesContactEmail } from "../../lib/runtime-config";
 import { submitContactSalesLeadAction } from "./actions";
 
 export const metadata: Metadata = {
   title: "Contact Evolve Edge | Evolve Edge",
   description:
-    "Book a call about the Founding Risk Audit or broader Evolve Edge AI risk and compliance engagements."
+    "Book an AI Security Readiness Call or contact Evolve Edge about premium AI security, compliance, and executive risk visibility engagements."
 };
 
 export const dynamic = "force-dynamic";
+
+type ContactSalesSearchParams = {
+  intent?: string | string[];
+  source?: string | string[];
+  submitted?: string | string[];
+  submission?: string | string[];
+  status?: string | string[];
+  hubspot?: string | string[];
+  workflow?: string | string[];
+  trace?: string | string[];
+  error?: string | string[];
+};
+
+function readFirstParam(
+  value: string | string[] | undefined,
+  fallback = ""
+) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value[0] ?? fallback;
+  }
+
+  return fallback;
+}
 
 const defaultTrustBullets = [
   "Executive-ready risk reporting",
@@ -21,10 +47,10 @@ const defaultTrustBullets = [
   "Clear remediation roadmap, not just findings"
 ] as const;
 
-const foundingTrustBullets = [
-  "Fast-turnaround premium assessment",
-  "Leadership-ready report and live briefing",
-  "Focused on AI, confidentiality, governance, and compliance exposure"
+const readinessTrustBullets = [
+  "Premium readiness-led advisory motion",
+  "Leadership-ready reporting and briefing support",
+  "Focused on AI, security, compliance, and governance exposure"
 ] as const;
 
 const defaultNextSteps = [
@@ -33,135 +59,62 @@ const defaultNextSteps = [
   "You leave with a clear next-step recommendation"
 ] as const;
 
-const foundingNextSteps = [
-  "We confirm fit and scope for the Founding Risk Audit",
-  "We review your current AI usage, sensitive workflows, and business concerns",
-  "We recommend the fastest path to a high-trust executive-ready assessment"
+const readinessNextSteps = [
+  "We confirm fit, scope, and urgency for your environment",
+  "We review current AI usage, sensitive workflows, and leadership priorities",
+  "We recommend the right readiness engagement and next-step path"
 ] as const;
-
-function formatDeliveryStatus(value: string, provider: "hubspot" | "workflow") {
-  switch (value) {
-    case "captured":
-      return "captured";
-    case "dispatched":
-      return "dispatched";
-    case "failed":
-      return "failed";
-    case "not_configured":
-      return "not configured";
-    case "not_repeated":
-      return provider === "hubspot" ? "already captured" : "already dispatched";
-    default:
-      return "not configured";
-  }
-}
 
 export default async function ContactSalesPage({
   searchParams
 }: {
-  searchParams: Promise<{
-    intent?: string | string[];
-    source?: string | string[];
-    submitted?: string | string[];
-    submission?: string | string[];
-    status?: string | string[];
-    hubspot?: string | string[];
-    workflow?: string | string[];
-    trace?: string | string[];
-    error?: string | string[];
-  }>;
+  searchParams?: Promise<ContactSalesSearchParams> | ContactSalesSearchParams;
 }) {
   const session = await getOptionalCurrentSession();
-  const rawParams = await searchParams;
-  const intent =
-    typeof rawParams.intent === "string"
-      ? rawParams.intent
-      : Array.isArray(rawParams.intent)
-        ? rawParams.intent[0] ?? ""
-        : "";
-  const source =
-    typeof rawParams.source === "string"
-      ? rawParams.source
-      : Array.isArray(rawParams.source)
-        ? rawParams.source[0] ?? ""
-        : "";
-  const submitted =
-    typeof rawParams.submitted === "string"
-      ? rawParams.submitted
-      : Array.isArray(rawParams.submitted)
-        ? rawParams.submitted[0] ?? ""
-        : "";
-  const error =
-    typeof rawParams.error === "string"
-      ? rawParams.error
-      : Array.isArray(rawParams.error)
-        ? rawParams.error[0] ?? ""
-        : "";
-  const submission =
-    typeof rawParams.submission === "string"
-      ? rawParams.submission
-      : Array.isArray(rawParams.submission)
-        ? rawParams.submission[0] ?? ""
-        : submitted;
-  const status =
-    typeof rawParams.status === "string"
-      ? rawParams.status
-      : Array.isArray(rawParams.status)
-        ? rawParams.status[0] ?? ""
-        : submitted
-          ? "success"
-          : "";
-  const hubspot =
-    typeof rawParams.hubspot === "string"
-      ? rawParams.hubspot
-      : Array.isArray(rawParams.hubspot)
-        ? rawParams.hubspot[0] ?? ""
-        : "";
-  const workflow =
-    typeof rawParams.workflow === "string"
-      ? rawParams.workflow
-      : Array.isArray(rawParams.workflow)
-        ? rawParams.workflow[0] ?? ""
-        : "";
-  const trace =
-    typeof rawParams.trace === "string"
-      ? rawParams.trace
-      : Array.isArray(rawParams.trace)
-        ? rawParams.trace[0] ?? ""
-        : "";
+  const rawParams = (searchParams ? await searchParams : undefined) ?? {};
+  const intent = readFirstParam(rawParams.intent);
+  const source = readFirstParam(rawParams.source);
+  const submitted = readFirstParam(rawParams.submitted);
+  const error = readFirstParam(rawParams.error);
+  const submission = readFirstParam(rawParams.submission, submitted);
+  const status = readFirstParam(rawParams.status, submitted ? "success" : "");
   const salesEmail = getSalesContactEmail();
-  const isFoundingAuditIntent = intent.includes("founding-risk-audit");
+  const bookingUrl = getFoundingRiskAuditCallUrl();
+  const hasExternalBookingUrl = /^https?:\/\//.test(bookingUrl);
+  const bookingHref = hasExternalBookingUrl
+    ? bookingUrl
+    : `mailto:${salesEmail}?subject=${encodeURIComponent("AI Security Readiness Call")}`;
+  const isReadinessIntent =
+    intent.includes("founding-risk-audit") || intent.includes("readiness");
   const primaryHref = session
     ? session.onboardingRequired
       ? "/onboarding"
       : "/dashboard/billing"
     : "/pricing";
-  const heroEyebrow = isFoundingAuditIntent ? FOUNDING_RISK_AUDIT.eyebrow : "Private walkthrough";
-  const heroTitle = isFoundingAuditIntent
-    ? `Apply for the ${FOUNDING_RISK_AUDIT.title}`
+  const heroEyebrow = isReadinessIntent ? "AI Security Readiness Call" : "Private walkthrough";
+  const heroTitle = isReadinessIntent
+    ? "Book an AI Security Readiness Call"
     : "Book a private Evolve Edge walkthrough";
-  const heroBody = isFoundingAuditIntent
-    ? `${FOUNDING_RISK_AUDIT.priceLabel} founding-client access for high-trust teams that need fast clarity on AI, confidentiality, governance, and compliance exposure.`
+  const heroBody = isReadinessIntent
+    ? "Start with a focused conversation about AI security, confidentiality, compliance readiness, and executive risk visibility so we can recommend the right engagement path."
     : "See how your team can identify AI security, compliance, and governance gaps faster, prioritize remediation, and deliver executive-ready reporting.";
-  const scheduleLabel = isFoundingAuditIntent ? "Founding client access" : "Schedule a call";
-  const formTitle = isFoundingAuditIntent
-    ? "Tell us about your current AI risk concerns"
+  const scheduleLabel = isReadinessIntent ? "Readiness call" : "Schedule a call";
+  const formTitle = isReadinessIntent
+    ? "Tell us about your current readiness concerns"
     : "Tell us what you need help understanding";
-  const formBody = isFoundingAuditIntent
-    ? "We will use this to confirm fit, understand your environment, and recommend the right audit scope."
+  const formBody = isReadinessIntent
+    ? "We will use this to understand your environment, leadership priorities, and the right scope for next steps."
     : "We will shape the conversation around your environment, stakeholders, and highest-priority risk questions.";
-  const submitLabel = isFoundingAuditIntent ? FOUNDING_RISK_AUDIT.ctas.apply : "Book a Call";
-  const messageLabel = isFoundingAuditIntent
-    ? "What is driving urgency right now?"
-    : "What do you want to discuss?";
-  const messagePlaceholder = isFoundingAuditIntent
-    ? "Tell us about your AI usage, sensitive workflows, top concerns, and what leadership needs clarity on."
+  const submitLabel = isReadinessIntent ? "Request the readiness call" : "Book a Call";
+  const messageLabel = isReadinessIntent ? "What is driving urgency right now?" : "What do you want to discuss?";
+  const messagePlaceholder = isReadinessIntent
+    ? "Tell us about your AI usage, sensitive workflows, diligence pressure, compliance goals, and what leadership needs clarity on."
     : "Tell us about your current environment, priorities, or the workflows you want to review.";
-  const successMessage = isFoundingAuditIntent
-    ? "Thanks. Your request is in, and we will follow up to confirm fit and next-step timing for the Founding Risk Audit."
+  const successMessage = isReadinessIntent
+    ? "Thanks. Your request is in, and we will follow up with the right next step for your readiness call."
     : "Thanks. Your request is in, and our team will follow up with the right next step.";
-  const trustBullets = isFoundingAuditIntent ? foundingTrustBullets : defaultTrustBullets;
-  const nextSteps = isFoundingAuditIntent ? foundingNextSteps : defaultNextSteps;
+  const trustBullets = isReadinessIntent ? readinessTrustBullets : defaultTrustBullets;
+  const nextSteps = isReadinessIntent ? readinessNextSteps : defaultNextSteps;
 
   return (
     <MarketingShell
@@ -228,15 +181,29 @@ export default async function ContactSalesPage({
             </div>
             <a
               href={`mailto:${salesEmail}?subject=${encodeURIComponent(
-                isFoundingAuditIntent
-                  ? "Founding Risk Audit"
-                  : "Evolve Edge walkthrough"
+                isReadinessIntent ? "AI Security Readiness Call" : "Evolve Edge walkthrough"
               )}`}
               className="inline-flex items-center rounded-full border border-line px-5 py-3 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
             >
               Email {salesEmail}
             </a>
           </div>
+
+          {isReadinessIntent ? (
+            <div className="mt-4">
+              <a
+                href={bookingHref}
+                target={hasExternalBookingUrl ? "_blank" : undefined}
+                rel={hasExternalBookingUrl ? "noopener noreferrer" : undefined}
+                className="inline-flex items-center rounded-full border border-accent/20 bg-accent/5 px-5 py-3 text-sm font-semibold text-accent transition hover:border-accent/40 hover:bg-accent/10"
+              >
+                {hasExternalBookingUrl
+                  ? "Book an AI Security Readiness Call"
+                  : "Book an AI Security Readiness Call by Email"}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </a>
+            </div>
+          ) : null}
 
           {submission === "received" ? (
             <div
@@ -246,14 +213,21 @@ export default async function ContactSalesPage({
                   : "border border-amber-200 bg-amber-50 text-[#92400e]"
               }`}
             >
-              <p>{status === "success" ? successMessage : "Your request was received, but one or more follow-up handoff steps did not complete yet."}</p>
-              {getRuntimeEnvironment() !== "production" ? (
-                <p className="mt-3">
-                  Submission: received. HubSpot: {formatDeliveryStatus(hubspot, "hubspot")}. Workflow: {formatDeliveryStatus(workflow, "workflow")}.
-                </p>
-              ) : null}
-              {getRuntimeEnvironment() !== "production" && trace ? (
-                <p className="mt-2 font-mono text-xs text-current/80">Trace: {trace}</p>
+              <p>{successMessage}</p>
+              {isReadinessIntent ? (
+                <div className="mt-4">
+                  <a
+                    href={bookingHref}
+                    target={hasExternalBookingUrl ? "_blank" : undefined}
+                    rel={hasExternalBookingUrl ? "noopener noreferrer" : undefined}
+                    className="inline-flex items-center rounded-full border border-current/20 bg-white px-5 py-3 text-sm font-semibold transition hover:opacity-90"
+                  >
+                    {hasExternalBookingUrl
+                      ? "Book your readiness call"
+                      : "Book your readiness call by email"}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </a>
+                </div>
               ) : null}
             </div>
           ) : null}

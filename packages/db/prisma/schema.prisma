@@ -156,6 +156,22 @@ enum JobStatus {
   CANCELED
 }
 
+enum AuditWorkflowCheckpointStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  PAUSED_FOR_REVIEW
+}
+
+enum AiWorkflowFeedbackType {
+  APPROVED
+  REJECTED
+  EDITED
+  REGENERATED
+  FLAGGED
+  CUSTOMER_FEEDBACK
+}
+
 enum FindingSeverity {
   LOW
   MEDIUM
@@ -173,6 +189,10 @@ enum RecommendationPriority {
 enum ReportStatus {
   PENDING
   PROCESSING
+  GENERATED
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
   READY
   FAILED
   DELIVERED
@@ -688,6 +708,7 @@ model Organization {
   routingSnapshots      RoutingSnapshot[]
   deliveryStates        DeliveryStateRecord[]
   deliveryStateTransitions DeliveryStateTransition[]
+  aiWorkflowFeedbackEntries AiWorkflowFeedback[]
 }
 
 model OrganizationMember {
@@ -1881,10 +1902,49 @@ model AnalysisJob {
   completedAt  DateTime?
   createdAt    DateTime   @default(now())
   assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  checkpoints  AuditWorkflowCheckpoint[]
 
   @@index([status, createdAt])
   @@index([provider, status])
   @@index([providerRequestId])
+}
+
+model AuditWorkflowCheckpoint {
+  id                 String                        @id @default(cuid())
+  analysisJobId      String?
+  workflowDispatchId String
+  dispatchId         String
+  orgId              String
+  assessmentId       String
+  nodeName           String
+  nodeOrder          Int
+  status             AuditWorkflowCheckpointStatus
+  stateSnapshot      Json
+  errorMessage       String?
+  createdAt          DateTime                      @default(now())
+  analysisJob        AnalysisJob?                  @relation(fields: [analysisJobId], references: [id], onDelete: SetNull)
+
+  @@index([workflowDispatchId, createdAt])
+  @@index([workflowDispatchId, nodeOrder, createdAt])
+  @@index([analysisJobId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AiWorkflowFeedback {
+  id                 String                 @id @default(cuid())
+  workflowDispatchId String
+  organizationId     String
+  reportId           String?
+  feedbackType       AiWorkflowFeedbackType
+  notes              String?
+  metadataJson       Json?
+  createdAt          DateTime               @default(now())
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  report             Report?                @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([workflowDispatchId, createdAt])
+  @@index([organizationId, feedbackType, createdAt])
+  @@index([reportId, createdAt])
 }
 
 model Finding {
@@ -2103,6 +2163,7 @@ model Report {
   paymentReconciliations PaymentReconciliationRecord[]
   customerAccessGrants CustomerAccessGrantRecord[]
   operatorWorkflowEvents OperatorWorkflowEventRecord[]
+  aiWorkflowFeedbackEntries AiWorkflowFeedback[]
 
   @@index([organizationId, status, publishedAt])
   @@index([customerAccountId, createdAt])
@@ -2166,6 +2227,7 @@ model ReportPackageVersion {
   executiveSummaryJson Json
   roadmapSummaryJson   Json
   frameworkSummaryJson Json
+  executiveBriefingJson Json?
   packetJson           Json
   createdAt            DateTime @default(now())
   reportPackage        ReportPackage @relation(fields: [reportPackageId], references: [id], onDelete: Cascade)

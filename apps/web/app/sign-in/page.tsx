@@ -16,18 +16,18 @@ export default async function SignInPage({
 }: {
   searchParams: Promise<{ error?: string; redirectTo?: string }>;
 }) {
-  const existingSession = await getOptionalCurrentSession();
-  if (existingSession?.authMode === "password") {
-    redirect("/dashboard");
-  }
-
   const params = await searchParams;
-  const errorMessage = getSignInErrorMessage(params.error);
-  const { email, isComplete } = getPasswordAuthConfig();
+  const existingSession = await getOptionalCurrentSession();
   const redirectTo =
     typeof params.redirectTo === "string" && params.redirectTo.startsWith("/")
       ? params.redirectTo
       : "";
+
+  if (existingSession) {
+    redirect((redirectTo || "/dashboard") as never);
+  }
+  const errorMessage = getSignInErrorMessage(params.error);
+  const { email, isComplete } = getPasswordAuthConfig();
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-10">

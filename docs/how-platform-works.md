@@ -23,7 +23,7 @@ The high-level customer path is:
 - Stripe owns billing truth
 - HubSpot owns CRM visibility, not access
 - n8n orchestrates, but does not own business rules
-- Dify executes AI workflows, but does not persist product state
+- OpenAI + LangGraph execute AI workflows, but do not persist product state
 
 ## Primary Data Flow
 
@@ -85,8 +85,8 @@ interchangeable.
 ### 3. Assessment To Report
 
 - assessment sections store intake
-- analysis jobs record Dify execution metadata and outputs
-- `apps/web/lib/dify-adapter.ts` validates and normalizes Dify input/output contracts
+- analysis jobs record provider-owned execution metadata and validated outputs
+- `apps/web/lib/ai-execution.ts` owns provider dispatch while `apps/web/lib/ai-schemas.ts` validates and normalizes AI contracts before app state changes
 - report generation creates findings, recommendations, report records, events,
   notifications, and executive delivery packages
 

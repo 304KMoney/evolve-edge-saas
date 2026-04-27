@@ -155,6 +155,11 @@ Existing integration variables remain relevant where enabled:
 - `OUTBOUND_DISPATCH_SECRET`
 - `INTERNAL_ADMIN_EMAILS`
 
+Optional sales-enrichment variables if Apollo is used through n8n or operator tooling:
+
+- `APOLLO_API_KEY`
+- `APOLLO_API_BASE_URL`
+
 ## Migrations Required
 
 New migration:
@@ -200,6 +205,7 @@ New migration:
    - `evolve_edge_customer_stage`
    - `evolve_edge_next_action_label`
 4. If n8n is enabled, confirm the `leadPipeline` workflow is allowed to receive `customer_account.stage_changed`.
+5. If Apollo is used for prospecting or enrichment, keep it behind n8n or operator tooling and do not let it overwrite app-owned lifecycle truth.
 
 ## Commands To Run
 

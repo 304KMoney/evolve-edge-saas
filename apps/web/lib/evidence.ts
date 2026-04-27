@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import {
@@ -101,9 +102,21 @@ export type EvidenceLibraryFilters = {
   to?: string;
 };
 
-function getEvidenceStorageRoot() {
+function getDefaultEvidenceStorageRoot() {
+  if (
+    process.env.VERCEL === "1" ||
+    process.env.VERCEL === "true" ||
+    Boolean(process.env.VERCEL_ENV)
+  ) {
+    return path.join(os.tmpdir(), "evolve-edge", "evidence");
+  }
+
+  return path.join(process.cwd(), ".data", "evidence");
+}
+
+export function getEvidenceStorageRoot() {
   return path.resolve(
-    getOptionalEnv("EVIDENCE_STORAGE_ROOT") ?? path.join(process.cwd(), ".data", "evidence")
+    getOptionalEnv("EVIDENCE_STORAGE_ROOT") ?? getDefaultEvidenceStorageRoot()
   );
 }
 

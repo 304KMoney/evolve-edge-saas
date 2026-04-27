@@ -9,3 +9,4 @@ node_modules
 dist
 coverage
 prisma/dev.db
+*.tsbuildinfo

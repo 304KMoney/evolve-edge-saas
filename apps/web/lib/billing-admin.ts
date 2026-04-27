@@ -34,6 +34,11 @@ import {
   resolveCanonicalPlanCode,
   resolveCanonicalPlanCodeFromRevenuePlanCode
 } from "./commercial-catalog";
+import {
+  buildFulfillmentVisibilitySummary,
+  listFulfillmentVisibilityEntries,
+  type FulfillmentVisibilityEntry
+} from "./fulfillment-visibility";
 
 type BillingAdminDbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -372,6 +377,16 @@ export type BillingManagementSnapshot = {
     lastFailedAt: Date | null;
     recommendedAction: string | null;
   };
+  fulfillmentVisibility: {
+    counts: {
+      aligned: number;
+      attention: number;
+      recovered: number;
+      critical: number;
+    };
+    recentAttention: FulfillmentVisibilityEntry[];
+    recentRecovered: FulfillmentVisibilityEntry[];
+  };
 };
 
 type AuditActorInput = {
@@ -515,6 +530,11 @@ export async function getOrganizationBillingManagementSnapshot(
     limit: 12,
     db
   });
+  const fulfillmentVisibilityEntriesPromise = listFulfillmentVisibilityEntries({
+    organizationId,
+    limit: 12,
+    db
+  });
 
   const [recentBillingEventLogs, recentUsageEvents, recentBillingEvents] =
     await Promise.all([
@@ -527,6 +547,10 @@ export async function getOrganizationBillingManagementSnapshot(
   const recentDeliveryOpsFindings = await recentDeliveryOpsFindingsPromise;
   const recentDeliveryMismatchFindings =
     await recentDeliveryMismatchFindingsPromise;
+  const fulfillmentVisibilityEntries =
+    await fulfillmentVisibilityEntriesPromise;
+  const fulfillmentVisibility =
+    buildFulfillmentVisibilitySummary(fulfillmentVisibilityEntries);
 
   const organizationBillingEvents = recentBillingEvents.filter((event) =>
     billingEventMatchesOrganization(event, {
@@ -695,7 +719,8 @@ export async function getOrganizationBillingManagementSnapshot(
       sourceRecordId: finding.sourceRecordId,
       lastDetectedAt: finding.lastDetectedAt
     })),
-    billingWebhookHealth
+    billingWebhookHealth,
+    fulfillmentVisibility
   };
 }
 

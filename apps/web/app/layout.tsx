@@ -2,7 +2,11 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AttributionCapture } from "../components/attribution-capture";
-import { assertCriticalEnvironmentParity, logEnvironmentParityStatus } from "../lib/env-validation";
+import {
+  assertCriticalEnvironmentParity,
+  logEnvironmentParityStatus,
+  shouldEnforceCriticalEnvironmentParity
+} from "../lib/env-validation";
 
 export const metadata: Metadata = {
   title: "Evolve Edge",
@@ -19,7 +23,10 @@ export const metadata: Metadata = {
   }
 };
 
-assertCriticalEnvironmentParity();
+if (shouldEnforceCriticalEnvironmentParity()) {
+  assertCriticalEnvironmentParity();
+}
+
 logEnvironmentParityStatus();
 
 export default function RootLayout({

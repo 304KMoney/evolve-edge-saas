@@ -195,7 +195,7 @@ export default async function AssessmentsPage({
             <ActivationTipCard
               title="Start the first assessment to unlock the real workflow"
               body="The fastest path to product value starts here. Once the first intake is underway, the workspace has real operating context for findings, reports, and roadmap generation."
-              href="/dashboard/assessments"
+              href="/dashboard/assessments/start"
               label="Create first assessment"
             />
           </div>

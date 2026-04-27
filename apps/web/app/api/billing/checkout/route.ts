@@ -6,7 +6,6 @@ import {
   getCurrentSubscription
 } from "../../../../lib/billing";
 import {
-  getCanonicalCommercialPlanDefinition,
   resolveCanonicalPlanCode,
   resolvePublicCanonicalPlanCode,
   resolveCanonicalPlanCodeFromRevenuePlanCode,
@@ -18,14 +17,55 @@ import { logServerEvent } from "../../../../lib/monitoring";
 import { createPaymentCustomerBinding } from "../../../../lib/payment-customer-binding";
 import { trackProductAnalyticsEvent } from "../../../../lib/product-analytics";
 import { getPlanTransitionDirection } from "../../../../lib/revenue-catalog";
+import { enforceTrustedOrigin } from "../../../../lib/route-security";
 import { getAppUrl } from "../../../../lib/runtime-config";
+import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
+
+function readValidatedFormString(
+  formData: FormData,
+  field: string,
+  options?: { maxLength?: number; fallback?: string }
+) {
+  const value = formData.get(field);
+  const normalized =
+    typeof value === "string" ? value.trim() : options?.fallback ?? "";
+
+  if (!normalized) {
+    return options?.fallback ?? "";
+  }
+
+  if (options?.maxLength && normalized.length > options.maxLength) {
+    return (options?.fallback ?? "").trim();
+  }
+
+  return normalized;
+}
 
 export async function POST(request: Request) {
+  const invalidOrigin = enforceTrustedOrigin(request);
+  if (invalidOrigin) {
+    return invalidOrigin;
+  }
+
+  const rateLimited = applyRouteRateLimit(request, {
+    key: "billing-checkout",
+    category: "api"
+  });
+  if (rateLimited) {
+    return rateLimited;
+  }
+
   const session = await requireOrganizationPermission("billing.manage");
-  const formData = await request.formData();
-  const requestedPlanCode = String(formData.get("planCode") ?? "scale");
-  const source = String(formData.get("source") ?? "").trim() || "billing-checkout";
   const appUrl = getAppUrl();
+  const formData = await request.formData().catch(() => null);
+  const requestedPlanCode = readValidatedFormString(formData ?? new FormData(), "planCode", {
+    maxLength: 120,
+    fallback: "scale"
+  });
+  const source = readValidatedFormString(formData ?? new FormData(), "source", {
+    maxLength: 120,
+    fallback: "billing-checkout"
+  });
   const canonicalPlanCode =
     resolvePublicCanonicalPlanCode(requestedPlanCode) ??
     resolveCanonicalPlanCode(requestedPlanCode) ??
@@ -38,6 +78,10 @@ export async function POST(request: Request) {
 
   if (shouldBlockDemoExternalSideEffects()) {
     return NextResponse.redirect(`${appUrl}/dashboard/settings?billing=demo-mode`);
+  }
+
+  if (!canonicalPlanCode) {
+    return NextResponse.redirect(`${appUrl}/dashboard/settings?billing=invalid-plan`);
   }
 
   if (canonicalPlanCode && !supportsStripeCheckoutForCanonicalPlan(canonicalPlanCode)) {

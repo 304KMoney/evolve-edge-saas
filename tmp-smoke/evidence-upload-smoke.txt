@@ -1,0 +1,3 @@
+Evolve Edge Preview smoke evidence upload
+Date: 2026-04-26
+Purpose: verify live evidence upload path in Preview.

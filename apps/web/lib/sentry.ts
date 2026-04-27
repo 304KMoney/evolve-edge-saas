@@ -1,4 +1,5 @@
 import { redactSecrets } from "./security-redaction";
+import { captureClientException } from "./sentry-runtime";
 
 export function isSentryServerEnabled() {
   return Boolean(process.env.SENTRY_DSN);
@@ -18,17 +19,16 @@ export async function captureServerException(input: {
     return;
   }
 
-  const Sentry = await import("@sentry/nextjs");
-  Sentry.withScope((scope) => {
-    for (const [key, value] of Object.entries(input.tags ?? {})) {
-      scope.setTag(key, value);
-    }
-    scope.setContext("safe_context", redactSecrets(input.context ?? {}));
-    if (input.fingerprint && input.fingerprint.length > 0) {
-      scope.setFingerprint(input.fingerprint);
-    }
-
-    const throwable = input.error instanceof Error ? input.error : new Error(String(input.error));
-    Sentry.captureException(throwable);
+  const throwable =
+    input.error instanceof Error ? input.error : new Error(String(input.error));
+  await captureClientException(throwable, {
+    tags: input.tags ?? {},
+    extra: {
+      safe_context: redactSecrets(input.context ?? {})
+    },
+    fingerprint:
+      input.fingerprint && input.fingerprint.length > 0
+        ? input.fingerprint
+        : undefined
   });
 }

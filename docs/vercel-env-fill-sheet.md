@@ -91,7 +91,27 @@ Production:
 | `HUBSPOT_API_BASE_URL` | `https://api.hubapi.com` | `https://api.hubapi.com` | Usually same in both. |
 | `HUBSPOT_TIMEOUT_MS` | `10000` | `10000` | Usually same in both. |
 
-## Dify
+## AI execution
+
+| Variable | Preview | Production | Notes |
+|---|---|---|---|
+| `AI_EXECUTION_PROVIDER` | `openai_langgraph` | `openai_langgraph` | Keep `dify` only for rollback. |
+| `AI_EXECUTION_DISPATCH_SECRET` | `____________________________` | `____________________________` | Shared bearer secret for `POST /api/internal/ai/execute`. Mirror this into n8n as `EVOLVE_EDGE_INTERNAL_API_SECRET`. |
+| `OPENAI_API_KEY` | `____________________________` | `____________________________` | Use distinct non-production credentials when available. |
+| `OPENAI_MODEL` | `gpt-4o-2024-08-06` | `gpt-4o-2024-08-06` | Pin the structured-output model explicitly. |
+| `OPENAI_REASONING_MODEL` | `____________________________` | `____________________________` | Optional. Use only if you intentionally split reasoning calls. |
+| `AI_EXECUTION_TIMEOUT_MS` | `20000` | `20000` | Keep default unless you have a measured reason to change it. |
+
+### Mirror into n8n
+
+Set these in n8n for the supported app-owned execution path:
+
+| n8n Variable | Preview | Production | Notes |
+|---|---|---|---|
+| `EVOLVE_EDGE_APP_URL` | `____________________________` | `____________________________` | Use the matching Preview or Production app URL. |
+| `EVOLVE_EDGE_INTERNAL_API_SECRET` | `____________________________` | `____________________________` | Must exactly match app env `AI_EXECUTION_DISPATCH_SECRET`. |
+
+## Deprecated Dify rollback
 
 | Variable | Preview | Production | Notes |
 |---|---|---|---|
@@ -136,3 +156,4 @@ Production:
 
 - [vercel-preview-vs-production-env-checklist.md](C:/Users/kielg/OneDrive/Desktop/Evolve%20Edge/docs/vercel-preview-vs-production-env-checklist.md)
 - [n8n-node-contract-sheet.md](C:/Users/kielg/OneDrive/Desktop/Evolve%20Edge/docs/n8n-node-contract-sheet.md)
+- [workflows/n8n-ai-execution.md](C:/Users/kielg/Documents/EvolveEdge/evolve-edge-saas/docs/workflows/n8n-ai-execution.md)
