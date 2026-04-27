@@ -8,36 +8,36 @@ export type MarketingServiceOffer = {
 
 export const MARKETING_SERVICE_OFFERS: readonly MarketingServiceOffer[] = [
   {
-    title: "AI Risk Snapshot",
-    priceLabel: "Starting at $2,500",
+    title: "Starter Governance Retainer",
+    priceLabel: "From $5,000 / month",
     audience:
       "Best for small law firms, small fintech teams, healthtech startups, and founders already using AI tools.",
     body:
-      "A paid diagnostic that gives leadership a fast, structured view of immediate AI, security, and compliance exposure.",
+      "A premium recurring engagement that gives leadership a structured operating rhythm for immediate AI, security, and compliance exposure.",
     deliverables: [
-      "Intake review",
-      "AI, security, and compliance gap scan",
-      "Executive summary",
-      "Top 5 risk findings",
-      "30-day action plan",
-      "Optional briefing call"
+      "Recurring intake reviews",
+      "AI, security, and compliance gap scans",
+      "Executive summary updates",
+      "Top risk findings refresh",
+      "30-day action planning",
+      "Advisory briefing cadence"
     ]
   },
   {
-    title: "AI Security & Compliance Audit",
-    priceLabel: "Starting at $7,500",
+    title: "Scale Governance Program",
+    priceLabel: "From $18,500 / month",
     audience:
       "Best for regulated small businesses, law firms, fintech, healthtech, and SaaS companies.",
     body:
-      "The core engagement for teams that need a fuller assessment, stronger reporting, and a prioritized remediation roadmap.",
+      "The core recurring program for teams that need fuller assessment coverage, stronger reporting, and a prioritized remediation roadmap.",
     deliverables: [
-      "Full AI and security risk assessment",
+      "Recurring AI and security risk assessments",
       "Compliance mapping",
-      "Vendor and tool risk review",
-      "Data exposure review",
-      "Executive-ready report",
+      "Vendor and tool risk reviews",
+      "Data exposure reviews",
+      "Executive-ready reporting",
       "Prioritized remediation roadmap",
-      "Executive briefing"
+      "Executive briefing cadence"
     ]
   },
   {

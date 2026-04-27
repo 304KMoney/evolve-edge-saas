@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowRight, CheckCircle2, CircleHelp, ShieldCheck } from "lucide-react";
 import type { PricingCta, PricingPageData } from "../lib/pricing";
-import type { CanonicalPlanCode } from "../lib/commercial-catalog";
+import type {
+  CanonicalBillingCadence,
+  CanonicalPlanCode
+} from "../lib/commercial-catalog";
 import {
   EXECUTIVE_PROOF,
   PRICING_FAQ,
@@ -15,15 +19,41 @@ import {
   WHO_ITS_FOR
 } from "../lib/pricing-content";
 
+function appendBillingCadenceToHref(
+  href: string,
+  billingCadence: CanonicalBillingCadence
+) {
+  if (
+    !href.startsWith("/") ||
+    !(
+      href.startsWith("/start") ||
+      href.startsWith("/onboarding") ||
+      href.startsWith("/pricing")
+    )
+  ) {
+    return href;
+  }
+
+  const [pathWithQuery, hashFragment] = href.split("#", 2);
+  const [pathname, queryString = ""] = pathWithQuery.split("?", 2);
+  const searchParams = new URLSearchParams(queryString);
+  searchParams.set("billingCadence", billingCadence);
+  return `${pathname}?${searchParams.toString()}${hashFragment ? `#${hashFragment}` : ""}`;
+}
+
 function PricingPlanAction({
-  cta
+  cta,
+  billingCadence
 }: {
   cta: PricingCta;
+  billingCadence: CanonicalBillingCadence;
 }) {
   if (cta.kind === "link") {
+    const href = appendBillingCadenceToHref(cta.href, billingCadence);
+
     return (
       <Link
-        href={cta.href as never}
+        href={href as never}
         className="inline-flex w-full items-center justify-center rounded-full bg-[#0f172a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#111f36]"
       >
         {cta.label}
@@ -36,7 +66,10 @@ function PricingPlanAction({
   return (
     <form action={cta.action} method="post" className="w-full">
       {cta.kind === "checkout" ? (
-        <input type="hidden" name="planCode" value={cta.planCode} />
+        <>
+          <input type="hidden" name="planCode" value={cta.planCode} />
+          <input type="hidden" name="billingCadence" value={billingCadence} />
+        </>
       ) : null}
       <button
         type="submit"
@@ -51,17 +84,22 @@ function PricingPlanAction({
 
 export function PricingPageClient({
   data,
-  selectedPlanCode
+  selectedPlanCode,
+  selectedBillingCadence = "monthly"
 }: {
   data: PricingPageData;
   selectedPlanCode?: CanonicalPlanCode | null;
+  selectedBillingCadence?: CanonicalBillingCadence;
 }) {
+  const [billingCadence, setBillingCadence] =
+    useState<CanonicalBillingCadence>(selectedBillingCadence);
   const readinessCallHref = data.marketingLinks.foundingRiskAuditCallHref;
   const readinessCallIsExternal = /^https?:\/\//.test(readinessCallHref);
   const highlightedPlanCode = selectedPlanCode ?? "starter";
   const highlightedPlan =
     data.plans.find((plan) => plan.code === highlightedPlanCode) ?? data.plans[0];
   const highlightedCta = data.ctasByPlanCode[highlightedPlan.code];
+  const highlightedPrice = highlightedPlan.priceByCadence[billingCadence];
 
   return (
     <main className="grid gap-6">
@@ -88,7 +126,7 @@ export function PricingPageClient({
           </div>
           <div className="mt-10 flex flex-wrap gap-3">
             <div className="min-w-[220px]">
-              <PricingPlanAction cta={highlightedCta} />
+              <PricingPlanAction cta={highlightedCta} billingCadence={billingCadence} />
             </div>
             <Link
               href={"/contact-sales?intent=enterprise-plan&source=pricing-page" as never}
@@ -98,7 +136,7 @@ export function PricingPageClient({
             </Link>
           </div>
           <p className="mt-4 text-sm text-white/[0.72]">
-            {highlightedPlan.name} is currently selected.
+            {highlightedPlan.name} is currently selected at {highlightedPrice.label}.
           </p>
         </div>
 
@@ -107,11 +145,30 @@ export function PricingPageClient({
             Pricing at a glance
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-            Premium packaging for advisory-led readiness work
+            Premium recurring packaging for advisory-led readiness work
           </h2>
           <p className="mt-4 text-sm leading-7 text-steel">
-            Evolve Edge is positioned as a premium AI security, compliance, and executive risk visibility platform rather than a low-ticket checklist tool.
+            Evolve Edge is positioned as a premium recurring AI security, compliance, and executive risk visibility platform rather than a low-ticket checklist tool.
           </p>
+          <div className="mt-6 inline-flex rounded-full border border-line bg-white p-1">
+            {([
+              ["monthly", "Monthly"],
+              ["annual", "Annual"]
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setBillingCadence(value)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  billingCadence === value
+                    ? "bg-[#0f172a] text-white"
+                    : "text-steel hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="mt-8 space-y-4">
             {PRICING_SUMMARY.map((item) => (
               <div
@@ -138,7 +195,7 @@ export function PricingPageClient({
             Choose the commercial path that fits your team
           </h2>
           <p className="mt-4 text-sm leading-7 text-steel">
-            Starter and Scale flow into the app-owned onboarding and billing path. Enterprise stays sales-led so scope, rollout, and commercial terms remain explicit.
+            Starter and Scale flow into the app-owned onboarding and recurring Stripe billing path. Enterprise stays sales-led so scope, rollout, and commercial terms remain explicit.
           </p>
         </div>
         <div className="mt-8 grid gap-5 lg:grid-cols-3">
@@ -160,7 +217,12 @@ export function PricingPageClient({
                     <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent">
                       {plan.name}
                     </p>
-                    <h3 className="mt-3 text-3xl font-semibold text-ink">{plan.priceLabel}</h3>
+                    <h3 className="mt-3 text-3xl font-semibold text-ink">
+                      {plan.priceByCadence[billingCadence].label}
+                    </h3>
+                    <p className="mt-2 text-sm text-steel">
+                      {plan.priceByCadence[billingCadence].helperText}
+                    </p>
                   </div>
                   {plan.recommendationLabel ? (
                     <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
@@ -170,6 +232,11 @@ export function PricingPageClient({
                 </div>
                 <p className="mt-5 text-sm leading-7 text-steel">{plan.headline}</p>
                 <p className="mt-4 text-sm leading-7 text-ink">{plan.publicDescription}</p>
+                {billingCadence === "annual" && plan.annualSavingsLabel ? (
+                  <p className="mt-4 text-sm font-medium text-accent">
+                    {plan.annualSavingsLabel}
+                  </p>
+                ) : null}
                 <ul className="mt-6 space-y-3 text-sm leading-7 text-steel">
                   {plan.highlights.map((highlight) => (
                     <li key={highlight} className="flex items-start gap-3">
@@ -179,7 +246,7 @@ export function PricingPageClient({
                   ))}
                 </ul>
                 <div className="mt-8">
-                  <PricingPlanAction cta={cta} />
+                  <PricingPlanAction cta={cta} billingCadence={billingCadence} />
                   <p className="mt-3 text-sm text-steel">{cta.helperText}</p>
                 </div>
               </article>
@@ -325,7 +392,7 @@ export function PricingPageClient({
           </p>
           <div className="mt-8 space-y-3">
             <div className="w-full">
-              <PricingPlanAction cta={highlightedCta} />
+              <PricingPlanAction cta={highlightedCta} billingCadence={billingCadence} />
             </div>
             {readinessCallIsExternal ? (
               <a
@@ -353,7 +420,7 @@ export function PricingPageClient({
           </div>
           <ul className="mt-8 space-y-3 text-sm text-slate-300">
             {[
-              "Premium packaging with starting-at pricing",
+              "Premium recurring subscriptions with annual commitment options",
               "Executive-ready reporting and remediation guidance",
               "Custom enterprise pricing for complex environments"
             ].map((item) => (

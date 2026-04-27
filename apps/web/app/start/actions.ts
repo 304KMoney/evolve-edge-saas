@@ -14,6 +14,7 @@ import {
   queueEmailNotification
 } from "../../lib/email";
 import {
+  resolveCanonicalBillingCadence,
   getCanonicalCommercialPlanDefinition,
   resolvePublicCanonicalPlanCode
 } from "../../lib/commercial-catalog";
@@ -34,6 +35,7 @@ function normalizeEmail(value: string) {
 
 function buildStartRedirect(input: {
   planCode: string;
+  billingCadence?: string | null;
   error?: string;
   submitted?: string;
   delivery?: string;
@@ -41,6 +43,10 @@ function buildStartRedirect(input: {
   const searchParams = new URLSearchParams({
     plan: input.planCode
   });
+
+  if (input.billingCadence) {
+    searchParams.set("billingCadence", input.billingCadence);
+  }
 
   if (input.error) {
     searchParams.set("error", input.error);
@@ -59,6 +65,10 @@ function buildStartRedirect(input: {
 
 export async function requestPricingAccessAction(formData: FormData) {
   const planCode = resolvePublicCanonicalPlanCode(String(formData.get("planCode") ?? ""));
+  const billingCadence = resolveCanonicalBillingCadence(
+    String(formData.get("billingCadence") ?? ""),
+    "monthly"
+  );
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
   const email = normalizeEmail(String(formData.get("email") ?? ""));
@@ -69,7 +79,13 @@ export async function requestPricingAccessAction(formData: FormData) {
   }
 
   if (!email || !companyName) {
-    redirect(buildStartRedirect({ planCode, error: "missing-required" }));
+    redirect(
+      buildStartRedirect({
+        planCode,
+        billingCadence,
+        error: "missing-required"
+      })
+    );
   }
 
   const plan = getCanonicalCommercialPlanDefinition(planCode);
@@ -154,6 +170,7 @@ export async function requestPricingAccessAction(formData: FormData) {
     });
     const signInPath = buildPricingAccessSignInPath({
       planCode,
+      billingCadence,
       hasWorkspaceAccess
     });
     const signInUrl = `${appUrl}${signInPath}`;
@@ -185,7 +202,7 @@ export async function requestPricingAccessAction(formData: FormData) {
         lastName: lastName || null,
         companyName,
         intent: "launch-pricing",
-        sourcePath: `/start?plan=${planCode}`,
+        sourcePath: `/start?plan=${planCode}&billingCadence=${billingCadence}`,
         requestedPlanCode: planCode,
         pricingContext: "pricing-start",
         userId: user.id,
@@ -195,6 +212,7 @@ export async function requestPricingAccessAction(formData: FormData) {
         payload: {
           companyName,
           planCode,
+          billingCadence,
           planName: plan.displayName
         } satisfies Prisma.InputJsonValue
       },
@@ -262,6 +280,7 @@ export async function requestPricingAccessAction(formData: FormData) {
   redirect(
     buildStartRedirect({
       planCode,
+      billingCadence,
       submitted: "1",
       delivery: deliveryMode
     })

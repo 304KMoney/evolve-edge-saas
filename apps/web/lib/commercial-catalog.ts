@@ -9,10 +9,14 @@ import {
   CANONICAL_STRIPE_PRODUCT_ENV_MAP,
   CANONICAL_WORKFLOW_CODES,
   getCanonicalHostingerRule,
+  getCanonicalPublicPriceLabelForCadence,
+  getCanonicalPublicPriceUsdForCadence,
   getCanonicalPlanDisplayName,
   getCanonicalPublicPriceLabel,
   getCanonicalPublicPriceUsd,
+  resolveCanonicalBillingCadence,
   type CanonicalBillingMotion,
+  type CanonicalBillingCadence,
   type CanonicalHostingerCtaTarget,
   type CanonicalPlanCode,
   type CanonicalPlanDisplayName,
@@ -26,7 +30,9 @@ export {
   CANONICAL_PLAN_CODES,
   CANONICAL_REPORT_TEMPLATES,
   CANONICAL_WORKFLOW_CODES,
+  resolveCanonicalBillingCadence,
   type CanonicalBillingMotion,
+  type CanonicalBillingCadence,
   type CanonicalHostingerCtaTarget,
   type CanonicalPlanCode,
   type CanonicalPlanDisplayName,
@@ -88,6 +94,7 @@ export type CanonicalCommercialPlan = {
   publicPriceUsd: number | null;
   publicPriceLabel: string;
   billingMotion: CanonicalBillingMotion;
+  stripeCheckoutMode: "subscription" | null;
   ctaLabel: string;
   publicDescription: string;
   workflowCode: CanonicalWorkflowCodeValue;
@@ -107,9 +114,10 @@ export const CANONICAL_COMMERCIAL_PLAN_CATALOG: readonly CanonicalCommercialPlan
     publicPriceUsd: getCanonicalPublicPriceUsd("starter"),
     publicPriceLabel: getCanonicalPublicPriceLabel("starter"),
     billingMotion: "stripe_checkout",
+    stripeCheckoutMode: "subscription",
     ctaLabel: "Start with Starter",
     publicDescription:
-      "A lighter-weight audit path for teams that need a credible starting point with clear delivery and backend-owned compliance routing.",
+      "A premium recurring starting point for teams that need a credible AI governance operating path with clear delivery and backend-owned compliance routing.",
     workflowCode: "audit_starter",
     reportTemplate: "starter_snapshot",
     processingDepth: "starter",
@@ -125,9 +133,10 @@ export const CANONICAL_COMMERCIAL_PLAN_CATALOG: readonly CanonicalCommercialPlan
     publicPriceUsd: getCanonicalPublicPriceUsd("scale"),
     publicPriceLabel: getCanonicalPublicPriceLabel("scale"),
     billingMotion: "stripe_checkout",
+    stripeCheckoutMode: "subscription",
     ctaLabel: "Start with Scale",
     publicDescription:
-      "The primary operating tier for deeper audit delivery, stronger monitoring posture, and premium internal workflow coverage.",
+      "The primary premium subscription tier for deeper audit delivery, stronger monitoring posture, and expanded workflow coverage.",
     workflowCode: "audit_scale",
     reportTemplate: "scale_operating_report",
     processingDepth: "scale",
@@ -143,6 +152,7 @@ export const CANONICAL_COMMERCIAL_PLAN_CATALOG: readonly CanonicalCommercialPlan
     publicPriceUsd: getCanonicalPublicPriceUsd("enterprise"),
     publicPriceLabel: getCanonicalPublicPriceLabel("enterprise"),
     billingMotion: "contact_sales",
+    stripeCheckoutMode: null,
     ctaLabel: "Contact sales",
     publicDescription:
       "Sales-led packaging for larger regulated programs that need custom rollout, advanced governance coverage, and enterprise coordination.",
@@ -272,26 +282,58 @@ export function getCanonicalProcessingDepthForPlan(
 }
 
 export function resolveRevenuePlanCodeForCanonicalPlan(
-  planCode: CanonicalPlanCode | null | undefined
+  planCode: CanonicalPlanCode | null | undefined,
+  cadence?: CanonicalBillingCadence | null
 ) {
-  return getCanonicalCommercialPlanDefinition(planCode)?.publicRevenuePlanCode ?? null;
+  const normalizedCadence = resolveCanonicalBillingCadence(cadence ?? undefined, "annual");
+
+  switch (planCode) {
+    case "starter":
+      return normalizedCadence === "monthly" ? "starter-monthly" : "starter-annual";
+    case "scale":
+      return normalizedCadence === "monthly" ? "scale-monthly" : "scale-annual";
+    case "enterprise":
+      return normalizedCadence === "monthly" ? "enterprise-monthly" : "enterprise-annual";
+    default:
+      return null;
+  }
 }
 
 export function resolveRevenuePlanCodeForCommercialSelection(
-  value: string | null | undefined
+  value: string | null | undefined,
+  cadence?: CanonicalBillingCadence | null
 ) {
   const canonicalPlanCode =
     resolvePublicCanonicalPlanCode(value) ??
     resolveCanonicalPlanCode(value) ??
     resolveCanonicalPlanCodeFromRevenuePlanCode(value);
 
-  return resolveRevenuePlanCodeForCanonicalPlan(canonicalPlanCode);
+  return resolveRevenuePlanCodeForCanonicalPlan(canonicalPlanCode, cadence);
 }
 
 export function supportsStripeCheckoutForCanonicalPlan(
   planCode: CanonicalPlanCode | null | undefined
 ) {
   return getCanonicalCommercialPlanDefinition(planCode)?.billingMotion === "stripe_checkout";
+}
+
+export function getStripeCheckoutModeForCanonicalPlan(
+  planCode: CanonicalPlanCode | null | undefined
+) {
+  return getCanonicalCommercialPlanDefinition(planCode)?.stripeCheckoutMode ?? null;
+}
+
+export function getCanonicalCadencePricingSummary(planCode: CanonicalPlanCode) {
+  return {
+    monthly: {
+      usd: getCanonicalPublicPriceUsdForCadence(planCode, "monthly"),
+      label: getCanonicalPublicPriceLabelForCadence(planCode, "monthly")
+    },
+    annual: {
+      usd: getCanonicalPublicPriceUsdForCadence(planCode, "annual"),
+      label: getCanonicalPublicPriceLabelForCadence(planCode, "annual")
+    }
+  };
 }
 
 export function getCanonicalPricingSummary() {

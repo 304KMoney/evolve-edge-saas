@@ -68,13 +68,13 @@ export const PRICING_FAQ = [
       "It is best for high-trust teams that handle sensitive data, face customer diligence, or need a clearer executive view of AI, security, and compliance risk."
   },
   {
-    question: "Why is pricing shown as starting at or custom?",
+    question: "Why are monthly and annual pricing options shown?",
     answer:
-      "Scope varies meaningfully by workflow complexity, data sensitivity, stakeholder needs, and framework depth, so Evolve Edge positions pricing around premium packaging rather than a low-ticket checklist motion."
+      "Evolve Edge is sold as a premium recurring service, so Starter and Scale surface monthly and annual subscription options while Enterprise stays custom and sales-led."
   },
   {
-    question: "What happens after the initial engagement?",
+    question: "What happens after onboarding?",
     answer:
-      "Clients can continue into implementation, recurring advisory, or a broader governance program depending on their readiness goals, remediation needs, and stakeholder demands."
+      "Customers move into a recurring operating rhythm that can include fresh assessments, executive reporting, remediation guidance, and broader governance expansion depending on their goals."
   }
 ] as const;

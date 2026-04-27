@@ -5,6 +5,7 @@ import { completeOnboardingAction } from "./actions";
 import { redirect } from "next/navigation";
 import { getRevenuePlanDefinition } from "../../lib/revenue-catalog";
 import {
+  resolveCanonicalBillingCadence,
   getCanonicalCommercialPlanDefinition,
   resolveCanonicalPlanCode,
   resolveCanonicalPlanCodeFromRevenuePlanCode,
@@ -27,6 +28,7 @@ export default async function OnboardingPage({
   searchParams: Promise<{
     error?: string;
     plan?: string;
+    billingCadence?: string;
     leadSource?: string;
     leadIntent?: string;
     leadPlanCode?: string;
@@ -44,9 +46,13 @@ export default async function OnboardingPage({
   }
 
   const params = await searchParams;
+  const billingCadence = resolveCanonicalBillingCadence(
+    params.billingCadence,
+    "monthly"
+  );
   const selectedRevenuePlanCode =
     getRevenuePlanDefinition(params.plan ?? "")?.code ??
-    resolveRevenuePlanCodeForCommercialSelection(params.plan ?? "") ??
+    resolveRevenuePlanCodeForCommercialSelection(params.plan ?? "", billingCadence) ??
     "";
   const selectedCanonicalPlanCode =
     resolveCanonicalPlanCode(params.plan ?? "") ??

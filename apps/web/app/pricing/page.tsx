@@ -3,7 +3,10 @@ import { MarketingShell } from "../../components/marketing-shell";
 import { PageAnalyticsTracker } from "../../components/page-analytics-tracker";
 import { PricingPageClient } from "../../components/pricing-page";
 import { getPricingPageData } from "../../lib/pricing";
-import { resolvePublicCanonicalPlanCode } from "../../lib/commercial-catalog";
+import {
+  resolveCanonicalBillingCadence,
+  resolvePublicCanonicalPlanCode
+} from "../../lib/commercial-catalog";
 import { buildPricingAccessStartPath } from "../../lib/pricing-access";
 
 export const metadata: Metadata = {
@@ -17,16 +20,20 @@ export const dynamic = "force-dynamic";
 export default async function PricingPage({
   searchParams
 }: {
-  searchParams: Promise<{ plan?: string }>;
+  searchParams: Promise<{ plan?: string; billingCadence?: string }>;
 }) {
   const params = await searchParams;
   const selectedPlanCode = resolvePublicCanonicalPlanCode(params.plan);
-  const data = await getPricingPageData();
+  const selectedBillingCadence = resolveCanonicalBillingCadence(
+    params.billingCadence,
+    "monthly"
+  );
+  const data = await getPricingPageData(selectedBillingCadence);
   const shellCtaHref = data.sessionState.isAuthenticated
     ? "/dashboard"
     : selectedPlanCode
-      ? buildPricingAccessStartPath(selectedPlanCode)
-      : buildPricingAccessStartPath("starter");
+      ? buildPricingAccessStartPath(selectedPlanCode, selectedBillingCadence)
+      : buildPricingAccessStartPath("starter", selectedBillingCadence);
 
   return (
     <MarketingShell
@@ -43,7 +50,11 @@ export default async function PricingPage({
         source="pricing-page"
         storageKey="analytics:pricing-viewed"
       />
-      <PricingPageClient data={data} selectedPlanCode={selectedPlanCode} />
+      <PricingPageClient
+        data={data}
+        selectedPlanCode={selectedPlanCode}
+        selectedBillingCadence={selectedBillingCadence}
+      />
     </MarketingShell>
   );
 }

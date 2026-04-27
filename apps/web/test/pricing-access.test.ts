@@ -10,15 +10,24 @@ import {
 async function runPricingAccessTests() {
   assert.equal(buildPricingAccessStartPath("starter"), "/start?plan=starter");
   assert.equal(
+    buildPricingAccessStartPath("starter", "monthly"),
+    "/start?plan=starter&billingCadence=monthly"
+  );
+  assert.equal(
     buildPricingAccessOnboardingPath("scale"),
     "/onboarding?plan=scale&leadSource=pricing_plan_selection&leadIntent=launch-pricing&leadPlanCode=scale"
   );
   assert.equal(
+    buildPricingAccessOnboardingPath("scale", "annual"),
+    "/onboarding?plan=scale&leadSource=pricing_plan_selection&leadIntent=launch-pricing&leadPlanCode=scale&billingCadence=annual"
+  );
+  assert.equal(
     buildPricingAccessSignInPath({
       planCode: "starter",
+      billingCadence: "monthly",
       hasWorkspaceAccess: false
     }),
-    "/sign-in?redirectTo=%2Fonboarding%3Fplan%3Dstarter%26leadSource%3Dpricing_plan_selection%26leadIntent%3Dlaunch-pricing%26leadPlanCode%3Dstarter"
+    "/sign-in?redirectTo=%2Fonboarding%3Fplan%3Dstarter%26leadSource%3Dpricing_plan_selection%26leadIntent%3Dlaunch-pricing%26leadPlanCode%3Dstarter%26billingCadence%3Dmonthly"
   );
   assert.equal(
     buildPricingAccessSignInPath({

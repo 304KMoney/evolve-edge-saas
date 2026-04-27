@@ -1,24 +1,59 @@
 import { randomBytes } from "node:crypto";
 import { sanitizeInternalRedirect } from "./auth";
 import type { CanonicalPlanCode } from "./commercial-catalog";
+import {
+  resolveCanonicalBillingCadence,
+  type CanonicalBillingCadence
+} from "./commercial-catalog";
 
-export function buildPricingAccessOnboardingPath(planCode: CanonicalPlanCode) {
-  return sanitizeInternalRedirect(
-    `/onboarding?plan=${encodeURIComponent(planCode)}&leadSource=pricing_plan_selection&leadIntent=launch-pricing&leadPlanCode=${encodeURIComponent(planCode)}`
+function appendBillingCadence(
+  searchParams: URLSearchParams,
+  billingCadence?: CanonicalBillingCadence | null
+) {
+  if (!billingCadence) {
+    return;
+  }
+
+  searchParams.set(
+    "billingCadence",
+    resolveCanonicalBillingCadence(billingCadence, "monthly")
   );
 }
 
-export function buildPricingAccessStartPath(planCode: CanonicalPlanCode) {
-  return `/start?plan=${encodeURIComponent(planCode)}`;
+export function buildPricingAccessOnboardingPath(
+  planCode: CanonicalPlanCode,
+  billingCadence?: CanonicalBillingCadence | null
+) {
+  const searchParams = new URLSearchParams({
+    plan: planCode,
+    leadSource: "pricing_plan_selection",
+    leadIntent: "launch-pricing",
+    leadPlanCode: planCode
+  });
+  appendBillingCadence(searchParams, billingCadence);
+
+  return sanitizeInternalRedirect(`/onboarding?${searchParams.toString()}`);
+}
+
+export function buildPricingAccessStartPath(
+  planCode: CanonicalPlanCode,
+  billingCadence?: CanonicalBillingCadence | null
+) {
+  const searchParams = new URLSearchParams({
+    plan: planCode
+  });
+  appendBillingCadence(searchParams, billingCadence);
+  return `/start?${searchParams.toString()}`;
 }
 
 export function buildPricingAccessSignInPath(input: {
   planCode: CanonicalPlanCode;
+  billingCadence?: CanonicalBillingCadence | null;
   hasWorkspaceAccess: boolean;
 }) {
   const redirectTo = input.hasWorkspaceAccess
     ? "/dashboard"
-    : buildPricingAccessOnboardingPath(input.planCode);
+    : buildPricingAccessOnboardingPath(input.planCode, input.billingCadence);
 
   return `/sign-in?redirectTo=${encodeURIComponent(redirectTo)}`;
 }

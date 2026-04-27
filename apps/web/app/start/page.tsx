@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { MarketingShell } from "../../components/marketing-shell";
 import { PageAnalyticsTracker } from "../../components/page-analytics-tracker";
 import {
+  resolveCanonicalBillingCadence,
   getCanonicalCommercialPlanDefinition,
   resolvePublicCanonicalPlanCode
 } from "../../lib/commercial-catalog";
@@ -19,6 +20,7 @@ export const dynamic = "force-dynamic";
 
 type StartSearchParams = {
   plan?: string;
+  billingCadence?: string;
   submitted?: string;
   delivery?: string;
   error?: string;
@@ -31,6 +33,10 @@ export default async function StartPage({
 }) {
   const params = await searchParams;
   const planCode = resolvePublicCanonicalPlanCode(params.plan ?? "") ?? "starter";
+  const billingCadence = resolveCanonicalBillingCadence(
+    params.billingCadence,
+    "monthly"
+  );
   const plan = getCanonicalCommercialPlanDefinition(planCode) ??
     getCanonicalCommercialPlanDefinition("starter");
 
@@ -139,6 +145,7 @@ export default async function StartPage({
 
             <form action={requestPricingAccessAction} className="mt-8 grid gap-4">
               <input type="hidden" name="planCode" value={plan.code} />
+              <input type="hidden" name="billingCadence" value={billingCadence} />
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
@@ -192,7 +199,7 @@ export default async function StartPage({
                   Email customer access
                 </button>
                 <Link
-                  href={`/pricing?plan=${plan.code}` as never}
+                  href={`/pricing?plan=${plan.code}&billingCadence=${billingCadence}` as never}
                   className="inline-flex items-center justify-center rounded-full border border-line px-5 py-3 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
                 >
                   Back to pricing

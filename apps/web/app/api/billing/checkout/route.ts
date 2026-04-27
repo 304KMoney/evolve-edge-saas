@@ -6,6 +6,7 @@ import {
   getCurrentSubscription
 } from "../../../../lib/billing";
 import {
+  resolveCanonicalBillingCadence,
   resolveCanonicalPlanCode,
   resolvePublicCanonicalPlanCode,
   resolveCanonicalPlanCodeFromRevenuePlanCode,
@@ -66,13 +67,20 @@ export async function POST(request: Request) {
     maxLength: 120,
     fallback: "billing-checkout"
   });
+  const billingCadence = resolveCanonicalBillingCadence(
+    readValidatedFormString(formData ?? new FormData(), "billingCadence", {
+      maxLength: 32,
+      fallback: "annual"
+    }),
+    "annual"
+  );
   const canonicalPlanCode =
     resolvePublicCanonicalPlanCode(requestedPlanCode) ??
     resolveCanonicalPlanCode(requestedPlanCode) ??
     resolveCanonicalPlanCodeFromRevenuePlanCode(requestedPlanCode);
   const resolvedPlanCode =
     canonicalPlanCode
-      ? resolveRevenuePlanCodeForCanonicalPlan(canonicalPlanCode) ??
+      ? resolveRevenuePlanCodeForCanonicalPlan(canonicalPlanCode, billingCadence) ??
         canonicalPlanCode
       : requestedPlanCode;
 
@@ -154,8 +162,9 @@ export async function POST(request: Request) {
       organizationId: session.organization!.id,
       email: session.user.email,
       planCode: canonicalPlanCode ?? resolvedPlanCode,
+      billingCadence,
       successUrl: `${appUrl}/billing/return?status=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: `${appUrl}/billing/return?status=cancelled&planCode=${encodeURIComponent(canonicalPlanCode ?? resolvedPlanCode)}`
+      cancelUrl: `${appUrl}/billing/return?status=cancelled&planCode=${encodeURIComponent(canonicalPlanCode ?? resolvedPlanCode)}&billingCadence=${encodeURIComponent(billingCadence)}`
     });
 
     const paymentBinding = createPaymentCustomerBinding({

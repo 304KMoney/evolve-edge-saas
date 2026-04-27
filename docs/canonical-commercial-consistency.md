@@ -20,14 +20,15 @@ Use these display names:
 
 The canonical public pricing model is:
 
-- `Starter`: `$2,500 one-time`
-- `Scale`: `$7,500 one-time`
+- `Starter`: `Starting at $5,000 / month`
+- `Scale`: `Starting at $18,500 / month`
 - `Enterprise`: `Custom`
 
 Important:
 
 - The app still contains legacy internal revenue plan records for compatibility.
 - Public commercial plan selection is normalized before billing and workflow routing decisions are made.
+- Starter and Scale are premium recurring subscription offers with monthly and annual cadence support.
 - `enterprise` remains sales-led and should not be routed to self-serve checkout.
 
 ## Internal compatibility layer
@@ -36,9 +37,9 @@ The current backend uses an internal revenue-plan layer for billing records and 
 
 Compatibility rules:
 
-- `starter` -> `starter-annual`
-- `scale` -> `scale-annual`
-- `enterprise` -> `enterprise-annual`
+- `starter` -> `starter-monthly` or `starter-annual`
+- `scale` -> `scale-monthly` or `scale-annual`
+- `enterprise` -> `enterprise-monthly` or `enterprise-annual`
 - legacy `growth-*` revenue plans normalize to canonical commercial plan `scale`
 
 Boundary rule:
@@ -62,7 +63,7 @@ Evolve Edge now uses three distinct billing identifier layers. Keeping them sepa
   - values: `starter`, `scale`, `enterprise`
   - purpose: customer-facing and support-safe plan naming
 - Internal revenue-plan codes
-  - examples: `starter-annual`, `scale-annual`, `enterprise-annual`
+  - examples: `starter-monthly`, `starter-annual`, `scale-monthly`, `scale-annual`
   - purpose: persisted billing compatibility and subscription resolution
 
 Important rule:
@@ -194,8 +195,8 @@ Intentionally deferred:
 
 ## Rollout notes
 
-1. Set Stripe price and product env vars for Starter, Scale, and Enterprise.
-2. Verify `scale-annual` and `starter-annual` are the intended live internal mappings.
+1. Set Stripe monthly and annual price env vars plus product env vars for Starter, Scale, and Enterprise.
+2. Verify `starter-monthly`, `starter-annual`, `scale-monthly`, and `scale-annual` are the intended live internal mappings.
 3. Update Hostinger pricing and CTA content from the canonical reference.
 4. Update n8n workflow nodes to consume canonical routing fields only.
 5. Verify HubSpot custom properties exist before rollout.

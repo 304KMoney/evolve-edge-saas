@@ -66,6 +66,10 @@ export const CANONICAL_BILLING_MOTIONS = [
 
 export type CanonicalBillingMotion = (typeof CANONICAL_BILLING_MOTIONS)[number];
 
+export const CANONICAL_BILLING_CADENCES = ["monthly", "annual"] as const;
+
+export type CanonicalBillingCadence = (typeof CANONICAL_BILLING_CADENCES)[number];
+
 export const CANONICAL_HOSTINGER_CTA_TARGETS = [
   "stripe_checkout",
   "contact_sales"
@@ -86,22 +90,59 @@ export type CanonicalProcessingDepth =
 
 export const CANONICAL_PUBLIC_PRICING = {
   starter: {
-    usd: 2500,
-    label: "$2,500 one-time"
+    usd: 5000,
+    label: "Starting at $5,000 / month",
+    cadence: {
+      monthly: {
+        usd: 5000,
+        label: "$5,000 / month"
+      },
+      annual: {
+        usd: 48000,
+        label: "$48,000 / year"
+      }
+    }
   },
   scale: {
-    usd: 7500,
-    label: "$7,500 one-time"
+    usd: 18500,
+    label: "Starting at $18,500 / month",
+    cadence: {
+      monthly: {
+        usd: 18500,
+        label: "$18,500 / month"
+      },
+      annual: {
+        usd: 180000,
+        label: "$180,000 / year"
+      }
+    }
   },
   enterprise: {
     usd: null,
-    label: "Custom"
+    label: "Custom",
+    cadence: {
+      monthly: {
+        usd: null,
+        label: "Custom"
+      },
+      annual: {
+        usd: null,
+        label: "Custom"
+      }
+    }
   }
 } as const satisfies Record<
   CanonicalPlanCode,
   {
     usd: number | null;
     label: string;
+    cadence: Record<
+      CanonicalBillingCadence,
+      {
+        usd: number | null;
+        label: string;
+      }
+    >;
   }
 >;
 
@@ -268,8 +309,44 @@ export function getCanonicalPublicPriceUsd(planCode: CanonicalPlanCode) {
   return CANONICAL_PUBLIC_PRICING[planCode].usd;
 }
 
-export function getCanonicalPublicPriceLabel(planCode: CanonicalPlanCode) {
-  return CANONICAL_PUBLIC_PRICING[planCode].label;
+export function getCanonicalPublicPriceLabel(
+  planCode: CanonicalPlanCode,
+  cadence?: CanonicalBillingCadence | null
+) {
+  if (!cadence) {
+    return CANONICAL_PUBLIC_PRICING[planCode].label;
+  }
+
+  return CANONICAL_PUBLIC_PRICING[planCode].cadence[cadence].label;
+}
+
+export function getCanonicalPublicPriceUsdForCadence(
+  planCode: CanonicalPlanCode,
+  cadence: CanonicalBillingCadence
+) {
+  return CANONICAL_PUBLIC_PRICING[planCode].cadence[cadence].usd;
+}
+
+export function getCanonicalPublicPriceLabelForCadence(
+  planCode: CanonicalPlanCode,
+  cadence: CanonicalBillingCadence
+) {
+  return CANONICAL_PUBLIC_PRICING[planCode].cadence[cadence].label;
+}
+
+export function isCanonicalBillingCadence(
+  value: string | null | undefined
+): value is CanonicalBillingCadence {
+  return CANONICAL_BILLING_CADENCES.includes(
+    (value ?? "").trim().toLowerCase() as CanonicalBillingCadence
+  );
+}
+
+export function resolveCanonicalBillingCadence(
+  value: string | null | undefined,
+  fallback: CanonicalBillingCadence = "annual"
+) {
+  return isCanonicalBillingCadence(value) ? value : fallback;
 }
 
 export function getCanonicalStripePriceEnvVar(planCode: CanonicalPlanCode) {

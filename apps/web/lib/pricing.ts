@@ -2,6 +2,9 @@ import { getOptionalCurrentSession, isPasswordAuthEnabled } from "./auth";
 import { getCurrentSubscription } from "./billing";
 import {
   CANONICAL_COMMERCIAL_PLAN_CATALOG,
+  getCanonicalCadencePricingSummary,
+  resolveCanonicalBillingCadence,
+  type CanonicalBillingCadence,
   type CanonicalPlanCode,
   getCanonicalCommercialPlanDefinition,
   resolveCanonicalPlanCode,
@@ -15,6 +18,30 @@ import {
 } from "./runtime-config";
 import { buildPricingAccessOnboardingPath, buildPricingAccessStartPath } from "./pricing-access";
 
+function formatUsd(usd: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0
+  }).format(usd);
+}
+
+function buildAnnualSavingsLabel(planCode: CanonicalPlanCode) {
+  const pricing = getCanonicalCadencePricingSummary(planCode);
+  if (pricing.monthly.usd === null || pricing.annual.usd === null) {
+    return null;
+  }
+
+  const annualizedMonthly = pricing.monthly.usd * 12;
+  const savings = annualizedMonthly - pricing.annual.usd;
+
+  if (savings <= 0) {
+    return null;
+  }
+
+  return `Save ${formatUsd(savings)} / year with annual billing`;
+}
+
 export type PricingPlanCard = {
   code: CanonicalPlanCode;
   name: string;
@@ -23,6 +50,15 @@ export type PricingPlanCard = {
   publicDescription: string;
   priceLabel: string;
   priceUsd: number | null;
+  priceByCadence: Record<
+    CanonicalBillingCadence,
+    {
+      label: string;
+      usd: number | null;
+      helperText: string;
+    }
+  >;
+  annualSavingsLabel: string | null;
   billingMotion: "stripe_checkout" | "contact_sales";
   workflowCode: string;
   reportTemplate: string;
@@ -79,7 +115,7 @@ function buildPlanHighlights(planCode: CanonicalPlanCode) {
         "Backend-owned audit routing",
         "Executive-ready snapshot delivery",
         "Evidence-backed assessment flow",
-        "Stripe-hosted checkout"
+        "Premium recurring governance subscription"
       ];
     case "enterprise":
       return [
@@ -94,7 +130,7 @@ function buildPlanHighlights(planCode: CanonicalPlanCode) {
         "Primary audit operating path",
         "Deeper report delivery",
         "Monitoring and control scoring support",
-        "Premium workflow depth"
+        "Premium workflow depth and recurring oversight"
       ];
   }
 }
@@ -102,12 +138,12 @@ function buildPlanHighlights(planCode: CanonicalPlanCode) {
 function buildPlanHeadline(planCode: CanonicalPlanCode) {
   switch (planCode) {
     case "starter":
-      return "For lean teams that need a credible AI governance starting point without operational sprawl.";
+      return "For lean teams that need a credible recurring AI governance starting point without operational sprawl.";
     case "enterprise":
       return "For larger regulated programs that need custom rollout, stakeholder coordination, and sales-led packaging.";
     case "scale":
     default:
-      return "For serious regulated teams that want the full operating path, deeper reporting, and stronger workflow coverage.";
+      return "For serious regulated teams that want a premium recurring operating path, deeper reporting, and stronger workflow coverage.";
   }
 }
 
@@ -198,12 +234,14 @@ function buildPricingCta(input: {
     kind: "checkout",
     action: "/api/billing/checkout",
     label: plan.ctaLabel,
-    helperText: "The app resolves the canonical plan and routes checkout safely through Stripe.",
+    helperText: "The app resolves the canonical plan and selected billing cadence before routing checkout safely through Stripe.",
     planCode: plan.code
   };
 }
 
-export async function getPricingPageData(): Promise<PricingPageData> {
+export async function getPricingPageData(
+  selectedBillingCadence?: string | null
+): Promise<PricingPageData> {
   const session = await getOptionalCurrentSession();
   const hasWorkspaceSession =
     Boolean(session) && session?.authMode === "password";
@@ -216,6 +254,10 @@ export async function getPricingPageData(): Promise<PricingPageData> {
   const currentPlanCode =
     resolveCanonicalPlanCode(currentSubscription?.plan.code ?? null) ??
     resolveCanonicalPlanCodeFromRevenuePlanCode(currentSubscription?.plan.code ?? null);
+  const billingCadence = resolveCanonicalBillingCadence(
+    selectedBillingCadence ?? undefined,
+    "monthly"
+  );
 
   const plans = CANONICAL_COMMERCIAL_PLAN_CATALOG.map((plan) => ({
     code: plan.code,
@@ -223,8 +265,25 @@ export async function getPricingPageData(): Promise<PricingPageData> {
     headline: buildPlanHeadline(plan.code),
     description: plan.publicDescription,
     publicDescription: plan.publicDescription,
-    priceLabel: plan.publicPriceLabel,
-    priceUsd: plan.publicPriceUsd,
+    priceLabel: getCanonicalCadencePricingSummary(plan.code)[billingCadence].label,
+    priceUsd: getCanonicalCadencePricingSummary(plan.code)[billingCadence].usd,
+    priceByCadence: {
+      monthly: {
+        ...getCanonicalCadencePricingSummary(plan.code).monthly,
+        helperText:
+          plan.code === "enterprise"
+            ? "Sales-led custom scope"
+            : "Billed monthly"
+      },
+      annual: {
+        ...getCanonicalCadencePricingSummary(plan.code).annual,
+        helperText:
+          plan.code === "enterprise"
+            ? "Sales-led custom scope"
+            : "Billed annually"
+      }
+    },
+    annualSavingsLabel: buildAnnualSavingsLabel(plan.code),
     billingMotion: plan.billingMotion,
     workflowCode: plan.workflowCode,
     reportTemplate: plan.reportTemplate,
