@@ -5,6 +5,17 @@ export type TrustArtifact = {
   audience: string;
 };
 
+export type DownloadableFrameworkAsset = {
+  frameworkSlug: string;
+  frameworkCode: string;
+  frameworkName: string;
+  title: string;
+  summary: string;
+  audience: string;
+  formatLabel: string;
+  href: string;
+};
+
 export type FrameworkCoverageEntry = {
   slug: string;
   code: string;
@@ -16,6 +27,24 @@ export type FrameworkCoverageEntry = {
   executiveQuestions: string[];
   reportOutputs: string[];
   monitoringSignals: string[];
+  featuredAsset?: {
+    eyebrow: string;
+    title: string;
+    body: string;
+    imagePath: string;
+    imageAlt: string;
+    stats: Array<{
+      label: string;
+      value: string;
+    }>;
+  };
+  assetDownloads?: Array<{
+    title: string;
+    summary: string;
+    audience: string;
+    formatLabel: string;
+    href: string;
+  }>;
 };
 
 export type MethodologyStage = {
@@ -82,6 +111,12 @@ export const TRUST_CENTER_CONTENT = {
       audience: "Security, compliance, internal audit"
     },
     {
+      title: "Framework asset pack",
+      summary: "Downloadable buyer-facing framework visuals that explain readiness posture, evidence flow, and executive delivery without overclaiming certification.",
+      status: "available",
+      audience: "Security reviewers, procurement, executive sponsors"
+    },
+    {
       title: "Security questionnaire pack",
       summary: "Questionnaire response pack and platform architecture summary for security review workflows.",
       status: "planned",
@@ -142,6 +177,38 @@ export const FRAMEWORK_COVERAGE_ENTRIES: FrameworkCoverageEntry[] = [
       "Recurring reassessment of open findings",
       "Trend visibility for remediation progress",
       "Framework posture changes over time"
+    ],
+    featuredAsset: {
+      eyebrow: "SOC 2 Asset Pack",
+      title: "Buyer-facing SOC 2 readiness assets for security review and executive alignment.",
+      body:
+        "These website assets give regulated buyers a cleaner way to understand how Evolve Edge frames trust service criteria, evidence discipline, and delivery expectations before a live walkthrough.",
+      imagePath: "/framework-assets/soc2-readiness-map.svg",
+      imageAlt:
+        "SOC 2 readiness map showing trust service criteria, evidence inputs, and executive-ready outputs.",
+      stats: [
+        { label: "Trust service criteria", value: "5" },
+        { label: "Executive outputs", value: "3" },
+        { label: "Downloadable assets", value: "2" }
+      ]
+    },
+    assetDownloads: [
+      {
+        title: "SOC 2 readiness map",
+        summary:
+          "Visual summary of the SOC 2 buyer conversation: trust service criteria, evidence lanes, and leadership outputs.",
+        audience: "Security reviewers and founders",
+        formatLabel: "SVG",
+        href: "/framework-assets/soc2-readiness-map.svg"
+      },
+      {
+        title: "SOC 2 evidence flow",
+        summary:
+          "Explains how intake, evidence, QA review, and executive delivery connect without overstating certification claims.",
+        audience: "Procurement, operators, and compliance leads",
+        formatLabel: "SVG",
+        href: "/framework-assets/soc2-evidence-flow.svg"
+      }
     ]
   },
   {
@@ -233,6 +300,20 @@ export const FRAMEWORK_COVERAGE_ENTRIES: FrameworkCoverageEntry[] = [
     ]
   }
 ];
+
+export const DOWNLOADABLE_FRAMEWORK_ASSETS: DownloadableFrameworkAsset[] =
+  FRAMEWORK_COVERAGE_ENTRIES.flatMap((framework) =>
+    (framework.assetDownloads ?? []).map((asset) => ({
+      frameworkSlug: framework.slug,
+      frameworkCode: framework.code,
+      frameworkName: framework.name,
+      title: asset.title,
+      summary: asset.summary,
+      audience: asset.audience,
+      formatLabel: asset.formatLabel,
+      href: asset.href
+    }))
+  );
 
 export const METHODOLOGY_STAGES: MethodologyStage[] = [
   {

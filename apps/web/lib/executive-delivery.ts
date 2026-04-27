@@ -74,6 +74,10 @@ type ReportJsonRecord = Record<string, unknown>;
 
 type ExecutiveDeliveryAction = "qa_approve" | "qa_request_changes" | "founder_review" | "send" | "book_briefing" | "complete_briefing";
 
+type TransactionalExecutiveDeliveryDbClient = ExecutiveDeliveryDbClient & {
+  $transaction?: <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>) => Promise<T>;
+};
+
 function readRecord(value: unknown): ReportJsonRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -89,6 +93,14 @@ function toSentence(value: string | null | undefined, fallback: string) {
 
 function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function isPendingReviewCompatibleReportStatus(status: ReportStatus | null | undefined) {
+  return (
+    status === ReportStatus.PENDING ||
+    status === ReportStatus.PENDING_REVIEW ||
+    status === ReportStatus.GENERATED
+  );
 }
 
 const reportPackageVersionSummarySelection = {
@@ -391,6 +403,33 @@ export function canTransitionReportPackage(input: {
     default:
       return false;
   }
+}
+
+export function canRecoverReportPackageQaApproval(input: {
+  deliveryStatus: ReportPackageDeliveryStatus;
+  qaStatus: ReportPackageQaStatus;
+  reportStatus: ReportStatus | null | undefined;
+}) {
+  return (
+    input.deliveryStatus === ReportPackageDeliveryStatus.REVIEWED &&
+    input.qaStatus === ReportPackageQaStatus.APPROVED &&
+    isPendingReviewCompatibleReportStatus(input.reportStatus)
+  );
+}
+
+async function runExecutiveDeliveryTransaction<T>(
+  db: ExecutiveDeliveryDbClient,
+  operation: (tx: ExecutiveDeliveryDbClient) => Promise<T>
+) {
+  const transactionCapableDb = db as TransactionalExecutiveDeliveryDbClient;
+
+  if (typeof transactionCapableDb.$transaction === "function") {
+    return transactionCapableDb.$transaction((tx) =>
+      operation(tx as ExecutiveDeliveryDbClient)
+    );
+  }
+
+  return operation(db);
 }
 
 export function buildReportPackageSendBlockedFinding(input: {
@@ -835,6 +874,11 @@ export async function approveReportPackageQa(input: {
   const db = (input.db ?? prisma) as ExecutiveDeliveryDbClient;
   const deliveryPackage = await getPackageById(input.packageId, input.organizationId, db);
   const latestReportId = getLatestReportId(deliveryPackage);
+  const qaApprovalRecoveryState = canRecoverReportPackageQaApproval({
+    deliveryStatus: deliveryPackage.deliveryStatus,
+    qaStatus: deliveryPackage.qaStatus,
+    reportStatus: deliveryPackage.latestReport?.status
+  });
 
   if (
     !canTransitionReportPackage({
@@ -843,51 +887,75 @@ export async function approveReportPackageQa(input: {
       requiresFounderReview: deliveryPackage.requiresFounderReview,
       founderReviewedAt: deliveryPackage.founderReviewedAt,
       action: "qa_approve"
-    })
+    }) &&
+    !qaApprovalRecoveryState
   ) {
     throw new Error("QA approval is only available on newly generated packages.");
   }
 
-  const reviewedAt = new Date();
-  const updated = await db.reportPackage.update({
-    where: { id: deliveryPackage.id },
-    data: {
-      qaStatus: ReportPackageQaStatus.APPROVED,
-      deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
-      qaNotes: input.notes?.trim() || null,
-      reviewedAt,
-      reviewedByUserId: input.actorUserId
+  const reviewedAt = deliveryPackage.reviewedAt ?? new Date();
+  const trimmedNotes = input.notes?.trim() || null;
+
+  return runExecutiveDeliveryTransaction(db, async (tx) => {
+    const packageNeedsStatusRepair =
+      deliveryPackage.deliveryStatus !== ReportPackageDeliveryStatus.REVIEWED ||
+      deliveryPackage.qaStatus !== ReportPackageQaStatus.APPROVED ||
+      deliveryPackage.reviewedAt === null ||
+      deliveryPackage.reviewedByUserId === null;
+    const packageNeedsNoteRefresh =
+      trimmedNotes !== null && trimmedNotes !== (deliveryPackage.qaNotes ?? null);
+    const shouldUpdatePackage = packageNeedsStatusRepair || packageNeedsNoteRefresh;
+
+    const updated = shouldUpdatePackage
+      ? await tx.reportPackage.update({
+          where: { id: deliveryPackage.id },
+          data: {
+            qaStatus: ReportPackageQaStatus.APPROVED,
+            deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
+            qaNotes: trimmedNotes ?? deliveryPackage.qaNotes ?? null,
+            reviewedAt,
+            reviewedByUserId: input.actorUserId
+          }
+        })
+      : deliveryPackage;
+
+    const currentReportStatus = deliveryPackage.latestReport?.status;
+    if (
+      currentReportStatus !== ReportStatus.APPROVED &&
+      currentReportStatus !== ReportStatus.DELIVERED &&
+      currentReportStatus !== ReportStatus.SUPERSEDED &&
+      currentReportStatus !== ReportStatus.READY
+    ) {
+      await tx.report.update({
+        where: { id: latestReportId },
+        data: {
+          status: ReportStatus.APPROVED
+        }
+      });
     }
-  });
 
-  await db.report.update({
-    where: { id: latestReportId },
-    data: {
-      status: ReportStatus.APPROVED
-    }
-  });
+    await markCustomerRunWorkflowProgressByReport({
+      reportId: latestReportId,
+      status: "completed",
+      db: tx
+    });
 
-  await markCustomerRunWorkflowProgressByReport({
-    reportId: latestReportId,
-    status: "completed",
-    db
-  });
+    await publishReportPackageEvent(tx, {
+      type: "report_package.reviewed",
+      reportPackageId: updated.id,
+      organizationId: updated.organizationId,
+      userId: input.actorUserId,
+      reportId: latestReportId,
+      assessmentId: updated.assessmentId,
+      payload: {
+        qaStatus: updated.qaStatus,
+        reviewedAt: reviewedAt.toISOString(),
+        requiresFounderReview: updated.requiresFounderReview
+      }
+    });
 
-  await publishReportPackageEvent(db, {
-    type: "report_package.reviewed",
-    reportPackageId: updated.id,
-    organizationId: updated.organizationId,
-    userId: input.actorUserId,
-    reportId: latestReportId,
-    assessmentId: updated.assessmentId,
-    payload: {
-      qaStatus: updated.qaStatus,
-      reviewedAt: reviewedAt.toISOString(),
-      requiresFounderReview: updated.requiresFounderReview
-    }
+    return updated;
   });
-
-  return updated;
 }
 
 export async function requestReportPackageChanges(input: {

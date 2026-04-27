@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
 import {
   EvidenceProcessingStatus,
   EvidenceReviewStatus
@@ -8,6 +10,7 @@ import {
   canTransitionEvidenceReviewStatus,
   computeEvidenceSha256,
   getEvidenceFileExtension,
+  getEvidenceStorageRoot,
   isSupportedEvidenceUpload,
   parseEvidenceTags,
   sanitizeEvidenceFileName
@@ -45,6 +48,33 @@ function runEvidenceTests() {
     computeEvidenceSha256(Buffer.from("hello-world")),
     computeEvidenceSha256(Buffer.from("hello-world"))
   );
+
+  const originalVercel = process.env.VERCEL;
+  const originalVercelEnv = process.env.VERCEL_ENV;
+  delete process.env.VERCEL;
+  delete process.env.VERCEL_ENV;
+  assert.equal(
+    getEvidenceStorageRoot(),
+    path.resolve(path.join(process.cwd(), ".data", "evidence"))
+  );
+
+  process.env.VERCEL = "1";
+  assert.equal(
+    getEvidenceStorageRoot(),
+    path.resolve(path.join(os.tmpdir(), "evolve-edge", "evidence"))
+  );
+
+  if (originalVercel === undefined) {
+    delete process.env.VERCEL;
+  } else {
+    process.env.VERCEL = originalVercel;
+  }
+
+  if (originalVercelEnv === undefined) {
+    delete process.env.VERCEL_ENV;
+  } else {
+    process.env.VERCEL_ENV = originalVercelEnv;
+  }
 
   assert.equal(
     canTransitionEvidenceProcessingStatus(

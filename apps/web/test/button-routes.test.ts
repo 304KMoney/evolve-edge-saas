@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { existsSync, readdirSync } from "node:fs";
 
-const appRoot = path.resolve(process.cwd(), "app");
+const repoAppRoot = path.resolve(process.cwd(), "apps", "web", "app");
+const appRoot = existsSync(repoAppRoot)
+  ? repoAppRoot
+  : path.resolve(process.cwd(), "app");
 
 function normalizeRoutePath(route: string) {
   const [pathname] = route.split(/[?#]/, 1);
@@ -74,6 +77,11 @@ function hasRouteImplementation(route: string) {
 
 function runButtonRouteTests() {
   const buttonRoutes = [
+    "/",
+    "/contact",
+    "/frameworks",
+    "/frameworks/soc-2",
+    "/pricing",
     "/dashboard",
     "/dashboard/assessments",
     "/dashboard/assessments/start",
@@ -94,6 +102,8 @@ function runButtonRouteTests() {
     "/dashboard/settings#trust-center",
     "/onboarding",
     "/contact-sales",
+    "/contact-sales?intent=enterprise-plan&source=pricing-page",
+    "/contact-sales?intent=framework-review&source=framework-page",
     "/contact-sales?intent=premium-reports&source=reports",
     "/contact-sales?intent=report-access-support&source=report-access-state",
     "/contact-sales?intent=white-glove-onboarding&source=dashboard",

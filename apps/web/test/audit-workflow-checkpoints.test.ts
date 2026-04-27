@@ -4,7 +4,9 @@ import {
   AUDIT_WORKFLOW_NODE_SEQUENCE,
   buildAuditWorkflowResumePlan,
   createInMemoryAuditWorkflowCheckpointStore,
+  createPrismaAuditWorkflowCheckpointStore,
 } from "../src/server/ai/workflows/audit/checkpoints";
+import { buildInitialAuditWorkflowState } from "../src/server/ai/workflows/audit/state";
 
 function buildWorkflowInput(workflowDispatchId = "wd_checkpoint") {
   return {
@@ -226,6 +228,63 @@ async function runAuditWorkflowCheckpointTests() {
       "remediation_roadmap",
       "final_report",
     ]);
+  }
+
+  {
+    const schemaDriftError = Object.assign(
+      new Error("The table `public.AuditWorkflowCheckpoint` does not exist in the current database."),
+      {
+        name: "PrismaClientKnownRequestError",
+        code: "P2021",
+      }
+    );
+
+    const store = createPrismaAuditWorkflowCheckpointStore({
+      analysisJob: {
+        findFirst: async () => ({ id: "job_123" }),
+      },
+      auditWorkflowCheckpoint: {
+        create: async () => {
+          throw schemaDriftError;
+        },
+        findMany: async () => {
+          throw schemaDriftError;
+        },
+      },
+    } as any);
+
+    const listedBeforeWrite = await store.listCheckpoints("wd_schema_drift");
+    assert.deepEqual(listedBeforeWrite, []);
+
+    const writtenCheckpoint = await store.writeCheckpoint({
+      workflowDispatchId: "wd_schema_drift",
+      dispatchId: "disp_123",
+      orgId: "org_123",
+      assessmentId: "asm_123",
+      nodeName: "business_context",
+      status: "RUNNING",
+      state: buildInitialAuditWorkflowState({
+        orgId: "org_123",
+        assessmentId: "asm_123",
+        workflowDispatchId: "wd_schema_drift",
+        dispatchId: "disp_123",
+        customerEmail: "buyer@example.com",
+        companyName: "Acme Health",
+        industry: "Healthcare",
+        companySize: "51-200",
+        planTier: "scale",
+        selectedFrameworks: ["SOC 2"],
+        assessmentAnswers: {},
+        evidenceSummary: null,
+      }),
+    });
+
+    assert.equal(writtenCheckpoint.nodeName, "business_context");
+    assert.equal(writtenCheckpoint.status, "RUNNING");
+
+    const listedAfterWrite = await store.listCheckpoints("wd_schema_drift");
+    assert.equal(listedAfterWrite.length, 1);
+    assert.equal(listedAfterWrite[0]?.nodeName, "business_context");
   }
 
   console.log("audit-workflow-checkpoints tests passed");

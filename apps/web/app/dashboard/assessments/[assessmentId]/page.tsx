@@ -102,7 +102,7 @@ export default async function AssessmentDetailPage({
 
         {query.error === "incomplete" ? (
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
-            Complete at least one intake section before submitting the assessment.
+            Save at least one intake section as in progress, in review, or completed before submitting the assessment.
           </div>
         ) : null}
 

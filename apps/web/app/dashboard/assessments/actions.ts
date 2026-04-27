@@ -11,7 +11,10 @@ import { requireCurrentSession } from "../../../lib/auth";
 import { getServerAuditRequestContext, writeAuditLog } from "../../../lib/audit";
 import { createOrReuseAssessmentWorkspace } from "../../../lib/assessment-start";
 import { syncOrganizationCustomerAccount } from "../../../lib/customer-accounts";
-import { calculateWeightedProgress } from "../../../lib/conversion-funnel";
+import {
+  calculateWeightedProgress,
+  hasSavedAssessmentIntakeDraft
+} from "../../../lib/conversion-funnel";
 import {
   createCustomerRunForAssessment,
   markCustomerRunQueuedForAnalysis
@@ -207,13 +210,13 @@ export async function submitAssessmentAction(formData: FormData) {
     redirect("/dashboard/assessments?error=missing-assessment");
   }
 
+  if (!hasSavedAssessmentIntakeDraft(assessment.sections)) {
+    redirect(`/dashboard/assessments/${assessment.id}?error=incomplete`);
+  }
+
   const completedSections = assessment.sections.filter(
     (section) => section.status === "completed"
   ).length;
-
-  if (completedSections === 0) {
-    redirect(`/dashboard/assessments/${assessment.id}?error=incomplete`);
-  }
 
   let submittedEventId: string | null = null;
 

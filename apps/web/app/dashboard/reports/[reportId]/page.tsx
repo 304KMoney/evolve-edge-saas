@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { AuditActorType, Prisma, ReportStatus, prisma } from "@evolve-edge/db";
 import {
   getSessionAuthorizationContext,
-  requireOrganizationPermission
+  requireOrganizationPermissionForOrganization
 } from "../../../../lib/auth";
 import {
   getServerAuditRequestContext,
@@ -17,7 +17,11 @@ import { createPlaceholderCustomerAccessGrant } from "../../../../lib/customer-a
 import { findLatestCustomerAccessGrant } from "../../../../lib/customer-access-grant-records";
 import { toCustomerAccessSession } from "../../../../lib/customer-access-session";
 import { publishDomainEvent } from "../../../../lib/domain-events";
-import { getReportExecutiveDeliveryPackage } from "../../../../lib/executive-delivery";
+import {
+  canRecoverReportPackageQaApproval,
+  canTransitionReportPackage,
+  getReportExecutiveDeliveryPackage
+} from "../../../../lib/executive-delivery";
 import {
   buildReportAccessStateHref,
   evaluateCustomerReportAccess,
@@ -105,9 +109,18 @@ export default async function ReportDetailPage({
     error?: string;
   }>;
 }) {
-  const session = await requireOrganizationPermission("reports.view");
   const { reportId } = await params;
   const query = await searchParams;
+  const reportAccessCandidate = await getReportAccessCandidateById(reportId);
+
+  if (!reportAccessCandidate) {
+    notFound();
+  }
+
+  const session = await requireOrganizationPermissionForOrganization(
+    "reports.view",
+    reportAccessCandidate.organizationId
+  );
   const accessSession = toCustomerAccessSession(session);
   const reportView = await getDashboardReportDetailViewForAccessSession({
     reportId,
@@ -116,11 +129,6 @@ export default async function ReportDetailPage({
   const report = reportView?.report ?? null;
 
   if (!report) {
-    const reportAccessCandidate = await getReportAccessCandidateById(reportId);
-
-    if (!reportAccessCandidate) {
-      notFound();
-    }
 
     const durableAccessGrant = await findLatestCustomerAccessGrant({
       organizationId: accessSession.organizationId,
@@ -245,6 +253,22 @@ export default async function ReportDetailPage({
           reportId: report.id
         })
       : null;
+  const qaApprovalNeedsSync = deliveryPackage
+    ? canRecoverReportPackageQaApproval({
+        deliveryStatus: deliveryPackage.deliveryStatus,
+        qaStatus: deliveryPackage.qaStatus,
+        reportStatus: report.status
+      })
+    : false;
+  const canMarkPackageSent = deliveryPackage
+    ? canTransitionReportPackage({
+        deliveryStatus: deliveryPackage.deliveryStatus,
+        qaStatus: deliveryPackage.qaStatus,
+        requiresFounderReview: deliveryPackage.requiresFounderReview,
+        founderReviewedAt: deliveryPackage.founderReviewedAt,
+        action: "send"
+      })
+    : false;
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
@@ -429,7 +453,9 @@ export default async function ReportDetailPage({
               {formatStatus(report.status)}
             </p>
             <p className="mt-2 text-sm text-steel">
-              {isPendingReviewLikeStatus(report.status)
+              {qaApprovalNeedsSync
+                ? "QA review is already recorded for this package and delivery controls are being synchronized."
+                : isPendingReviewLikeStatus(report.status)
                 ? "Awaiting internal reviewer approval before client delivery."
                 : report.status === ReportStatus.APPROVED
                   ? "Approved for delivery controls and customer send."
@@ -495,8 +521,14 @@ export default async function ReportDetailPage({
                         Save internal notes
                       </button>
                     </form>
-                    {deliveryPackage.deliveryStatus === "GENERATED" ? (
+                    {deliveryPackage.deliveryStatus === "GENERATED" ||
+                    qaApprovalNeedsSync ? (
                       <>
+                    {qaApprovalNeedsSync ? (
+                      <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-warning">
+                        QA approval is already recorded for this package. Retrying approval will repair the report review state and restore the next delivery actions.
+                      </p>
+                    ) : null}
                     <form action={approveReportPackageQaAction} className="space-y-3">
                       <input type="hidden" name="reportId" value={report.id} />
                       <textarea
@@ -509,7 +541,7 @@ export default async function ReportDetailPage({
                         type="submit"
                         className="rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-5 py-3 text-sm font-semibold text-[#05111d]"
                       >
-                        Approve for delivery
+                        {qaApprovalNeedsSync ? "Retry approval sync" : "Approve for delivery"}
                       </button>
                     </form>
                     <form action={requestReportPackageChangesAction} className="space-y-3">
@@ -588,7 +620,7 @@ export default async function ReportDetailPage({
                 ) : null}
 
                 {report.status !== ReportStatus.DELIVERED &&
-                report.status === ReportStatus.APPROVED &&
+                canMarkPackageSent &&
                 canManageDeliveryControls ? (
                   <form action={markReportDeliveredAction} className="space-y-3">
                     <input type="hidden" name="reportId" value={report.id} />

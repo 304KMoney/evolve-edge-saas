@@ -6,6 +6,7 @@ import {
   buildExecutiveSummarySnapshot,
   buildFrameworkSummarySnapshot,
   buildRoadmapSummarySnapshot,
+  canRecoverReportPackageQaApproval,
   canTransitionReportPackage,
   evaluateFounderReviewRequirement,
   getOrganizationReportPackages,
@@ -15,7 +16,7 @@ import {
   ReportPackageQaStatus,
   upsertExecutiveDeliveryPackageForReport
 } from "../lib/executive-delivery";
-import { CommercialPlanCode } from "@evolve-edge/db";
+import { CommercialPlanCode, ReportStatus } from "@evolve-edge/db";
 import { buildExecutiveBriefingOutput } from "../lib/executive-briefing";
 
 async function runExecutiveDeliveryTests() {
@@ -361,6 +362,22 @@ async function runExecutiveDeliveryTests() {
     assert.equal(cannotSendBeforeQa, false);
     assert.equal(cannotSendBeforeFounderReview, false);
     assert.equal(canCompleteBriefing, true);
+  }
+
+  {
+    const canRecoverApprovedQa = canRecoverReportPackageQaApproval({
+      deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
+      qaStatus: ReportPackageQaStatus.APPROVED,
+      reportStatus: ReportStatus.PENDING
+    });
+    const cannotRecoverRejectedQa = canRecoverReportPackageQaApproval({
+      deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
+      qaStatus: ReportPackageQaStatus.CHANGES_REQUESTED,
+      reportStatus: ReportStatus.PENDING
+    });
+
+    assert.equal(canRecoverApprovedQa, true);
+    assert.equal(cannotRecoverRejectedQa, false);
   }
 
   {

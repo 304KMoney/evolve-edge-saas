@@ -6,7 +6,7 @@ import {
   prisma
 } from "@evolve-edge/db";
 import { NextResponse } from "next/server";
-import { requireOrganizationPermission } from "../../../../../lib/auth";
+import { requireOrganizationPermissionForOrganization } from "../../../../../lib/auth";
 import {
   buildAuditRequestContextFromRequest,
   writeAuditLog
@@ -69,6 +69,14 @@ function readOverallRiskPosture(value: unknown) {
     level: typeof posture.level === "string" ? posture.level : null,
     summary: typeof posture.summary === "string" ? posture.summary : null
   };
+}
+
+function readArtifactMetadata(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
 }
 
 export async function GET(
@@ -135,21 +143,25 @@ export async function GET(
     );
   }
 
-  const session = await requireOrganizationPermission("reports.view");
-  const accessSession = toCustomerAccessSession(session);
   const reportAccessCandidate = await getReportAccessCandidateById(reportId);
 
   if (!reportAccessCandidate) {
     logServerEvent("warn", "report.export.not_found", {
       resource_id: reportId,
-      org_id: signedAccess?.organizationId ?? session?.organization?.id ?? null,
-      user_id: session?.user.id ?? null,
+      org_id: signedAccess?.organizationId ?? null,
+      user_id: null,
       status: "not_found",
       source: "report.delivery",
       requestContext
     });
     return new Response("Report not found.", { status: 404 });
   }
+
+  const session = await requireOrganizationPermissionForOrganization(
+    "reports.view",
+    reportAccessCandidate.organizationId
+  );
+  const accessSession = toCustomerAccessSession(session);
 
   const durableAccessGrant = await findLatestCustomerAccessGrant({
     organizationId:
@@ -222,7 +234,8 @@ export async function GET(
 
   const artifactAvailability = getReportArtifactAvailability({
     reportId: report.id,
-    status: report.status
+    status: report.status,
+    artifactMetadata: readArtifactMetadata(report.artifactMetadataJson)
   });
 
   if (!artifactAvailability.canDownload) {

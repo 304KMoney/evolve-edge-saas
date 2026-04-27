@@ -12,6 +12,10 @@ import {
   mapCustomerAccessGrantRecordToGrant
 } from "./customer-access-grant-records";
 import type { CustomerAccessSession } from "./customer-access-session";
+import {
+  isPrismaRuntimeCompatibilityError,
+  logPrismaRuntimeCompatibilityError,
+} from "./prisma-runtime";
 import { getReportArtifactAvailability } from "./report-artifacts";
 import { evaluateCustomerReportAccess } from "./report-access-control";
 
@@ -337,6 +341,57 @@ function mergeArtifactMetadataPatch(input: {
   nextArtifactMetadata.downloadRoute = `/api/reports/${input.reportId}/export`;
 
   return nextArtifactMetadata;
+}
+
+let compatibleGeneratedReportStatusCache: ReportStatus | null = null;
+
+async function getCompatibleGeneratedReportStatus(
+  db: ReportRecordsDbClient = prisma
+) {
+  if (compatibleGeneratedReportStatusCache) {
+    return compatibleGeneratedReportStatusCache;
+  }
+
+  try {
+    const rows = await db.$queryRaw<Array<{ value: string }>>`
+      SELECT e.enumlabel AS value
+      FROM pg_enum e
+      JOIN pg_type t ON e.enumtypid = t.oid
+      WHERE lower(t.typname) = lower('ReportStatus')
+      ORDER BY e.enumsortorder
+    `;
+
+    const supportsGenerated = rows.some((row) => row.value === ReportStatus.GENERATED);
+    compatibleGeneratedReportStatusCache = supportsGenerated
+      ? ReportStatus.GENERATED
+      : ReportStatus.PENDING_REVIEW;
+
+    if (!supportsGenerated) {
+      logPrismaRuntimeCompatibilityError(
+        "report.persist_validated_workflow.generated_status_preflight",
+        new Error("ReportStatus enum does not currently include GENERATED."),
+        {
+          fallbackStatus: ReportStatus.PENDING_REVIEW,
+        }
+      );
+    }
+
+    return compatibleGeneratedReportStatusCache;
+  } catch (error) {
+    if (!isPrismaRuntimeCompatibilityError(error)) {
+      throw error;
+    }
+
+    compatibleGeneratedReportStatusCache = ReportStatus.PENDING_REVIEW;
+    logPrismaRuntimeCompatibilityError(
+      "report.persist_validated_workflow.generated_status_preflight",
+      error,
+      {
+        fallbackStatus: ReportStatus.PENDING_REVIEW,
+      }
+    );
+    return compatibleGeneratedReportStatusCache;
+  }
 }
 
 export type DashboardReportSummaryView = {
@@ -766,44 +821,50 @@ export async function persistValidatedWorkflowReport(input: {
     throw new Error("Report not found for validated workflow persistence.");
   }
 
+  const compatibleGeneratedStatus = await getCompatibleGeneratedReportStatus(db);
+
+  const baseData = {
+    organizationNameSnapshot:
+      input.organizationNameSnapshot === undefined
+        ? undefined
+        : input.organizationNameSnapshot,
+    customerEmailSnapshot:
+      input.customerEmailSnapshot === undefined
+        ? undefined
+        : input.customerEmailSnapshot,
+    selectedPlan:
+      input.selectedPlan === undefined
+        ? undefined
+        : toCommercialPlanCode(input.selectedPlan),
+    customerAccountId:
+      input.customerAccountId === undefined ? undefined : input.customerAccountId,
+    title: input.result.finalReport.reportTitle,
+    executiveSummary: input.result.finalReport.executiveSummary,
+    overallRiskPostureJson: {
+      score: input.result.postureScore,
+      level: input.result.riskLevel,
+      summary: input.result.riskAnalysis.summary
+    },
+    reportJson: buildWorkflowReportJson({
+      result: input.result,
+      existingReportJson: existing.reportJson
+    }),
+    artifactMetadataJson: {
+      downloadStatus: "ready",
+      source: "validated_workflow_report",
+      availableAt: new Date().toISOString(),
+      downloadRoute: `/api/reports/${input.reportId}/export`
+    },
+    publishedAt: new Date(),
+    deliveredAt: null,
+    deliveredByUserId: null
+  };
+
   return db.report.update({
     where: { id: input.reportId },
     data: {
-      organizationNameSnapshot:
-        input.organizationNameSnapshot === undefined
-          ? undefined
-          : input.organizationNameSnapshot,
-      customerEmailSnapshot:
-        input.customerEmailSnapshot === undefined
-          ? undefined
-          : input.customerEmailSnapshot,
-      selectedPlan:
-        input.selectedPlan === undefined
-          ? undefined
-          : toCommercialPlanCode(input.selectedPlan),
-      customerAccountId:
-        input.customerAccountId === undefined ? undefined : input.customerAccountId,
-      title: input.result.finalReport.reportTitle,
-      executiveSummary: input.result.finalReport.executiveSummary,
-      overallRiskPostureJson: {
-        score: input.result.postureScore,
-        level: input.result.riskLevel,
-        summary: input.result.riskAnalysis.summary
-      },
-      status: ReportStatus.GENERATED,
-      reportJson: buildWorkflowReportJson({
-        result: input.result,
-        existingReportJson: existing.reportJson
-      }),
-      artifactMetadataJson: {
-        downloadStatus: "ready",
-        source: "validated_workflow_report",
-        availableAt: new Date().toISOString(),
-        downloadRoute: `/api/reports/${input.reportId}/export`
-      },
-      publishedAt: new Date(),
-      deliveredAt: null,
-      deliveredByUserId: null
+      ...baseData,
+      status: compatibleGeneratedStatus,
     }
   });
 }

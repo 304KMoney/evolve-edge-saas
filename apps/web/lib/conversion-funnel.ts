@@ -33,6 +33,7 @@ export type BillingNextAction = {
 type IntakeSectionLike = {
   title: string;
   status: string;
+  responses?: unknown;
 };
 
 function clampPercent(value: number) {
@@ -49,6 +50,26 @@ function getSectionWeight(status: string) {
     default:
       return 0.2;
   }
+}
+
+function hasSavedDraftResponse(responses: unknown) {
+  return Boolean(
+    responses &&
+      typeof responses === "object" &&
+      !Array.isArray(responses)
+  );
+}
+
+export function hasSavedAssessmentIntakeDraft(
+  sections: IntakeSectionLike[]
+) {
+  return sections.some((section) => {
+    if (section.status === "completed" || section.status === "in_review") {
+      return true;
+    }
+
+    return section.status === "in_progress" && hasSavedDraftResponse(section.responses);
+  });
 }
 
 export function calculateWeightedProgress(statuses: string[]) {
@@ -127,7 +148,7 @@ export function getAssessmentIntakeProgress(
     ["in_progress", "in_review", "completed"].includes(section.status)
   );
   const progressPercent = calculateWeightedProgress(statuses);
-  const isReadyForSubmission = completedSections > 0;
+  const isReadyForSubmission = hasSavedAssessmentIntakeDraft(sections);
 
   return {
     progressPercent,
