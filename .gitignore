@@ -13,3 +13,10 @@ prisma/dev.db
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Vercel env pulls and temp files - never commit these, they contain live secrets
+.tmp-preview-env-*
+.tmp-production-env-pull
+.tmp-development-env-pull
+.npm-cache/
+tmp-smoke/
