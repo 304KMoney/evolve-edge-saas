@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { ArrowRight, RefreshCcw, ShieldCheck } from "lucide-react";
 import type { RetentionSnapshot } from "../lib/retention";
+import { resolveBillingCadenceFromPlanCode } from "../lib/billing-cadence";
 
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -45,6 +46,10 @@ function RetentionActionButton({
   const className = primary
     ? "inline-flex items-center justify-center rounded-full bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white"
     : "inline-flex items-center justify-center rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink";
+  const billingCadence =
+    action.kind === "checkout" && action.planCode
+      ? resolveBillingCadenceFromPlanCode(action.planCode)
+      : null;
 
   if (action.kind === "link") {
     return (
@@ -58,7 +63,12 @@ function RetentionActionButton({
   return (
     <form action={action.action} method="post">
       {action.kind === "checkout" && action.planCode ? (
-        <input type="hidden" name="planCode" value={action.planCode} />
+        <>
+          <input type="hidden" name="planCode" value={action.planCode} />
+          {billingCadence ? (
+            <input type="hidden" name="billingCadence" value={billingCadence} />
+          ) : null}
+        </>
       ) : null}
       <input type="hidden" name="source" value={action.source} />
       <button type="submit" className={className}>

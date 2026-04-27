@@ -351,20 +351,35 @@ export async function ensureDefaultPlans() {
 
 export async function listBillablePlans() {
   await ensureDefaultPlans();
-  const publicRevenuePlanCodes = getCanonicalCommercialPlanCatalog()
-    .map((plan) => plan.publicRevenuePlanCode)
-    .filter((value): value is NonNullable<typeof value> => value !== null);
+  const publicRevenuePlanCodes = getCanonicalCommercialPlanCatalog().flatMap((plan) => {
+    if (plan.billingMotion === "stripe_checkout") {
+      return [
+        resolveRevenuePlanCodeForCanonicalPlan(plan.code, "monthly"),
+        resolveRevenuePlanCodeForCanonicalPlan(plan.code, "annual")
+      ].filter((value): value is NonNullable<typeof value> => value !== null);
+    }
 
-  return prisma.plan.findMany({
+    return plan.publicRevenuePlanCode ? [plan.publicRevenuePlanCode] : [];
+  });
+  const planOrder = new Map(
+    publicRevenuePlanCodes.map((planCode, index) => [planCode, index] as const)
+  );
+
+  const plans = await prisma.plan.findMany({
     where: {
       isActive: true,
       isPublic: true,
       code: {
         in: publicRevenuePlanCodes
       }
-    },
-    orderBy: [{ sortOrder: "asc" }, { priceCents: "asc" }]
+    }
   });
+
+  return plans.sort(
+    (left, right) =>
+      (planOrder.get(left.code) ?? Number.MAX_SAFE_INTEGER) -
+      (planOrder.get(right.code) ?? Number.MAX_SAFE_INTEGER)
+  );
 }
 
 async function findPlanByCode(db: BillingDbClient, planCode: string) {

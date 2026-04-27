@@ -40,6 +40,7 @@ import {
   hasStripeBillingConfig,
   listBillablePlans
 } from "../../../lib/billing";
+import { getCanonicalPublicPriceLabelForCadence } from "../../../lib/canonical-domain";
 import {
   getCanonicalCommercialPlanDefinition,
   resolveCanonicalPlanCodeFromRevenuePlanCode
@@ -1149,6 +1150,28 @@ export default async function SettingsPage({
                     (() => {
                       const canonicalPlanCode = resolveCanonicalPlanCodeFromRevenuePlanCode(plan.code);
                       const canonicalPlan = getCanonicalCommercialPlanDefinition(canonicalPlanCode);
+                      const billingCadence =
+                        plan.billingInterval === "monthly" ? "monthly" : "annual";
+                      const isContactSalesPlan =
+                        canonicalPlan?.billingMotion === "contact_sales";
+                      const isCurrentPlan =
+                        subscription?.planId === plan.id ||
+                        (isContactSalesPlan &&
+                          canonicalPlanCode !== null &&
+                          resolveCanonicalPlanCodeFromRevenuePlanCode(
+                            subscription?.plan.code ?? null
+                          ) === canonicalPlanCode);
+                      const priceLabel =
+                        canonicalPlan && canonicalPlanCode
+                          ? getCanonicalPublicPriceLabelForCadence(
+                              canonicalPlanCode,
+                              billingCadence
+                            )
+                          : formatPriceCents(plan.priceCents, plan.billingInterval);
+                      const transitionDirection = getPlanTransitionDirection(
+                        currentPlanCode,
+                        plan.code
+                      );
 
                       return (
                     <div
@@ -1161,8 +1184,14 @@ export default async function SettingsPage({
                             {canonicalPlan?.displayName ?? plan.name}
                           </p>
                           <p className="mt-1 text-sm text-steel">
-                            {canonicalPlan?.publicPriceLabel ??
-                              formatPriceCents(plan.priceCents, plan.billingInterval)}
+                            {priceLabel}
+                          </p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.16em] text-steel">
+                            {isContactSalesPlan
+                              ? "Sales-led commercial packaging"
+                              : billingCadence === "monthly"
+                                ? "Billed monthly"
+                                : "Billed annually"}
                           </p>
                           <p className="mt-1 text-sm text-steel">
                             {canonicalPlan
@@ -1170,7 +1199,7 @@ export default async function SettingsPage({
                               : getPlanDisplaySummary(plan)}
                           </p>
                         </div>
-                        {subscription?.planId === plan.id ? (
+                        {isCurrentPlan ? (
                           <button
                             type="button"
                             disabled
@@ -1178,6 +1207,13 @@ export default async function SettingsPage({
                           >
                             Current plan
                           </button>
+                        ) : isContactSalesPlan ? (
+                          <Link
+                            href="/contact-sales?intent=enterprise-plan&source=settings-billing"
+                            className="inline-flex items-center justify-center rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
+                          >
+                            Talk to sales
+                          </Link>
                         ) : subscription?.stripeCustomerId &&
                           subscription?.stripeSubscriptionId ? (
                           <form action="/api/billing/portal" method="post">
@@ -1205,6 +1241,11 @@ export default async function SettingsPage({
                             <input type="hidden" name="planCode" value={plan.code} />
                             <input
                               type="hidden"
+                              name="billingCadence"
+                              value={billingCadence}
+                            />
+                            <input
+                              type="hidden"
                               name="source"
                               value={`settings-plan-selection:${plan.code}`}
                             />
@@ -1212,11 +1253,11 @@ export default async function SettingsPage({
                               type="submit"
                               className="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
                             >
-                              {getPlanTransitionDirection(currentPlanCode, plan.code) === "upgrade"
-                                ? "Upgrade in Stripe"
-                                : getPlanTransitionDirection(currentPlanCode, plan.code) === "downgrade"
-                                  ? "Downgrade in Stripe"
-                                  : "Choose plan"}
+                              {transitionDirection === "upgrade"
+                                ? `Upgrade to ${billingCadence} billing`
+                                : transitionDirection === "downgrade"
+                                  ? `Move to ${billingCadence} billing`
+                                  : `Choose ${billingCadence} plan`}
                             </button>
                           </form>
                         )}

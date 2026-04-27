@@ -600,6 +600,12 @@ export function getRevenuePlanDefinition(planCode: string | null | undefined) {
   return REVENUE_PLAN_CATALOG.find((plan) => plan.code === planCode) ?? null;
 }
 
+export function getBillingCadenceForRevenuePlanCode(
+  planCode: string | null | undefined
+) {
+  return getRevenuePlanDefinition(planCode)?.billingInterval ?? null;
+}
+
 export function getCanonicalPlanKeyFromPlanCode(planCode: string | null | undefined) {
   return getRevenuePlanDefinition(planCode)?.canonicalKey ?? null;
 }

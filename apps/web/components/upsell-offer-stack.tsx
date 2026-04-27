@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { ArrowRight, Sparkles } from "lucide-react";
 import type { ResolvedUpsellOffer } from "../lib/expansion-engine";
+import { resolveBillingCadenceFromPlanCode } from "../lib/billing-cadence";
 
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -100,6 +101,10 @@ export function UpsellOfferStack({
               : offer.priority === "medium"
                 ? "border-sky-200 bg-white"
                 : "border-[#d7eaeb] bg-white";
+          const billingCadence =
+            offer.cta.kind === "checkout"
+              ? resolveBillingCadenceFromPlanCode(offer.cta.planCode)
+              : null;
 
           return (
             <article
@@ -150,7 +155,16 @@ export function UpsellOfferStack({
                 ) : (
                   <form action={offer.cta.action} method="post">
                     {offer.cta.kind === "checkout" ? (
-                      <input type="hidden" name="planCode" value={offer.cta.planCode} />
+                      <>
+                        <input type="hidden" name="planCode" value={offer.cta.planCode} />
+                        {billingCadence ? (
+                          <input
+                            type="hidden"
+                            name="billingCadence"
+                            value={billingCadence}
+                          />
+                        ) : null}
+                      </>
                     ) : null}
                     <input
                       type="hidden"

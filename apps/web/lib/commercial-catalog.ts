@@ -311,6 +311,26 @@ export function resolveRevenuePlanCodeForCommercialSelection(
   return resolveRevenuePlanCodeForCanonicalPlan(canonicalPlanCode, cadence);
 }
 
+export function resolveCanonicalBillingCadenceFromPlanCode(
+  value: string | null | undefined
+) {
+  const normalized = (value ?? "").trim().toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.endsWith("-monthly")) {
+    return "monthly" as const;
+  }
+
+  if (normalized.endsWith("-annual") || normalized.endsWith("-yearly")) {
+    return "annual" as const;
+  }
+
+  return null;
+}
+
 export function supportsStripeCheckoutForCanonicalPlan(
   planCode: CanonicalPlanCode | null | undefined
 ) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrganizationPermission } from "../../../../lib/auth";
+import { resolveBillingCadenceFromPlanCode } from "../../../../lib/billing-cadence";
 import {
   createStripeBillingPortalSession,
   createStripeCheckoutSession,
@@ -67,12 +68,18 @@ export async function POST(request: Request) {
     maxLength: 120,
     fallback: "billing-checkout"
   });
-  const billingCadence = resolveCanonicalBillingCadence(
-    readValidatedFormString(formData ?? new FormData(), "billingCadence", {
+  const requestedBillingCadence = readValidatedFormString(
+    formData ?? new FormData(),
+    "billingCadence",
+    {
       maxLength: 32,
-      fallback: "annual"
-    }),
-    "annual"
+      fallback: ""
+    }
+  );
+  const inferredBillingCadence = resolveBillingCadenceFromPlanCode(requestedPlanCode);
+  const billingCadence = resolveCanonicalBillingCadence(
+    requestedBillingCadence || inferredBillingCadence || undefined,
+    inferredBillingCadence ?? "annual"
   );
   const canonicalPlanCode =
     resolvePublicCanonicalPlanCode(requestedPlanCode) ??
