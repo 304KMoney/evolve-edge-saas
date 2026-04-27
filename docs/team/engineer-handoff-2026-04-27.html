@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evolve Edge — Engineer Handoff Package (April 27, 2026)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #1a1a1a;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 48px;
+  }
+  @media print {
+    body { padding: 20px; font-size: 11px; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 16px; }
+    h3 { font-size: 13px; }
+    .page-break { page-break-before: always; }
+    table { page-break-inside: avoid; }
+  }
+  h1 { font-size: 26px; font-weight: 700; color: #0f0f0f; margin-bottom: 6px; border-bottom: 3px solid #0f0f0f; padding-bottom: 10px; }
+  h2 { font-size: 18px; font-weight: 700; color: #1a1a1a; margin: 36px 0 12px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+  h3 { font-size: 14px; font-weight: 600; color: #333; margin: 20px 0 8px; }
+  .meta { color: #555; margin-bottom: 24px; font-size: 12px; line-height: 1.8; }
+  .meta strong { color: #111; }
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0 8px 24px; }
+  li { margin: 3px 0; }
+  code {
+    font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 12px;
+    background: #f4f4f4;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+  pre {
+    background: #f6f6f6;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; }
+  th { background: #1a1a1a; color: #fff; text-align: left; padding: 8px 10px; font-weight: 600; }
+  td { padding: 7px 10px; border-bottom: 1px solid #e8e8e8; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .blocker-red { background: #fff5f5; border-left: 4px solid #e53e3e; padding: 14px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .blocker-yellow { background: #fffdf0; border-left: 4px solid #d69e2e; padding: 14px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .blocker-green { background: #f0fff4; border-left: 4px solid #38a169; padding: 14px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .tag-red { display: inline-block; background: #e53e3e; color: #fff; font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 3px; margin-right: 6px; letter-spacing: 0.5px; }
+  .tag-yellow { display: inline-block; background: #d69e2e; color: #fff; font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 3px; margin-right: 6px; letter-spacing: 0.5px; }
+  .tag-green { display: inline-block; background: #38a169; color: #fff; font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 3px; margin-right: 6px; letter-spacing: 0.5px; }
+  .checkbox { font-size: 14px; margin-right: 4px; }
+  hr { border: none; border-top: 1px solid #e0e0e0; margin: 28px 0; }
+  .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #ddd; color: #888; font-size: 11px; font-style: italic; }
+  a { color: #2563eb; }
+</style>
+</head>
+<body>
+
+<h1>Evolve Edge — Engineer Handoff Package</h1>
+<div class="meta">
+  <strong>Prepared:</strong> April 27, 2026<br>
+  <strong>Branch:</strong> <code>codex-launch-hardening-handoff</code><br>
+  <strong>Prepared by:</strong> AI Operating Partner (Genspark Claw)<br>
+  <strong>Audience:</strong> Incoming full-stack engineer
+</div>
+
+<h2>1. What Is Evolve Edge?</h2>
+<p>Evolve Edge is a Next.js SaaS control plane for AI security, compliance, audit delivery, and customer operations. It targets executive buyers who need AI governance, risk assessment, and audit delivery in one trusted surface.</p>
+<p>The product is approaching first-customer launch. The codebase is architecturally mature, TypeScript-clean, and fully wired for production integrations. <strong>One hard blocker</strong> (Stripe live key) stands between the current state and the first paying customer.</p>
+
+<h2>2. Architecture &amp; Source-of-Truth Boundaries</h2>
+<p><strong>These boundaries are non-negotiable.</strong> Every engineer decision must preserve them.</p>
+<table>
+<tr><th>System</th><th>Role</th><th>Must Never Own</th></tr>
+<tr><td><strong>Next.js (apps/web)</strong></td><td>Product logic, customer-visible state, lifecycle truth</td><td>—</td></tr>
+<tr><td><strong>Neon/Postgres</strong></td><td>Canonical persistence (via Prisma)</td><td>—</td></tr>
+<tr><td><strong>Stripe</strong></td><td>Billing authority, payment-event source only</td><td>Entitlements, plan routing, product state</td></tr>
+<tr><td><strong>n8n</strong></td><td>Orchestration and async execution only</td><td>Pricing, routing decisions, audit status</td></tr>
+<tr><td><strong>LangGraph</strong></td><td>AI workflow sequencing only</td><td>Business logic, lifecycle state</td></tr>
+<tr><td><strong>OpenAI</strong></td><td>Model execution only</td><td>Any persistence or routing</td></tr>
+<tr><td><strong>HubSpot</strong></td><td>CRM projection only</td><td>Customer lifecycle truth</td></tr>
+<tr><td><strong>Dify</strong></td><td>Deprecated — rollback path only</td><td>Do not route new state through Dify</td></tr>
+<tr><td><strong>Apollo</strong></td><td>Enrichment-only via n8n/operator tooling</td><td>App lifecycle, product state</td></tr>
+</table>
+
+<h3>Production AI Execution Path</h3>
+<pre><code>n8n → POST /api/internal/ai/execute
+    → Next.js queues AnalysisJob
+    → scheduled worker runs LangGraph → OpenAI
+    → validated structured output → Neon-backed persistence</code></pre>
+
+<h3>Report Lifecycle</h3>
+<pre><code>generated → pending_review → approved/rejected → delivered</code></pre>
+<p>After delivery: customer email + 3-day and 7-day follow-ups queued, expansion opportunities refreshed, HubSpot updated.</p>
+
+<h2>3. High-Risk Files — Read Before Touching</h2>
+<table>
+<tr><th>File</th><th>Why High Risk</th></tr>
+<tr><td><code>apps/web/app/api/stripe/webhook/route.ts</code></td><td>Stripe event handling — idempotency, livemode check, billing truth</td></tr>
+<tr><td><code>apps/web/lib/billing.ts</code></td><td>Subscription lifecycle, Stripe plan resolution (1300+ lines)</td></tr>
+<tr><td><code>apps/web/lib/commercial-routing.ts</code></td><td>Plan entitlement resolution — never infer from raw Stripe names</td></tr>
+<tr><td><code>apps/web/lib/workflow-routing.ts</code></td><td>Workflow code routing per plan</td></tr>
+<tr><td><code>apps/web/lib/workflow-dispatch.ts</code></td><td>n8n dispatch logic and stale recovery</td></tr>
+<tr><td><code>apps/web/lib/ai-execution.ts</code></td><td>AI job queueing and concurrency limits</td></tr>
+<tr><td><code>apps/web/src/server/ai/providers/openai-langgraph.ts</code></td><td>LangGraph/OpenAI execution</td></tr>
+<tr><td><code>apps/web/src/server/ai/workflows/audit/graph.ts</code></td><td>Audit workflow graph</td></tr>
+<tr><td><code>apps/web/lib/dify.ts</code></td><td>Deprecated — do not re-enable routing</td></tr>
+<tr><td><code>apps/web/lib/hubspot.ts</code></td><td>CRM projection — never make authoritative</td></tr>
+<tr><td><code>packages/db/prisma/schema.prisma</code></td><td>Canonical schema — migrations must be explicit</td></tr>
+</table>
+
+<h2>4. Local Development Setup</h2>
+<pre><code># 1. Clone
+git clone https://github.com/304KMoney/evolve-edge-saas.git
+cd evolve-edge-saas
+
+# 2. Install (requires pnpm 10.8.1)
+npm install -g pnpm@10.8.1
+pnpm install
+
+# 3. Populate env from vault — do NOT copy founder's .env
+cp .env.example .env.local
+
+# 4. Generate Prisma client
+pnpm db:generate
+
+# 5. Validate env coverage
+pnpm ci:env:validate
+
+# 6. Start
+pnpm dev</code></pre>
+
+<h3>Key Commands</h3>
+<table>
+<tr><th>Command</th><th>What It Does</th></tr>
+<tr><td><code>pnpm integration:status</code></td><td>Check integration wiring snapshot</td></tr>
+<tr><td><code>pnpm preflight:first-customer:env</code></td><td>Check required env coverage</td></tr>
+<tr><td><code>pnpm preflight:first-customer</code></td><td>Run all launch safety checks</td></tr>
+<tr><td><code>pnpm typecheck</code></td><td>TypeScript across monorepo (or use tsc directly below)</td></tr>
+<tr><td><code>pnpm lint</code></td><td>ESLint</td></tr>
+<tr><td><code>pnpm test</code></td><td>Vitest test suite</td></tr>
+<tr><td><code>pnpm db:generate</code></td><td>Regenerate Prisma client after schema changes</td></tr>
+<tr><td><code>pnpm db:migrate:deploy</code></td><td>Deploy migrations (staging/prod only)</td></tr>
+</table>
+<p><strong>Direct TypeScript check</strong> (avoids Turbo electron issue in some terminals):</p>
+<pre><code>cd apps/web
+.\node_modules\.bin\tsc.cmd --noEmit</code></pre>
+
+<div class="page-break"></div>
+
+<h2>5. Launch Blockers</h2>
+
+<div class="blocker-red">
+<p><span class="tag-red">HARD BLOCKER</span> <strong>Stripe Test Keys in Production</strong></p>
+<p><strong>Error:</strong> <code>stripe.test_mode_configured_for_production</code></p>
+<p>Vercel production has <code>STRIPE_SECRET_KEY=sk_test_...</code>. A real customer checkout will silently fail — no money moves, no subscription created.</p>
+<h3>Fix (requires Stripe + Vercel dashboard access):</h3>
+<ol>
+  <li>Stripe Dashboard → toggle to <strong>Live mode</strong> → Developers → API keys → copy <code>sk_live_...</code></li>
+  <li>Vercel → project → Settings → Environment Variables:
+    <ul>
+      <li><code>STRIPE_SECRET_KEY</code> → <code>sk_live_...</code></li>
+      <li><code>STRIPE_WEBHOOK_SECRET</code> → signing secret from live webhook endpoint</li>
+      <li>Verify all price/product IDs are live mode: <code>STRIPE_PRICE_STARTER_ANNUAL</code>, <code>STRIPE_PRICE_SCALE_ANNUAL</code>, <code>STRIPE_PRICE_ENTERPRISE_ANNUAL</code>, <code>STRIPE_PRODUCT_STARTER</code>, <code>STRIPE_PRODUCT_SCALE</code>, <code>STRIPE_PRODUCT_ENTERPRISE</code></li>
+    </ul>
+  </li>
+  <li>Redeploy</li>
+  <li>Run <code>pnpm preflight:first-customer</code> — should pass clean</li>
+</ol>
+</div>
+
+<div class="blocker-red">
+<p><span class="tag-red">MUST DO</span> <strong>Rotate Exposed Secrets + Clean Git History</strong></p>
+<p>Commit <code>8279585</code> accidentally included <code>.tmp-preview-env-*</code> files (Vercel env pulls) containing a HubSpot API key and Stripe test secret key. GitHub Push Protection blocked the push.</p>
+<h3>Fix:</h3>
+<pre><code># Option A — rewrite history (recommended)
+git rebase -i c22e00b
+# Change "pick 8279585" → "edit 8279585" in the editor, save
+
+git rm --cached .tmp-preview-env-current .tmp-preview-env-pull \
+  .tmp-preview-env-pull-after .tmp-preview-env-pull-after-final \
+  .tmp-preview-env-pull-now
+# Also remove .npm-cache/ if present in that commit's diff
+git commit --amend --no-edit
+git rebase --continue
+git push --force-with-lease origin codex-launch-hardening-handoff</code></pre>
+<p><strong>After the rebase — rotate these credentials immediately:</strong></p>
+<ul>
+  <li>HubSpot API key → HubSpot → Settings → Integrations → Private Apps → rotate</li>
+  <li>Stripe test secret key → Stripe Dashboard → Developers → API keys → Roll key</li>
+</ul>
+<p><em>Note: test Stripe keys can still be used to read customer data and inspect webhooks. Rotate them regardless.</em></p>
+</div>
+
+<div class="blocker-yellow">
+<p><span class="tag-yellow">RECOMMENDED</span> <strong>Set OPENAI_REASONING_MODEL</strong></p>
+<p>Currently unset — falling back to strong model tier. Set in Vercel: <code>OPENAI_REASONING_MODEL=o1</code> (or <code>o3-mini</code>).</p>
+</div>
+
+<div class="blocker-yellow">
+<p><span class="tag-yellow">RECOMMENDED</span> <strong>Set Optional Sales Contact Env Vars</strong></p>
+<p><code>NEXT_PUBLIC_CONTACT_SALES_URL</code> and <code>NEXT_PUBLIC_SALES_CONTACT_EMAIL</code> are unset. These are <code>NEXT_PUBLIC_</code> values — require redeploy after setting.</p>
+</div>
+
+<h2>6. Live Verification Checklist</h2>
+<p>After Stripe is on live keys and preflight passes:</p>
+
+<h3>Stripe Webhook Flow</h3>
+<ul>
+<li>☐ Submit one checkout → confirm <code>BillingEvent</code> created in Neon</li>
+<li>☐ Confirm <code>RoutingSnapshot</code> written with correct plan code</li>
+<li>☐ Confirm <code>WorkflowDispatch</code> row created and dispatched to n8n</li>
+<li>☐ Invalid webhook signature → 400 response</li>
+<li>☐ Duplicate event → does not overwrite a terminal <code>BillingEvent</code></li>
+</ul>
+
+<h3>n8n Callback Flow</h3>
+<ul>
+<li>☐ Status callback accepted, <code>WorkflowDispatch</code> row updated</li>
+<li>☐ Report-ready callback accepted</li>
+<li>☐ Report-writeback reconciles delivered milestones</li>
+<li>☐ No rows stuck permanently in <code>DISPATCHING</code></li>
+</ul>
+
+<h3>Signed Report Export</h3>
+<ul>
+<li>☐ Delivered report export succeeds</li>
+<li>☐ Undelivered report fails closed</li>
+</ul>
+
+<h3>Paid-Only Delivery</h3>
+<ul>
+<li>☐ <code>ACTIVE</code> / <code>GRACE_PERIOD</code> org can deliver report</li>
+<li>☐ Unpaid org cannot mark report delivered</li>
+<li>☐ Paid org delivery queues customer email</li>
+</ul>
+
+<h3>Email Dispatch</h3>
+<ul>
+<li>☐ <code>GET /api/internal/jobs/run?job=dispatch-email-notifications</code> with <code>CRON_SECRET</code> succeeds</li>
+<li>☐ Delivered report creates immediate email + 3-day + 7-day follow-ups</li>
+</ul>
+
+<h3>Operator Console</h3>
+<ul>
+<li>☐ <code>/admin</code> loads correctly</li>
+<li>☐ <code>/admin/queues</code> shows queue items</li>
+<li>☐ <code>/admin/accounts/[organizationId]</code> shows org state</li>
+<li>☐ <code>/api/fulfillment/health</code> returns reconciliation output</li>
+<li>☐ <code>/api/fulfillment/dispatch-health</code> shows destinations and outcomes</li>
+</ul>
+
+<h2>7. Access Onboarding (for Harshay or any new engineer)</h2>
+<table>
+<tr><th>System</th><th>Initial Access</th><th>How</th></tr>
+<tr><td>GitHub</td><td>Repo write access</td><td>Invite to <code>304KMoney/evolve-edge-saas</code></td></tr>
+<tr><td>Vercel</td><td>Project developer</td><td>Invite to <code>harshay.imag3@gmail.com</code></td></tr>
+<tr><td>Secret vault</td><td>Scoped dev/preview collection</td><td>Password manager invite</td></tr>
+<tr><td>Neon</td><td>Preview DB read access first</td><td>Neon project invite</td></tr>
+<tr><td>Evolve Edge app</td><td>Dedicated test account only</td><td>Create test user — not founder creds</td></tr>
+<tr><td>Stripe</td><td>Test-mode developer</td><td>Stripe team invite</td></tr>
+<tr><td>n8n</td><td>Workflow viewer/developer</td><td>n8n user invite</td></tr>
+<tr><td>Sentry</td><td>Member with issue visibility</td><td>Sentry org/project invite</td></tr>
+<tr><td>HubSpot</td><td>Scoped read/edit</td><td>HubSpot user invite</td></tr>
+<tr><td>Dify</td><td>Viewer (deprecated context only)</td><td>Dify workspace invite</td></tr>
+</table>
+
+<h2>8. Summary — Done vs. Remaining</h2>
+
+<div class="blocker-green">
+<p><span class="tag-green">DONE</span> <strong>Code and Architecture</strong></p>
+<ul>
+<li>TypeScript clean — <code>tsc --noEmit</code> passes with zero errors</li>
+<li>All 4 required integrations wired (Neon, Stripe, n8n, OpenAI/LangGraph)</li>
+<li>All 24 required env vars set in Vercel production</li>
+<li>Manual sales control plane (<code>CustomerAccount</code>, lifecycle stages, admin surfaces)</li>
+<li>Report lifecycle gated (generated → pending_review → approved/rejected → delivered)</li>
+<li>Sentry properly integrated (env-gated, <code>sendDefaultPii: false</code>, PII header scrubbing)</li>
+<li>Root-level Sentry wizard artifacts removed (hardcoded DSN, <code>sendDefaultPii: true</code>, public error-trigger route)</li>
+<li>Signed report export enforced</li>
+<li>Email dispatch + follow-up queuing wired</li>
+<li>Operator admin console (/admin, /admin/queues, /admin/accounts, /admin/customers)</li>
+<li>Harshay access handoff doc prepared</li>
+<li>n8n lead pipeline workflow package documented</li>
+</ul>
+</div>
+
+<div class="blocker-red">
+<p><span class="tag-red">BEFORE FIRST CUSTOMER</span></p>
+<ol>
+<li>Rotate exposed secrets (HubSpot API key, Stripe test key from <code>.tmp-preview-env-*</code>)</li>
+<li>Clean git history (rebase to remove those files, force-push branch)</li>
+<li>Set Stripe live keys in Vercel production and redeploy</li>
+</ol>
+</div>
+
+<div class="blocker-yellow">
+<p><span class="tag-yellow">SHORTLY AFTER LAUNCH</span></p>
+<ol>
+<li>Set <code>OPENAI_REASONING_MODEL</code> in Vercel</li>
+<li>Set <code>NEXT_PUBLIC_CONTACT_SALES_URL</code> and <code>NEXT_PUBLIC_SALES_CONTACT_EMAIL</code></li>
+<li>Complete live verification checklist (Section 6)</li>
+<li>Confirm operator access to <code>/admin</code> in production</li>
+<li>Send one controlled end-to-end audit request and confirm the full flow</li>
+</ol>
+</div>
+
+<h2>9. Key Docs Index</h2>
+<table>
+<tr><th>Doc</th><th>Path</th></tr>
+<tr><td>Launch readiness runbook</td><td><code>docs/launch-environment-readiness.md</code></td></tr>
+<tr><td>Manual sales control plane</td><td><code>docs/manual-sales-control-plane.md</code></td></tr>
+<tr><td>n8n lead pipeline</td><td><code>docs/n8n-lead-pipeline-workflow-package.md</code></td></tr>
+<tr><td>Harshay access handoff</td><td><code>docs/team/harshay-access-handoff-2026-04-27.md</code></td></tr>
+<tr><td>Apollo Codex setup</td><td><code>docs/apollo-codex-setup.md</code></td></tr>
+<tr><td>Workflow reference</td><td><code>docs/workflows/n8n-ai-execution.md</code></td></tr>
+<tr><td>DB schema summary</td><td><code>packages/db/src/schema-summary.md</code></td></tr>
+<tr><td>AI evaluation</td><td><code>docs/ai-evaluation.md</code></td></tr>
+<tr><td>Deployment/CI-CD</td><td><code>docs/deployment-cicd.md</code></td></tr>
+<tr><td>Data retention</td><td><code>docs/data-retention.md</code></td></tr>
+</table>
+
+<div class="footer">
+  Generated April 27, 2026 from branch <code>codex-launch-hardening-handoff</code> &mdash; verify against live docs. The codebase is the source of truth.
+</div>
+
+</body>
+</html>
