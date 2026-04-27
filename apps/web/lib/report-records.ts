@@ -467,7 +467,14 @@ function mapDashboardReportSummaryView(
     artifactAvailability: getReportArtifactAvailability({
       reportId: report.id,
       status: report.status,
-      artifactMetadata
+      artifactMetadata,
+      executiveSummary: executiveSummary.value,
+      overallRiskPosture: {
+        score: overallRiskPosture.score,
+        level: overallRiskPosture.level,
+        summary: overallRiskPosture.summary
+      },
+      reportJson: report.reportJson
     }),
     dataSources: {
       executiveSummary: executiveSummary.source,
@@ -495,7 +502,14 @@ function mapDashboardReportDetailView(
     artifactAvailability: getReportArtifactAvailability({
       reportId: report.id,
       status: report.status,
-      artifactMetadata
+      artifactMetadata,
+      executiveSummary: executiveSummary.value,
+      overallRiskPosture: {
+        score: overallRiskPosture.score,
+        level: overallRiskPosture.level,
+        summary: overallRiskPosture.summary
+      },
+      reportJson: report.reportJson
     }),
     dataSources: {
       executiveSummary: executiveSummary.source

@@ -13,6 +13,7 @@ import {
   type AuditWorkflowProgress,
   type AuditWorkflowProgressState
 } from "./customer-runs";
+import { getCanonicalReportFinalizationState } from "./report-artifacts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -217,7 +218,28 @@ function parseWorkflowProgressFromContext(value: Prisma.JsonValue | null | undef
 function buildWorkflowProgressViewModel(input: {
   workflowSnapshot: WorkflowSnapshot;
   reportStatus: ReportStatus;
+  isExportable: boolean;
 }) {
+  if (input.isExportable) {
+    const isPendingReviewLikeStatus =
+      input.reportStatus === ReportStatus.PENDING ||
+      input.reportStatus === ReportStatus.PENDING_REVIEW ||
+      input.reportStatus === ReportStatus.GENERATED;
+    const presentation = getAuditWorkflowProgressPresentation(
+      isPendingReviewLikeStatus ? "pending_review" : "completed"
+    );
+
+    return {
+      status: isPendingReviewLikeStatus
+        ? ("pending_review" as const)
+        : ("completed" as const),
+      label: presentation.label,
+      description: presentation.description,
+      progressPercent: presentation.progressPercent,
+      updatedAt: null
+    };
+  }
+
   const snapshotProgress = input.workflowSnapshot.progress;
 
   if (snapshotProgress) {
@@ -418,26 +440,23 @@ function buildLegacyOverallRiskSummary(reportJson: JsonObject | null, posture: O
 }
 
 function buildTrustSignals(input: {
-  workflowSnapshot: WorkflowSnapshot;
   report: ReportRecordLike;
+  finalizationState: "exportable" | "failed" | "pending";
 }) {
   const isPendingReviewLikeStatus =
     input.report.status === ReportStatus.PENDING ||
     input.report.status === ReportStatus.PENDING_REVIEW ||
     input.report.status === ReportStatus.GENERATED;
   const confidenceLevel =
-    input.workflowSnapshot.state === "completed"
+    input.finalizationState === "exportable"
       ? isPendingReviewLikeStatus
         ? "High confidence, pending internal review"
         : "High confidence"
-      : input.workflowSnapshot.state === "failed"
+      : input.finalizationState === "failed"
         ? "Unavailable until review"
-        : input.workflowSnapshot.state === "running"
-          ? "In progress"
-          : "Pending";
+        : "In progress";
 
   const lastUpdatedSource =
-    input.workflowSnapshot.progress?.updatedAt ??
     input.report.publishedAt ??
     input.report.createdAt;
 
@@ -559,15 +578,26 @@ export function buildExecutiveReportViewModel(input: {
       ? getWorkflowSnapshotState(input.report.assessment.status)
       : input.workflowSnapshot.state;
   const result = input.workflowSnapshot.result;
+  const finalization = getCanonicalReportFinalizationState({
+    reportId: input.report.id,
+    status: input.report.status,
+    executiveSummary: input.report.executiveSummary,
+    overallRiskPosture: input.overallRiskPosture,
+    reportJson: input.report.reportJson,
+    workflowState
+  });
   const state: ExecutiveReportRenderState =
-    workflowState === "completed"
+    finalization.state === "exportable"
       ? "ready"
-      : workflowState === "failed"
+      : finalization.state === "failed"
         ? "failed"
-        : workflowState;
+        : workflowState === "completed"
+          ? "unavailable"
+          : workflowState;
   const workflowProgress = buildWorkflowProgressViewModel({
     workflowSnapshot: input.workflowSnapshot,
-    reportStatus: input.report.status
+    reportStatus: input.report.status,
+    isExportable: finalization.state === "exportable"
   });
   const topFindings = result
     ? result.riskAnalysis.findings.slice(0, 5).map((finding) => ({
@@ -637,8 +667,8 @@ export function buildExecutiveReportViewModel(input: {
       "Prioritize governance, remediation ownership, and measurable control adoption before the next customer-facing review cycle.",
     topConcerns: result?.topConcerns ?? asStringArray(reportJson?.topConcerns).slice(0, 5),
     trustSignals: buildTrustSignals({
-      workflowSnapshot: input.workflowSnapshot,
-      report: input.report
+      report: input.report,
+      finalizationState: finalization.state
     }),
     disclaimers: {
       advisoryOnly:

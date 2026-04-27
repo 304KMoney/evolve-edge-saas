@@ -4,6 +4,7 @@ import { PageAnalyticsTracker } from "../../components/page-analytics-tracker";
 import { PricingPageClient } from "../../components/pricing-page";
 import { getPricingPageData } from "../../lib/pricing";
 import { resolvePublicCanonicalPlanCode } from "../../lib/commercial-catalog";
+import { buildPricingAccessStartPath } from "../../lib/pricing-access";
 
 export const metadata: Metadata = {
   title: "Pricing | Evolve Edge",
@@ -24,13 +25,13 @@ export default async function PricingPage({
   const shellCtaHref = data.sessionState.isAuthenticated
     ? "/dashboard"
     : selectedPlanCode
-      ? `/sign-in?redirectTo=${encodeURIComponent(`/pricing?plan=${selectedPlanCode}`)}`
-      : "/sign-in";
+      ? buildPricingAccessStartPath(selectedPlanCode)
+      : buildPricingAccessStartPath("starter");
 
   return (
     <MarketingShell
       ctaHref={shellCtaHref}
-      ctaLabel={data.sessionState.isAuthenticated ? "Open workspace" : "Sign in"}
+      ctaLabel={data.sessionState.isAuthenticated ? "Open workspace" : "Get started"}
     >
       <PageAnalyticsTracker
         eventName="marketing.pricing_viewed"

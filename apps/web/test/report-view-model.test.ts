@@ -305,6 +305,8 @@ async function runReportViewModelTests() {
 
   const failedModel = buildExecutiveReportViewModel({
     report: createReportRecord({
+      executiveSummary: null,
+      reportJson: {},
       assessment: {
         id: "asm_123",
         name: "Acme Health Assessment",
@@ -324,6 +326,60 @@ async function runReportViewModelTests() {
   assert.equal(failedModel.workflowProgress?.status, "analyzing_risks");
   assert.match(failedHtml, /Report generation needs review/);
   assert.doesNotMatch(failedHtml, /sk-test-123|buyer@example\.com/i);
+
+  const contentfulFailedModel = buildExecutiveReportViewModel({
+    report: createReportRecord({
+      status: ReportStatus.PENDING_REVIEW,
+      assessment: {
+        id: "asm_123",
+        name: "Acme Health Assessment",
+        status: AssessmentStatus.ANALYSIS_QUEUED
+      }
+    }),
+    overallRiskPosture: {
+      score: 62,
+      level: "Moderate",
+      summary: "Moderate posture."
+    },
+    workflowSnapshot: failedSnapshot
+  });
+
+  const contentfulFailedHtml = buildExecutiveReportHtml(contentfulFailedModel);
+  assert.equal(contentfulFailedModel.state, "ready");
+  assert.equal(contentfulFailedModel.workflowProgress?.status, "pending_review");
+  assert.equal(contentfulFailedModel.emptyState, null);
+  assert.doesNotMatch(contentfulFailedHtml, /Last safe error/i);
+
+  const pendingWithoutContentModel = buildExecutiveReportViewModel({
+    report: createReportRecord({
+      status: ReportStatus.PENDING,
+      executiveSummary: null,
+      reportJson: {},
+      publishedAt: null,
+      assessment: {
+        id: "asm_123",
+        name: "Acme Health Assessment",
+        status: AssessmentStatus.ANALYSIS_RUNNING
+      }
+    }),
+    overallRiskPosture: {
+      score: null,
+      level: null,
+      summary: null
+    },
+    workflowSnapshot: {
+      state: "running",
+      result: null,
+      safeError: null,
+      progress: null
+    }
+  });
+
+  assert.equal(pendingWithoutContentModel.state, "running");
+  assert.match(
+    pendingWithoutContentModel.emptyState?.title ?? "",
+    /being prepared/i
+  );
 
   console.log("report-view-model tests passed");
 }

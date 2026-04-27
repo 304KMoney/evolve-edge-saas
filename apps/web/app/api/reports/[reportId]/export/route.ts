@@ -6,7 +6,10 @@ import {
   prisma
 } from "@evolve-edge/db";
 import { NextResponse } from "next/server";
-import { requireOrganizationPermissionForOrganization } from "../../../../../lib/auth";
+import {
+  getOptionalCurrentSession,
+  resolveScopedOrganizationSession
+} from "../../../../../lib/auth";
 import {
   buildAuditRequestContextFromRequest,
   writeAuditLog
@@ -17,67 +20,26 @@ import { toCustomerAccessSession } from "../../../../../lib/customer-access-sess
 import { logServerEvent } from "../../../../../lib/monitoring";
 import { recordOperationalFinding } from "../../../../../lib/operations-queues";
 import {
+  buildReportExportPayload,
+  readReportArtifactMetadata
+} from "../../../../../lib/report-export";
+import {
   canUseSignedReportAccess,
   verifySignedReportAccessToken
 } from "../../../../../lib/report-access";
 import {
-  buildReportAccessStateHref,
-  evaluateCustomerReportAccess,
-  mapReportAccessDecisionToStateReason,
-  type ReportAccessStateReason
+  evaluateCustomerReportAccess
 } from "../../../../../lib/report-access-control";
-import { getReportArtifactAvailability } from "../../../../../lib/report-artifacts";
 import {
   getExportableReportById,
   getReportAccessCandidateById
 } from "../../../../../lib/report-records";
 import {
-  buildExecutiveReportHtml,
-  buildExecutiveReportViewModel,
   getLatestAssessmentWorkflowSnapshot
 } from "../../../../../lib/report-view-model";
 import { applyRouteRateLimit } from "../../../../../lib/security-rate-limit";
 
 export const dynamic = "force-dynamic";
-
-function buildAccessRedirectUrl(input: {
-  request: Request;
-  reason: ReportAccessStateReason;
-  reportId?: string | null;
-}) {
-  return new URL(
-    buildReportAccessStateHref({
-      reason: input.reason,
-      reportId: input.reportId
-    }),
-    input.request.url
-  );
-}
-
-function readOverallRiskPosture(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {
-      score: null,
-      level: null,
-      summary: null
-    };
-  }
-
-  const posture = value as Record<string, unknown>;
-  return {
-    score: typeof posture.score === "number" ? posture.score : null,
-    level: typeof posture.level === "string" ? posture.level : null,
-    summary: typeof posture.summary === "string" ? posture.summary : null
-  };
-}
-
-function readArtifactMetadata(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-
-  return value as Record<string, unknown>;
-}
 
 export async function GET(
   request: Request,
@@ -106,23 +68,13 @@ export async function GET(
     try {
       signedAccess = verifySignedReportAccessToken(signedToken);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message.toLowerCase() : "invalid signed report token";
-      const reason = message.includes("expired") ? "expired" : "unauthorized";
-
       logServerEvent("warn", "report.export.invalid_signed_token", {
         resource_id: reportId,
         status: "forbidden",
         source: "report.delivery",
         requestContext
       });
-      return NextResponse.redirect(
-        buildAccessRedirectUrl({
-          request,
-          reason,
-          reportId
-        })
-      );
+      return new Response("Invalid or expired report export token.", { status: 403 });
     }
   }
 
@@ -134,13 +86,9 @@ export async function GET(
       source: "report.delivery",
       requestContext
     });
-    return NextResponse.redirect(
-      buildAccessRedirectUrl({
-        request,
-        reason: "not-bound",
-        reportId
-      })
-    );
+    return new Response("Report export token does not match this report.", {
+      status: 403
+    });
   }
 
   const reportAccessCandidate = await getReportAccessCandidateById(reportId);
@@ -157,11 +105,42 @@ export async function GET(
     return new Response("Report not found.", { status: 404 });
   }
 
-  const session = await requireOrganizationPermissionForOrganization(
-    "reports.view",
-    reportAccessCandidate.organizationId
-  );
-  const accessSession = toCustomerAccessSession(session);
+  const session = await getOptionalCurrentSession();
+  if (!session) {
+    logServerEvent("warn", "report.export.unauthenticated", {
+      resource_id: reportId,
+      org_id: signedAccess?.organizationId ?? reportAccessCandidate.organizationId,
+      user_id: null,
+      status: "forbidden",
+      source: "report.delivery",
+      requestContext
+    });
+    return new Response("Authentication is required to export this report.", {
+      status: 403
+    });
+  }
+
+  const scopedSession = await resolveScopedOrganizationSession({
+    session,
+    organizationId: reportAccessCandidate.organizationId,
+    permission: "reports.view"
+  });
+
+  if (!scopedSession) {
+    logServerEvent("warn", "report.export.permission_denied", {
+      resource_id: reportId,
+      org_id: signedAccess?.organizationId ?? reportAccessCandidate.organizationId,
+      user_id: session.user.id,
+      status: "forbidden",
+      source: "report.delivery",
+      requestContext
+    });
+    return new Response("You are not allowed to export this report.", {
+      status: 403
+    });
+  }
+
+  const accessSession = toCustomerAccessSession(scopedSession);
 
   const durableAccessGrant = await findLatestCustomerAccessGrant({
     organizationId:
@@ -195,8 +174,8 @@ export async function GET(
 
     logServerEvent("warn", "report.export.access_denied", {
       resource_id: reportId,
-      org_id: signedAccess?.organizationId ?? session?.organization?.id ?? null,
-      user_id: session?.user.id ?? null,
+      org_id: signedAccess?.organizationId ?? scopedSession.organization?.id ?? null,
+      user_id: scopedSession.user.id,
       status: status === 403 ? "forbidden" : "not_found",
       source: "report.delivery",
       requestContext,
@@ -205,12 +184,10 @@ export async function GET(
       }
     });
 
-    return NextResponse.redirect(
-      buildAccessRedirectUrl({
-        request,
-        reason: mapReportAccessDecisionToStateReason(reportAccessDecision),
-        reportId
-      }),
+    return new Response(
+      status === 403
+        ? "You are not allowed to export this report."
+        : "Report not found.",
       { status }
     );
   }
@@ -223,42 +200,34 @@ export async function GET(
   if (!report) {
     logServerEvent("warn", "report.export.not_found", {
       resource_id: reportId,
-      org_id: signedAccess?.organizationId ?? session?.organization?.id ?? null,
-      user_id: session?.user.id ?? null,
+      org_id: signedAccess?.organizationId ?? scopedSession.organization?.id ?? null,
+      user_id: scopedSession.user.id,
       status: "not_found",
       source: "report.delivery",
       requestContext
     });
     return new Response("Report not found.", { status: 404 });
   }
-
-  const artifactAvailability = getReportArtifactAvailability({
-    reportId: report.id,
-    status: report.status,
-    artifactMetadata: readArtifactMetadata(report.artifactMetadataJson)
+  const workflowSnapshot = await getLatestAssessmentWorkflowSnapshot(report.assessmentId);
+  const exportPayload = buildReportExportPayload({
+    report,
+    workflowSnapshot
   });
 
-  if (!artifactAvailability.canDownload) {
-    logServerEvent("warn", "report.export.not_ready", {
+  if (!exportPayload.ok) {
+    logServerEvent("warn", "report.export.not_exportable", {
       resource_id: report.id,
       org_id: report.organizationId,
-      user_id: session?.user.id ?? null,
-      status: "conflict",
+      user_id: scopedSession.user.id,
+      status: "unprocessable_entity",
       source: "report.delivery",
       requestContext,
       metadata: {
         reportStatus: report.status,
-        artifactState: artifactAvailability.state
+        artifactMetadata: readReportArtifactMetadata(report.artifactMetadataJson)
       }
     });
-    return NextResponse.redirect(
-      buildAccessRedirectUrl({
-        request,
-        reason: "unavailable",
-        reportId: report.id
-      }),
-      { status: 307 }
-    );
+    return new Response(exportPayload.message, { status: exportPayload.status });
   }
 
   if (
@@ -291,7 +260,7 @@ export async function GET(
     logServerEvent("warn", "report.export.signed_token_not_delivered", {
       resource_id: reportId,
       org_id: report.organizationId,
-      user_id: session?.user.id ?? null,
+      user_id: scopedSession.user.id,
       status: "forbidden",
       source: "report.delivery",
       requestContext,
@@ -300,21 +269,16 @@ export async function GET(
         deliveredAt: report.deliveredAt?.toISOString() ?? null
       }
     });
-    return NextResponse.redirect(
-      buildAccessRedirectUrl({
-        request,
-        reason: "unavailable",
-        reportId: report.id
-      }),
-      { status: 307 }
-    );
+    return new Response("Signed export is not available until the report is delivered.", {
+      status: 403
+    });
   }
 
   await writeAuditLog(prisma, {
     organizationId: report.organizationId,
-    userId: session?.user.id ?? null,
+    userId: scopedSession.user.id,
     actorType: signedAccess ? AuditActorType.SYSTEM : AuditActorType.USER,
-    actorLabel: signedAccess ? "signed-report-link" : session?.user.email ?? null,
+    actorLabel: signedAccess ? "signed-report-link" : scopedSession.user.email,
     action: "report.exported",
     entityType: "report",
     entityId: report.id,
@@ -332,7 +296,7 @@ export async function GET(
   logServerEvent("info", "report.export.delivered", {
     resource_id: report.id,
     org_id: report.organizationId,
-    user_id: session?.user.id ?? null,
+    user_id: scopedSession.user.id,
     status: "delivered",
     source: "report.delivery",
     requestContext,
@@ -343,37 +307,19 @@ export async function GET(
     }
   });
 
-  const workflowSnapshot = await getLatestAssessmentWorkflowSnapshot(report.assessmentId);
-  const reportViewModel = buildExecutiveReportViewModel({
-    report,
-    overallRiskPosture: readOverallRiskPosture(report.overallRiskPostureJson),
-    workflowSnapshot
-  });
-
   if (format === "json") {
-    const filename =
-      `${reportViewModel.title
-        .toLowerCase()
-        .replaceAll(/[^a-z0-9]+/g, "-")
-        .replaceAll(/^-|-$/g, "") || "executive-report"}.json`;
+    const filename = `${exportPayload.filenameBase}.json`;
 
-    return NextResponse.json(reportViewModel, {
+    return NextResponse.json(exportPayload.reportViewModel, {
       headers: {
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "private, no-store"
       }
     });
   }
+  const filename = `${exportPayload.filenameBase}.html`;
 
-  const html = buildExecutiveReportHtml(reportViewModel);
-
-  const filename =
-    `${reportViewModel.title
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/g, "-")
-      .replaceAll(/^-|-$/g, "") || "executive-report"}.html`;
-
-  return new Response(html, {
+  return new Response(exportPayload.html, {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",

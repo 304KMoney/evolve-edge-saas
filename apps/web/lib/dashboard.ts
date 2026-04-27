@@ -1,5 +1,6 @@
 import { AssessmentStatus, Prisma, prisma } from "@evolve-edge/db";
 import type { DashboardData } from "../components/dashboard-shell";
+import { FRAMEWORK_COVERAGE_ENTRIES } from "./authority-content";
 import { getOrganizationActivationSnapshot } from "./activation";
 import { requireCurrentSession } from "./auth";
 import { getOrganizationEntitlements } from "./entitlements";
@@ -109,6 +110,57 @@ function readAssessmentWorkflowProgress(contextJson: Prisma.JsonValue | null | u
   );
 }
 
+function normalizeFrameworkKey(value: string | null | undefined) {
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function resolveFrameworkResourceSelections(
+  selections: Array<{ code: string; name: string }>
+) {
+  const matched = new Map<
+    string,
+    {
+      code: string;
+      title: string;
+      body: string;
+      href: string;
+      assetCount: number;
+    }
+  >();
+
+  for (const selection of selections) {
+    const selectionKeys = [
+      normalizeFrameworkKey(selection.code),
+      normalizeFrameworkKey(selection.name)
+    ];
+    const resource = FRAMEWORK_COVERAGE_ENTRIES.find((entry) => {
+      const entryKeys = [
+        normalizeFrameworkKey(entry.slug),
+        normalizeFrameworkKey(entry.code),
+        normalizeFrameworkKey(entry.name)
+      ];
+
+      return selectionKeys.some((selectionKey) =>
+        entryKeys.some((entryKey) => entryKey.length > 0 && entryKey === selectionKey)
+      );
+    });
+
+    if (!resource || !resource.assetDownloads?.length) {
+      continue;
+    }
+
+    matched.set(resource.slug, {
+      code: resource.code,
+      title: resource.featuredAsset?.title ?? resource.name,
+      body: resource.featuredAsset?.body ?? resource.overview,
+      href: `/frameworks/${resource.slug}`,
+      assetCount: resource.assetDownloads.length
+    });
+  }
+
+  return Array.from(matched.values());
+}
+
 function buildFallbackDashboardData(organizationName: string): DashboardData {
   return {
     organizationName,
@@ -129,6 +181,7 @@ function buildFallbackDashboardData(organizationName: string): DashboardData {
     roadmap: [],
     reports: [],
     notifications: [],
+    frameworkResources: [],
     inventories: {
       vendorCount: 0,
       modelCount: 0,
@@ -357,6 +410,12 @@ export async function getDashboardData(): Promise<DashboardData> {
   const assessment = organization.assessments[0];
   const reports = organization.reports;
   const frameworks = organization.frameworkSelections.map((item) => item.framework.name);
+  const frameworkResources = resolveFrameworkResourceSelections(
+    organization.frameworkSelections.map((item) => ({
+      code: item.framework.code,
+      name: item.framework.name
+    }))
+  );
   const vendorNames = organization.vendors.map((vendor) => vendor.name);
   const modelNames = organization.models.map((model) => model.name);
   const monitoredAssetsCount = organization._count.vendors + organization._count.models;
@@ -549,6 +608,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       date: formatDate(notification.createdAt),
       actionUrl: notification.actionUrl
     })),
+    frameworkResources,
     usageMetrics: usageMetering.metrics.filter((metric) =>
       ["activeAssessments", "reportsGenerated", "monitoredAssets", "seats"].includes(
         metric.key

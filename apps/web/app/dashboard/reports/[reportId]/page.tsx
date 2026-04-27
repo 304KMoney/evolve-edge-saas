@@ -36,6 +36,7 @@ import {
   getLatestAssessmentWorkflowSnapshot
 } from "../../../../lib/report-view-model";
 import { getReportDeliveryOperationsSnapshot } from "../../../../lib/report-delivery-operations";
+import { getCanonicalReportFinalizationState } from "../../../../lib/report-artifacts";
 import {
   approveReportPackageQaAction,
   bookReportBriefingAction,
@@ -245,7 +246,19 @@ export default async function ReportDetailPage({
   const canManageDeliveryControls = canManageReportDelivery(authz);
   const canApproveQa = hasPermission(authz, "reports.review");
   const canFounderReview = hasPermission(authz, "organization.manage");
-  const artifactAvailability = hydratedReportView.artifactAvailability;
+  const reportFinalization = getCanonicalReportFinalizationState({
+    reportId: report.id,
+    status: report.status,
+    artifactMetadata:
+      hydratedReportView.artifactMetadata &&
+      typeof hydratedReportView.artifactMetadata === "object"
+        ? hydratedReportView.artifactMetadata
+        : null,
+    executiveSummary: hydratedReportView.executiveSummary,
+    overallRiskPosture: hydratedReportView.overallRiskPosture,
+    reportJson: report.reportJson,
+    workflowState: workflowSnapshot.state
+  });
   const deliveryOperations =
     canManageDeliveryControls || canApproveQa
       ? await getReportDeliveryOperationsSnapshot({
@@ -269,6 +282,8 @@ export default async function ReportDetailPage({
         action: "send"
       })
     : false;
+  const canShowRetryControl =
+    reportFinalization.state === "failed" && canApproveQa;
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
@@ -297,16 +312,30 @@ export default async function ReportDetailPage({
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {artifactAvailability.canDownload ? (
+            {reportFinalization.canDownload ? (
               <a
                 href={`/api/reports/${report.id}/export`}
                 className="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink"
               >
                 Download HTML
               </a>
+            ) : canShowRetryControl ? (
+              <form action={requestReportRegenerationAction}>
+                <input type="hidden" name="reportId" value={report.id} />
+                <button
+                  type="submit"
+                  className="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink"
+                >
+                  Retry generation
+                </button>
+              </form>
+            ) : reportFinalization.state === "pending" ? (
+              <span className="rounded-full border border-line bg-mist px-4 py-2 text-sm font-semibold text-steel">
+                Processing report
+              </span>
             ) : (
               <span className="rounded-full border border-line bg-mist px-4 py-2 text-sm font-semibold text-steel">
-                Export pending
+                Review needed
               </span>
             )}
             <Link
@@ -370,13 +399,15 @@ export default async function ReportDetailPage({
           </div>
         ) : null}
 
-        {!artifactAvailability.canDownload ? (
+        {!reportFinalization.canDownload ? (
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
             <p className="text-sm font-semibold text-warning">
-              Download artifact not available yet
+              {reportFinalization.state === "failed"
+                ? "Report finalization needs review"
+                : "Report finalization is still in progress"}
             </p>
             <p className="mt-2 text-sm leading-6 text-warning">
-              {artifactAvailability.customerMessage}
+              {reportFinalization.customerMessage}
             </p>
           </div>
         ) : null}
@@ -469,16 +500,16 @@ export default async function ReportDetailPage({
           <div className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Artifact state</p>
             <p className="mt-2 text-lg font-semibold text-ink">
-              {typeof hydratedReportView.artifactMetadata?.downloadStatus === "string"
-                ? formatStatus(hydratedReportView.artifactMetadata.downloadStatus)
-                : artifactAvailability.canDownload
-                  ? "Ready"
+              {reportFinalization.state === "exportable"
+                ? "Ready"
+                : reportFinalization.state === "failed"
+                  ? "Needs review"
                   : "Pending"}
             </p>
             <p className="mt-2 text-sm text-steel">
               {typeof hydratedReportView.artifactMetadata?.fileName === "string"
                 ? hydratedReportView.artifactMetadata.fileName
-                : artifactAvailability.customerMessage}
+                : reportFinalization.customerMessage}
             </p>
           </div>
         </div>
