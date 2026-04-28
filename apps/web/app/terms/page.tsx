@@ -86,11 +86,11 @@ export default function TermsPage() {
             limited, non-exclusive license to process Customer Data solely as necessary to provide
             and improve the Service. We do not sell Customer Data to third parties. Our use of
             Customer Data is further described in our{" "}
-            <Link href="/privacy" className="text-accent">
+            <Link href={"/privacy" as never} className="text-accent">
               Privacy Policy
             </Link>{" "}
             and{" "}
-            <Link href="/dpa" className="text-accent">
+            <Link href={"/dpa" as never} className="text-accent">
               Data Processing Agreement
             </Link>
             .
