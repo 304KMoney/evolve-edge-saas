@@ -11,7 +11,7 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, context: RouteContext) {
-  const rateLimited = applyRouteRateLimit(request, {
+  const rateLimited = await applyRouteRateLimit(request, {
     key: "internal-workflows-trace",
     category: "webhook",
   });

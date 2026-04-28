@@ -45,7 +45,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ reportId: string }> }
 ) {
-  const rateLimited = applyRouteRateLimit(request, {
+  const rateLimited = await applyRouteRateLimit(request, {
     key: "reports-export",
     category: "api"
   });
