@@ -23,7 +23,7 @@ import {
 
 export async function POST(request: Request) {
   try {
-    const rateLimited = applyRouteRateLimit(request, {
+    const rateLimited = await applyRouteRateLimit(request, {
       key: "internal-workflows-audit-execute",
       category: "webhook",
       maxRequests: 30
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
         : "";
 
     if (orgId) {
-      const orgRateLimit = consumeRateLimit({
+      const orgRateLimit = await consumeRateLimit({
         storeKey: `internal-ai-execute:org:${orgId}`,
         maxRequests: getAiExecutionOrgRateLimitMaxRequests(),
         windowMs: getAiExecutionOrgRateLimitWindowMs(),
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     }
 
     if (workflowDispatchId) {
-      const workflowRateLimit = consumeRateLimit({
+      const workflowRateLimit = await consumeRateLimit({
         storeKey: `internal-ai-execute:workflow:${workflowDispatchId}`,
         maxRequests: getAiExecutionWorkflowRateLimitMaxRequests(),
         windowMs: getAiExecutionWorkflowRateLimitWindowMs(),

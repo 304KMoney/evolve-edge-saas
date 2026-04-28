@@ -156,7 +156,7 @@ async function markResendWebhookReceiptFailed(messageId: string, error: unknown)
 
 export async function POST(request: Request) {
   const route = "api.webhooks.resend";
-  const rateLimited = applyRouteRateLimit(request, {
+  const rateLimited = await applyRouteRateLimit(request, {
     key: "webhooks-resend",
     category: "webhook"
   });

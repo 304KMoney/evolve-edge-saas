@@ -448,7 +448,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const rateLimited = applyRouteRateLimit(request, {
+  const rateLimited = await applyRouteRateLimit(request, {
     key: "automation-intake-to-app-dispatch",
     category: "api"
   });

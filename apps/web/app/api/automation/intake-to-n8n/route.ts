@@ -137,7 +137,7 @@ function normalizePayload(payload: Record<string, unknown>) {
 
 export async function POST(request: Request) {
   const route = "api.automation.intake-to-n8n";
-  const rateLimited = applyRouteRateLimit(request, {
+  const rateLimited = await applyRouteRateLimit(request, {
     key: "automation-intake-to-n8n",
     category: "api"
   });

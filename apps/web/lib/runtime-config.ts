@@ -214,6 +214,13 @@ export function getOptionalEnv(name: string) {
   return value || null;
 }
 
+export function getUpstashRedisConfig() {
+  return {
+    url: getOptionalEnv("UPSTASH_REDIS_REST_URL") ?? null,
+    token: getOptionalEnv("UPSTASH_REDIS_REST_TOKEN") ?? null,
+  };
+}
+
 export function requireEnv(name: string) {
   const value = readEnv(name);
   if (!value) {

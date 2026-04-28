@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     return invalidOrigin;
   }
 
-  const rateLimited = applyRouteRateLimit(request, {
+  const rateLimited = await applyRouteRateLimit(request, {
     key: "analytics-track"
   });
   if (rateLimited) {

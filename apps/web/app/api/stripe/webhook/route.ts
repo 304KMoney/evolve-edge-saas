@@ -1105,7 +1105,7 @@ async function processStripeEvent(
 
 
 export async function POST(request: Request) {
-  const rateLimited = applyRouteRateLimit(request, {
+  const rateLimited = await applyRouteRateLimit(request, {
     key: "stripe-webhook",
     category: "webhook"
   });

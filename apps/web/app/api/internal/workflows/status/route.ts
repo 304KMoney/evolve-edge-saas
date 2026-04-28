@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       requestContext
     });
 
-    const rateLimited = applyRouteRateLimit(request, {
+    const rateLimited = await applyRouteRateLimit(request, {
       key: "internal-workflows-status",
       category: "webhook"
     });

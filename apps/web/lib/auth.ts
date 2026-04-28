@@ -343,7 +343,7 @@ export async function consumeAuthenticationRateLimit(email: string) {
     return { limited: false } as const;
   }
 
-  const localRateLimit = consumeRateLimit({
+  const localRateLimit = await consumeRateLimit({
     storeKey: `auth:sign-in:${normalizedEmail}`,
     maxRequests: AUTH_RATE_LIMIT_MAX_REQUESTS,
     windowMs: AUTH_RATE_LIMIT_WINDOW_MS,

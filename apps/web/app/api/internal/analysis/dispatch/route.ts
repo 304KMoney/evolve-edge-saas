@@ -13,7 +13,7 @@ import {
 
 export async function POST(request: Request) {
   try {
-    const rateLimited = applyRouteRateLimit(request, {
+    const rateLimited = await applyRouteRateLimit(request, {
       key: "internal-analysis-dispatch",
       category: "webhook"
     });

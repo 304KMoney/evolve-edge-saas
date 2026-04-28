@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const rateLimited = applyRouteRateLimit(request, {
+    const rateLimited = await applyRouteRateLimit(request, {
       key: "stripe-webhooks-v2",
       category: "webhook"
     });
