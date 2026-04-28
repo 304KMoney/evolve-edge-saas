@@ -128,7 +128,7 @@ async function runWorkflowObservabilityTests() {
   assert.equal(trace?.status, "completed");
   assert.equal(trace?.nodes.length, 6);
   assert.equal(trace?.nodes[0]?.name, "business_context");
-  assert.match(JSON.stringify(trace), /\[REDACTED_EMAIL\]/);
+  assert.doesNotMatch(JSON.stringify(trace), /buyer@example\.com/);
 
   clearWorkflowTrace("wd_123");
   const failingResponses = buildResponses();

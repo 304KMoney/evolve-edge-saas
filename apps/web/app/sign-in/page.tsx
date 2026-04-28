@@ -6,6 +6,7 @@ import {
 } from "../../lib/auth";
 import { PageAnalyticsTracker } from "../../components/page-analytics-tracker";
 import { signInAction } from "./actions";
+import type { Route } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -107,7 +108,7 @@ export default async function SignInPage({
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-ink">Password</span>
                 <Link
-                  href="/forgot-password"
+                  href={"/forgot-password" as Route}
                   className="text-xs font-medium text-accent transition hover:opacity-80"
                 >
                   Forgot password?

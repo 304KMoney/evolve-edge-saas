@@ -59,7 +59,7 @@ export function MarketingShell({
         <div className="relative z-10 px-4 py-12 md:px-6 md:py-16">{children}</div>
 
         <footer className="relative z-10 border-t border-[#13233b] bg-[#081120] px-6 py-10 md:px-8">
-          <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr_1fr]">
+          <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
             <div>
               <Brand
                 imageClassName="w-[146px] sm:w-[170px]"
@@ -99,6 +99,22 @@ export function MarketingShell({
                 </Link>
                 <Link href={"/methodology" as never} className="block transition hover:text-white">
                   Methodology
+                </Link>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-white/[0.55]">
+                Legal
+              </p>
+              <div className="mt-4 space-y-3 text-sm text-white/[0.72]">
+                <Link href={"/terms" as never} className="block transition hover:text-white">
+                  Terms of Service
+                </Link>
+                <Link href={"/privacy" as never} className="block transition hover:text-white">
+                  Privacy Policy
+                </Link>
+                <Link href={"/dpa" as never} className="block transition hover:text-white">
+                  DPA
                 </Link>
               </div>
             </div>
