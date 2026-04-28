@@ -30,9 +30,22 @@ import { getOperatorConsoleSnapshot } from "../../lib/operator-console";
 import { getOpsReadinessSnapshot } from "../../lib/ops-readiness";
 import { getAdminSafePlanMappings } from "../../lib/revenue-catalog";
 import { getOrganizationUsageSnapshot } from "../../lib/usage";
+import type { FulfillmentVisibilityEntry } from "../../lib/fulfillment-visibility";
 import { updatePlatformRoleAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+type AdminScaleSnapshot = Awaited<ReturnType<typeof getAdminConsoleScaleSnapshot>>;
+type GlobalMismatchFinding =
+  AdminScaleSnapshot["globalOpsDashboard"]["recentMismatchFindings"][number];
+type GlobalDeliveryOpsFinding =
+  AdminScaleSnapshot["globalOpsDashboard"]["recentDeliveryOpsFindings"][number];
+type SupportSafeAccountSummary =
+  AdminScaleSnapshot["supportSafeAccountSummaries"][number];
+type RecentBillingEvent =
+  AdminScaleSnapshot["recentBillingEvents"][number];
+type RecentLeadSubmission =
+  AdminScaleSnapshot["recentLeadSubmissions"][number];
 
 function formatDate(date: Date | null | undefined) {
   if (!date) {
@@ -846,7 +859,9 @@ export default async function AdminPage({
               </h3>
               <div className="mt-3 space-y-3">
                 {scaleSnapshot.globalOpsDashboard.recentMismatchFindings.length > 0 ? (
-                  scaleSnapshot.globalOpsDashboard.recentMismatchFindings.map((finding) => {
+                  scaleSnapshot.globalOpsDashboard.recentMismatchFindings.map((
+                    finding: GlobalMismatchFinding
+                  ) => {
                     const accountHref = `/admin/accounts/${finding.organization.id}` as Route;
 
                     return (
@@ -905,7 +920,9 @@ export default async function AdminPage({
               </h3>
               <div className="mt-3 space-y-3">
                 {scaleSnapshot.globalOpsDashboard.recentFulfillmentAttentionFindings.length > 0 ? (
-                  scaleSnapshot.globalOpsDashboard.recentFulfillmentAttentionFindings.map((finding) => {
+                  scaleSnapshot.globalOpsDashboard.recentFulfillmentAttentionFindings.map((
+                    finding: FulfillmentVisibilityEntry
+                  ) => {
                     const accountHref = `/admin/accounts/${finding.organization.id}` as Route;
 
                     return (
@@ -963,7 +980,9 @@ export default async function AdminPage({
                     );
                   })
                 ) : scaleSnapshot.globalOpsDashboard.recentFulfillmentRecovered.length > 0 ? (
-                  scaleSnapshot.globalOpsDashboard.recentFulfillmentRecovered.map((finding) => {
+                  scaleSnapshot.globalOpsDashboard.recentFulfillmentRecovered.map((
+                    finding: FulfillmentVisibilityEntry
+                  ) => {
                     const accountHref = `/admin/accounts/${finding.organization.id}` as Route;
 
                     return (
@@ -1016,7 +1035,9 @@ export default async function AdminPage({
               </h3>
               <div className="mt-3 space-y-3">
                 {scaleSnapshot.globalOpsDashboard.recentDeliveryOpsFindings.length > 0 ? (
-                  scaleSnapshot.globalOpsDashboard.recentDeliveryOpsFindings.map((finding) => {
+                  scaleSnapshot.globalOpsDashboard.recentDeliveryOpsFindings.map((
+                    finding: GlobalDeliveryOpsFinding
+                  ) => {
                     const accountHref = `/admin/accounts/${finding.organizationId}` as Route;
                     const queueHref = `/admin/queues/${finding.id}` as Route;
 
@@ -1084,7 +1105,9 @@ export default async function AdminPage({
             Fast operator summaries for account lookup, billing state checks, owner identification, usage posture, and latest product activity.
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {scaleSnapshot.supportSafeAccountSummaries.map((summary) => {
+            {scaleSnapshot.supportSafeAccountSummaries.map((
+              summary: SupportSafeAccountSummary
+            ) => {
               const accountHref = `/admin/accounts/${summary.organizationId}` as Route;
 
               return (
@@ -1146,7 +1169,7 @@ export default async function AdminPage({
           <div>
             <h2 className="text-lg font-semibold text-ink">Billing event inspection</h2>
             <div className="mt-4 space-y-3">
-              {scaleSnapshot.recentBillingEvents.map((event) => (
+              {scaleSnapshot.recentBillingEvents.map((event: RecentBillingEvent) => (
                 <div key={event.id} className="rounded-2xl border border-line p-4">
                   <p className="font-medium text-ink">{event.type}</p>
                   <p className="mt-1 text-sm text-steel">
@@ -1192,7 +1215,7 @@ export default async function AdminPage({
               </div>
             </div>
             <div className="mt-4 space-y-3">
-              {scaleSnapshot.recentLeadSubmissions.map((lead) => (
+              {scaleSnapshot.recentLeadSubmissions.map((lead: RecentLeadSubmission) => (
                 <div key={lead.id} className="rounded-2xl border border-line p-4">
                   <p className="font-medium text-ink">{lead.email}</p>
                   <p className="mt-1 text-sm text-steel">

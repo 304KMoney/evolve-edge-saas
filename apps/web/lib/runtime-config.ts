@@ -164,7 +164,7 @@ export function getContactSalesUrl() {
 }
 
 export function getFoundingRiskAuditOfferUrl() {
-  return "/pricing?plan=starter";
+  return "/pricing?plan=starter&billingCadence=monthly";
 }
 
 export function getFoundingRiskAuditCallUrl() {
