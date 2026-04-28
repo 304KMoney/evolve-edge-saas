@@ -1,5 +1,6 @@
 "use server";
 
+import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { verifyAndConsumePasswordResetToken, resetUserPassword } from "../../lib/password-reset";
 
@@ -9,19 +10,23 @@ export async function resetPasswordAction(formData: FormData): Promise<void> {
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
   if (!token) {
-    redirect("/forgot-password");
+    redirect("/forgot-password" as Route);
   }
 
   if (!newPassword || newPassword !== confirmPassword || newPassword.length < 8) {
-    redirect(`/reset-password?token=${encodeURIComponent(token)}&error=invalid_password`);
+    redirect(
+      `/reset-password?token=${encodeURIComponent(token)}&error=invalid_password` as Route
+    );
   }
 
   const userId = await verifyAndConsumePasswordResetToken(token);
 
   if (!userId) {
-    redirect(`/reset-password?token=${encodeURIComponent(token)}&error=invalid_token`);
+    redirect(
+      `/reset-password?token=${encodeURIComponent(token)}&error=invalid_token` as Route
+    );
   }
 
   await resetUserPassword(userId, newPassword);
-  redirect("/sign-in?reset=success");
+  redirect("/sign-in?reset=success" as Route);
 }

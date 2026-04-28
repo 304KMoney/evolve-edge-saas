@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { headers } from "next/headers";
 import { AttributionCapture } from "../components/attribution-capture";
 import {
   assertCriticalEnvironmentParity,
@@ -29,9 +30,14 @@ if (shouldEnforceCriticalEnvironmentParity()) {
 
 logEnvironmentParityStatus();
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: Readonly<{ children: React.ReactNode }>) {
+  const requestHeaders = await headers();
+  // nonce is read here for use with next/script components if present
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _nonce = requestHeaders.get("x-csp-nonce") ?? undefined;
+
   return (
     <html lang="en">
       <body>

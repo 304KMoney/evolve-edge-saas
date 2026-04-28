@@ -1,7 +1,15 @@
 type SecuritySurface = "public" | "private" | "api";
 
-function buildScriptSourceDirective(isDevelopment: boolean) {
-  const sources = ["'self'", "'unsafe-inline'", "https:"];
+function buildScriptSourceDirective(isDevelopment: boolean, nonce?: string) {
+  const sources = ["'self'"];
+
+  if (nonce) {
+    sources.push(`'nonce-${nonce}'`);
+  } else {
+    sources.push("'unsafe-inline'");
+  }
+
+  sources.push("https:");
 
   if (isDevelopment) {
     sources.push("'unsafe-eval'");
@@ -10,8 +18,9 @@ function buildScriptSourceDirective(isDevelopment: boolean) {
   return `script-src ${sources.join(" ")}`;
 }
 
-export function buildContentSecurityPolicy(input?: { isDevelopment?: boolean }) {
+export function buildContentSecurityPolicy(input?: { isDevelopment?: boolean; nonce?: string }) {
   const isDevelopment = input?.isDevelopment ?? false;
+  const nonce = input?.nonce;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -22,7 +31,7 @@ export function buildContentSecurityPolicy(input?: { isDevelopment?: boolean }) 
     "img-src 'self' data: blob: https:",
     "font-src 'self' data: https:",
     "style-src 'self' 'unsafe-inline' https:",
-    buildScriptSourceDirective(isDevelopment),
+    buildScriptSourceDirective(isDevelopment, nonce),
     "connect-src 'self' https: wss:",
     "manifest-src 'self'",
     "media-src 'self'",
@@ -60,12 +69,14 @@ export function buildSecurityHeaders(input: {
   pathname: string;
   isDevelopment?: boolean;
   isPreview?: boolean;
+  nonce?: string;
 }) {
   const surface = classifySecuritySurface(input.pathname);
   const isDevelopment = input.isDevelopment ?? false;
   const isPreview = input.isPreview ?? false;
+  const nonce = input.nonce;
   const headers: Record<string, string> = {
-    "Content-Security-Policy": buildContentSecurityPolicy({ isDevelopment }),
+    "Content-Security-Policy": buildContentSecurityPolicy({ isDevelopment, nonce }),
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",

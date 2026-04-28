@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Route } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MarketingShell } from "../../components/marketing-shell";
@@ -24,7 +25,7 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
   const error = typeof params.error === "string" ? params.error : null;
 
   if (!token) {
-    redirect("/forgot-password");
+    redirect("/forgot-password" as Route);
   }
 
   const isInvalidToken = error === "invalid_token";
@@ -43,7 +44,7 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
           {isInvalidToken ? (
             <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-danger">
               This reset link is invalid or has expired.{" "}
-              <Link href="/forgot-password" className="font-semibold underline">
+              <Link href={"/forgot-password" as Route} className="font-semibold underline">
                 Request a new one
               </Link>
               .
