@@ -23,7 +23,7 @@ function buildWorkflowInput() {
         answer: "No",
       },
     ],
-    evidenceSummary: "Contact buyer@example.com for missing artifacts.",
+    evidenceSummary: "Contact the account owner for missing artifacts.",
     planTier: "scale" as const,
   };
 }
@@ -61,7 +61,7 @@ function buildResponses() {
           businessImpact: "Audit readiness is reduced.",
           controlDomain: "governance",
           impactedFrameworks: ["SOC 2"],
-          evidence: ["No policy package", "Escalate to buyer@example.com"],
+          evidence: ["No policy package", "Escalate to the account owner"],
           tags: ["policy"],
         },
       ],

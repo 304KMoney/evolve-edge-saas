@@ -644,6 +644,7 @@ model User {
   deliveryStates         DeliveryStateRecord[]      @relation("DeliveryStateUser")
   deliveryStateTransitions DeliveryStateTransition[] @relation("DeliveryStateTransitionActor")
   customerAccessGrants   CustomerAccessGrantRecord[] @relation("CustomerAccessGrantUser")
+  passwordResetTokens    PasswordResetToken[]
 }
 
 model Organization {
@@ -2587,4 +2588,14 @@ model AuditLog {
   @@index([action, createdAt])
   @@index([entityType, entityId, createdAt])
   @@index([resourceType, resourceId, createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

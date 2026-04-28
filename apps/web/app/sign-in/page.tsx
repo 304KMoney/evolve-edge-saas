@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function SignInPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string; redirectTo?: string }>;
+  searchParams: Promise<{ error?: string; redirectTo?: string; reset?: string }>;
 }) {
   const params = await searchParams;
   const existingSession = await getOptionalCurrentSession();
@@ -22,6 +22,7 @@ export default async function SignInPage({
     typeof params.redirectTo === "string" && params.redirectTo.startsWith("/")
       ? params.redirectTo
       : "";
+  const passwordResetSuccess = params.reset === "success";
 
   if (existingSession) {
     redirect((redirectTo || "/dashboard") as never);
@@ -61,6 +62,12 @@ export default async function SignInPage({
           compliance, assessment, and reporting workflows.
         </p>
 
+        {passwordResetSuccess ? (
+          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+            Your password has been reset. Sign in with your new credentials.
+          </div>
+        ) : null}
+
         {!isPasswordAuthEnabled() ? (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-danger">
             Password auth is currently disabled. Set <code>AUTH_MODE=password</code> and provide
@@ -97,7 +104,15 @@ export default async function SignInPage({
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-ink">Password</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-ink">Password</span>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-accent transition hover:opacity-80"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 name="password"
                 type="password"
