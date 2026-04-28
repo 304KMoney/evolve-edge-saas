@@ -28,5 +28,11 @@
   },
   "dependencies": {
     "@sentry/nextjs": "10"
+  },
+  "pnpm": {
+    "overrides": {
+      "langsmith": ">=0.5.19",
+      "postcss": ">=8.5.10"
+    }
   }
 }

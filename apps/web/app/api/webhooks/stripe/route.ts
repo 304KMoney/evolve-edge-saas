@@ -10,8 +10,9 @@ import {
 } from "../../../../lib/commercial-routing";
 import { resolveRevenuePlanCodeForCanonicalPlan } from "../../../../lib/commercial-catalog";
 import { createDeliveryStateFromPaidRequest } from "../../../../lib/delivery-state";
+import { maskEmail } from "../../../../lib/intake-observability";
 import { logServerEvent } from "../../../../lib/monitoring";
-import { requireEnv } from "../../../../lib/runtime-config";
+import { getRuntimeEnvironment, requireEnv } from "../../../../lib/runtime-config";
 import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
 import { expectObject, ValidationError } from "../../../../lib/security-validation";
 import { verifyStripeWebhookSignature } from "../../../../lib/security-webhooks";
@@ -53,6 +54,16 @@ function parseStripeEvent(rawPayload: unknown) {
 
 export async function POST(request: Request) {
   try {
+    if (getRuntimeEnvironment() === "production") {
+      return NextResponse.json(
+        {
+          error:
+            "This legacy Stripe webhook endpoint is disabled in production. Use /api/stripe/webhook."
+        },
+        { status: 410 }
+      );
+    }
+
     const rateLimited = applyRouteRateLimit(request, {
       key: "stripe-webhooks-v2",
       category: "webhook"
@@ -152,8 +163,7 @@ export async function POST(request: Request) {
       metadata: {
         checkoutSessionId,
         tier: normalizedTier,
-        customerEmail: commercialContext.user.email,
-        customerName: [commercialContext.user.firstName, commercialContext.user.lastName].filter(Boolean).join(" ") || null,
+        customerEmailMasked: maskEmail(commercialContext.user.email),
         deliveryStateId: deliveryState.id,
         routingSnapshotId: routingSnapshot.id,
         workflowDispatchId: workflowDispatch.id
@@ -164,8 +174,6 @@ export async function POST(request: Request) {
       ok: true,
       eventId: event.id,
       sessionId: checkoutSessionId,
-      email: commercialContext.user.email,
-      name: [commercialContext.user.firstName, commercialContext.user.lastName].filter(Boolean).join(" ") || null,
       tier: normalizedTier,
       organizationId: commercialContext.organization.id,
       deliveryStateId: deliveryState.id,

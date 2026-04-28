@@ -235,6 +235,13 @@ enum WebhookDeliveryStatus {
   FAILED
 }
 
+enum InboundWebhookReceiptStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
 enum BillingEventStatus {
   PENDING
   PROCESSING
@@ -1440,6 +1447,27 @@ model WebhookDelivery {
   @@unique([eventId, destination])
   @@index([status, nextRetryAt])
   @@index([destination, status])
+}
+
+/// Durable inbound webhook receipt for non-Stripe providers. Stripe events use
+/// BillingEvent because they own billing reconciliation state; this table gives
+/// operational webhooks the same replay-safe receipt boundary.
+model InboundWebhookReceipt {
+  id                  String                      @id @default(cuid())
+  provider            String
+  messageId           String
+  eventType           String?
+  status              InboundWebhookReceiptStatus @default(PENDING)
+  processingStartedAt DateTime?
+  processedAt         DateTime?
+  failedAt            DateTime?
+  lastError           String?
+  payload             Json?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+
+  @@unique([provider, messageId])
+  @@index([provider, status, createdAt])
 }
 
 model EventReplayAttempt {
