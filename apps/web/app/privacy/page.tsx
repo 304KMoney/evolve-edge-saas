@@ -15,7 +15,7 @@ export default function PrivacyPage() {
           <p className="mt-2 text-sm text-steel">Last updated: April 29, 2026</p>
           <p className="mt-2 text-sm text-steel">
             Covers residents in the United States, Canada (PIPEDA &amp; Quebec Law 25), and United Kingdom (UK GDPR).{" "}
-            <a href="mailto:sales@evolveedgeai.com" className="text-accent">Contact us</a> to request our Data Processing Agreement (DPA).
+            <a href="mailto:k.green@evolveedgeai.com" className="text-accent">Contact us</a> to request our Data Processing Agreement (DPA).
           </p>
 
           <p className="mt-6 text-sm leading-7 text-steel">
@@ -159,8 +159,8 @@ export default function PrivacyPage() {
           </ul>
           <p className="mt-3 text-sm leading-7 text-steel">
             To exercise any of these rights, please contact us at{" "}
-            <a href="mailto:sales@evolveedgeai.com" className="text-accent">
-              sales@evolveedgeai.com
+            <a href="mailto:k.green@evolveedgeai.com" className="text-accent">
+              k.green@evolveedgeai.com
             </a>
             . We will respond within 30 days.
           </p>
@@ -177,8 +177,8 @@ export default function PrivacyPage() {
           <h2 className="mt-10 text-xl font-semibold text-ink">9. Contact</h2>
           <p className="mt-3 text-sm leading-7 text-steel">
             If you have questions or concerns about this Privacy Policy, please contact us at:{" "}
-            <a href="mailto:sales@evolveedgeai.com" className="text-accent">
-              sales@evolveedgeai.com
+            <a href="mailto:k.green@evolveedgeai.com" className="text-accent">
+              k.green@evolveedgeai.com
             </a>
             .
           </p>

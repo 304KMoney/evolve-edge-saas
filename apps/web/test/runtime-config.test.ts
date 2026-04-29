@@ -139,7 +139,7 @@ function runRuntimeConfigTests() {
   assert.equal(getRuntimeEnvironment(), "development");
   assert.equal(isPreviewGuestAccessEnabled(), false);
   assert.equal(isSignedReportAuthEnforced(), false);
-  assert.equal(getSalesContactEmail(), "sales@evolveedgeai.com");
+  assert.equal(getSalesContactEmail(), "k.green@evolveedgeai.com");
   assert.equal(
     getFoundingRiskAuditOfferUrl(),
     "/pricing?plan=starter&billingCadence=monthly"

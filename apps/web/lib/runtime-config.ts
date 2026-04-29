@@ -153,7 +153,7 @@ export function isAiDebugModeEnabled() {
 }
 
 export function getSalesContactEmail() {
-  return readEnv(CANONICAL_ENV_KEYS.salesContactEmail) || "sales@evolveedgeai.com";
+  return readEnv(CANONICAL_ENV_KEYS.salesContactEmail) || "k.green@evolveedgeai.com";
 }
 
 export function getContactSalesUrl() {

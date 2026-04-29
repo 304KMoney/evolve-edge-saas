@@ -62,7 +62,7 @@ export async function sendPasswordResetEmail(toEmail: string, token: string): Pr
   const resend = new Resend(apiKey);
 
   await resend.emails.send({
-    from: "Evolve Edge <info@evolveedgeai.com>",
+    from: "Evolve Edge <k.green@evolveedgeai.com>",
     to: [toEmail],
     subject: "Reset your Evolve Edge password",
     html: `
