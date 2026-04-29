@@ -118,11 +118,11 @@ export default async function IntakePage() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </TrackedCtaLink>
                 <TrackedCtaLink
-                  href="/contact"
+                  href="/contact-sales"
                   eventPayload={{
                     ctaKey: "book-demo",
                     location: "intake-page",
-                    href: "/contact"
+                    href: "/contact-sales"
                   }}
                   source="intake-page"
                   className="inline-flex items-center rounded-full border border-white/[0.14] bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white"

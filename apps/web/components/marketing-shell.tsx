@@ -12,8 +12,8 @@ type MarketingShellProps = {
 const navItems = [
   { href: "/", label: "Home" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/intake", label: "Intake" },
-  { href: "/contact", label: "Contact" },
+  { href: "/frameworks", label: "Frameworks" },
+  { href: "/contact-sales", label: "Contact" },
   { href: "/sign-in", label: "Sign In" }
 ];
 
@@ -91,7 +91,7 @@ export function MarketingShell({
                 Company
               </p>
               <div className="mt-4 space-y-3 text-sm text-white/[0.72]">
-                <Link href={"/contact" as never} className="block transition hover:text-white">
+                <Link href={"/contact-sales" as never} className="block transition hover:text-white">
                   Contact
                 </Link>
                 <Link href={"/trust" as never} className="block transition hover:text-white">

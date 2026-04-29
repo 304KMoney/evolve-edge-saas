@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { MarketingShell } from "../../components/marketing-shell";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | Evolve Edge",
-  description: "Privacy Policy for Evolve Edge AI."
+  description: "Privacy Policy for Evolve Edge — covering US, Canada (PIPEDA), and United Kingdom (UK GDPR) residents."
 };
 
 export default function PrivacyPage() {
@@ -12,7 +12,11 @@ export default function PrivacyPage() {
       <div className="mx-auto max-w-3xl py-12">
         <div className="prose prose-slate max-w-none">
           <h1 className="text-3xl font-semibold tracking-tight text-ink">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-steel">Last updated: April 27, 2026</p>
+          <p className="mt-2 text-sm text-steel">Last updated: April 29, 2026</p>
+          <p className="mt-2 text-sm text-steel">
+            Covers residents in the United States, Canada (PIPEDA &amp; Quebec Law 25), and United Kingdom (UK GDPR).{" "}
+            <a href="mailto:kiel@evolveedge.ai" className="text-accent">Contact us</a> to request our Data Processing Agreement (DPA).
+          </p>
 
           <p className="mt-6 text-sm leading-7 text-steel">
             Evolve Edge AI (&ldquo;Evolve Edge,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or
@@ -155,8 +159,8 @@ export default function PrivacyPage() {
           </ul>
           <p className="mt-3 text-sm leading-7 text-steel">
             To exercise any of these rights, please contact us at{" "}
-            <a href="mailto:info@evolveedgeai.com" className="text-accent">
-              info@evolveedgeai.com
+            <a href="mailto:kiel@evolveedge.ai" className="text-accent">
+              kiel@evolveedge.ai
             </a>
             . We will respond within 30 days.
           </p>
@@ -173,8 +177,8 @@ export default function PrivacyPage() {
           <h2 className="mt-10 text-xl font-semibold text-ink">9. Contact</h2>
           <p className="mt-3 text-sm leading-7 text-steel">
             If you have questions or concerns about this Privacy Policy, please contact us at:{" "}
-            <a href="mailto:info@evolveedgeai.com" className="text-accent">
-              info@evolveedgeai.com
+            <a href="mailto:kiel@evolveedge.ai" className="text-accent">
+              kiel@evolveedge.ai
             </a>
             .
           </p>

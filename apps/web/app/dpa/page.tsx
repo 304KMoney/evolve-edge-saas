@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { MarketingShell } from "../../components/marketing-shell";
 
 export const metadata: Metadata = {
@@ -14,7 +14,14 @@ export default function DpaPage() {
           <h1 className="text-3xl font-semibold tracking-tight text-ink">
             Data Processing Agreement
           </h1>
-          <p className="mt-2 text-sm text-steel">Last updated: April 27, 2026</p>
+          <p className="mt-2 text-sm text-steel">Last updated: April 29, 2026</p>
+          <p className="mt-2 text-sm text-steel">
+            To request an executed DPA for your organization, email{" "}
+            <a href="mailto:kiel@evolveedge.ai?subject=DPA%20Request%20%E2%80%94%20Evolve%20Edge" className="text-accent">
+              kiel@evolveedge.ai
+            </a>{" "}
+            with subject line &ldquo;DPA Request — Evolve Edge&rdquo;. UK and Canadian customers may also request Standard Contractual Clauses or IDTA addendums.
+          </p>
 
           <p className="mt-6 text-sm leading-7 text-steel">
             This Data Processing Agreement (&ldquo;DPA&rdquo;) forms part of the agreement between
@@ -203,8 +210,8 @@ export default function DpaPage() {
             Evolve Edge relies on the Standard Contractual Clauses (EU SCCs 2021) adopted by the
             European Commission as the lawful transfer mechanism. Customers requiring executed SCCs
             may contact us at{" "}
-            <a href="mailto:info@evolveedgeai.com" className="text-accent">
-              info@evolveedgeai.com
+            <a href="mailto:kiel@evolveedge.ai" className="text-accent">
+              kiel@evolveedge.ai
             </a>
             .
           </p>
@@ -235,8 +242,8 @@ export default function DpaPage() {
           <p className="mt-3 text-sm leading-7 text-steel">
             For questions about this DPA or to request executed Standard Contractual Clauses,
             please contact us at:{" "}
-            <a href="mailto:info@evolveedgeai.com" className="text-accent">
-              info@evolveedgeai.com
+            <a href="mailto:kiel@evolveedge.ai" className="text-accent">
+              kiel@evolveedge.ai
             </a>
             .
           </p>

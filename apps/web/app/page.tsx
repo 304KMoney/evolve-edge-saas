@@ -9,8 +9,8 @@ import { EXECUTIVE_PROOF_POINTS } from "../lib/marketing-services";
 
 const actionLinks = [
   { href: "/pricing", label: "View Pricing" },
-  { href: "/contact", label: "Contact Sales" },
-  { href: "/contact", label: "Contact Us" }
+  { href: "/contact-sales", label: "Contact Sales" },
+  { href: "/trust", label: "Trust Center" }
 ];
 
 const highlights = [
@@ -95,10 +95,10 @@ export default function HomePage() {
 
         <section className="content-surface px-6 py-7 sm:px-8 sm:py-8 md:px-10 md:py-10">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
-            Premium offers
+            Get started
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-            Positioning built around readiness, not checklists
+            Ready to close your AI governance gaps?
           </h2>
           <div className="mt-7 grid gap-4 md:grid-cols-3">
             {actionLinks.map((link) => (
