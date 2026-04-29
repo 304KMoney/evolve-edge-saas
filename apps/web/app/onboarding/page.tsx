@@ -56,10 +56,15 @@ export default async function OnboardingPage({
 }) {
   const session = await getCurrentSession();
   const allowPreviewGuestOnboarding = session.authMode === "demo";
-  const frameworks =
-    (await prisma.framework.findMany({
+  let frameworks: typeof FALLBACK_FRAMEWORKS = [];
+  try {
+    const dbFrameworks = await prisma.framework.findMany({
       orderBy: [{ category: "asc" }, { name: "asc" }]
-    })) || [];
+    });
+    frameworks = dbFrameworks.length > 0 ? dbFrameworks : FALLBACK_FRAMEWORKS;
+  } catch {
+    frameworks = FALLBACK_FRAMEWORKS;
+  }
 
   if (session.organization && !session.onboardingRequired && !allowPreviewGuestOnboarding) {
     redirect("/dashboard");
