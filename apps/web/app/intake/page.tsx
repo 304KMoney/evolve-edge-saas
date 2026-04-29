@@ -40,7 +40,7 @@ export default async function IntakePage() {
       ? "/onboarding"
       : "/dashboard/assessments"
     : isPasswordAuthEnabled()
-      ? "/sign-in"
+      ? "/signup"
       : "/dashboard/assessments";
 
   return (
