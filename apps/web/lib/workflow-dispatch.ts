@@ -39,6 +39,7 @@ import {
   requireWorkflowWritebackSecret
 } from "./workflow-callback-secrets";
 import { resolveRecoveredWorkflowDispatchState } from "./workflow-dispatch-policy";
+import { getOrganizationAuditReadiness } from "./audit-intake";
 
 type WorkflowDispatchDbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -146,6 +147,33 @@ export async function queueAuditRequestedDispatch(input: {
   db?: WorkflowDispatchDbClient;
 }) {
   const db = input.db ?? prisma;
+  const snapshotReadiness = await db.routingSnapshot.findUnique({
+    where: { id: input.routingSnapshotId },
+    select: { organizationId: true }
+  });
+
+  if (!snapshotReadiness) {
+    throw new Error("Routing snapshot not found for workflow dispatch.");
+  }
+
+  const readiness = await getOrganizationAuditReadiness({
+    organizationId: snapshotReadiness.organizationId,
+    db
+  });
+
+  if (!readiness.readyForAudit) {
+    logServerEvent("warn", "workflow.dispatch.blocked_intake_incomplete", {
+      routing_snapshot_id: input.routingSnapshotId,
+      org_id: snapshotReadiness.organizationId,
+      status: "blocked",
+      source: "backend",
+      metadata: {
+        reason: "audit_intake_incomplete"
+      }
+    });
+    throw new Error("Audit intake is incomplete; workflow dispatch is blocked.");
+  }
+
   const existing = await db.workflowDispatch.findUnique({
     where: {
       routingSnapshotId_eventType_destination: {
@@ -422,6 +450,32 @@ async function dispatchWorkflow(dispatchId: string, db: WorkflowDispatchDbClient
   });
 
   if (!dispatch) {
+    return { delivered: false, skipped: true as const };
+  }
+
+  const readiness = await getOrganizationAuditReadiness({
+    organizationId: dispatch.routingSnapshot.organizationId,
+    db
+  });
+
+  if (!readiness.readyForAudit) {
+    await db.workflowDispatch.update({
+      where: { id: dispatch.id },
+      data: {
+        lastError: "Audit intake is incomplete; workflow dispatch is blocked."
+      }
+    });
+    logServerEvent("warn", "workflow.dispatch.delivery_blocked_intake_incomplete", {
+      dispatch_id: dispatch.id,
+      routing_snapshot_id: dispatch.routingSnapshotId,
+      org_id: dispatch.routingSnapshot.organizationId,
+      workflow_code: dispatch.routingSnapshot.workflowCode,
+      status: "blocked",
+      source: "backend",
+      metadata: {
+        reason: "audit_intake_incomplete"
+      }
+    });
     return { delivered: false, skipped: true as const };
   }
 

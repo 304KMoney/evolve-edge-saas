@@ -827,6 +827,8 @@ export default async function SettingsPage({
     inviteEmail?: string;
     inviteToken?: string;
     billing?: string;
+    planCode?: string;
+    billingCadence?: string;
     vendor?: string;
     model?: string;
     deliveries?: string;
@@ -1050,7 +1052,19 @@ export default async function SettingsPage({
 
         {params.billing === "cancelled" ? (
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
-            Billing checkout was cancelled before Stripe finalized the subscription update.
+            Billing checkout was cancelled before Stripe finalized the subscription update. You can retry from the plan section below.
+          </div>
+        ) : null}
+
+        {params.billing === "checkout-config" ? (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
+            Your workspace was created, but Stripe checkout is not fully configured yet. Add Stripe environment variables, then retry checkout from the plan section below.
+          </div>
+        ) : null}
+
+        {params.billing === "checkout-error" ? (
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-danger">
+            Your workspace was created, but checkout could not be started. Check Stripe plan mapping and retry from the plan section below.
           </div>
         ) : null}
 

@@ -120,6 +120,10 @@ Recommended:
 - keep test/staging webhook URLs out of the production `N8N_WORKFLOW_DESTINATIONS` payload
 - use the legacy `N8N_WEBHOOK_URL` fallback only if you are intentionally
   supporting older workflow wiring
+- keep `/api/automation/intake-to-app-dispatch` pointed at app-owned dispatch
+  only. The route fails closed unless the organization has completed app intake
+  and has an active Stripe-backed subscription stored in Postgres; purchased
+  plan fields in external payloads are treated as context, not authority.
 
 ### n8n webhook cutover
 

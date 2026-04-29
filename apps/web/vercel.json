@@ -5,6 +5,10 @@
   "buildCommand": "pnpm --filter @evolve-edge/web build",
   "crons": [
     {
+      "path": "/api/internal/jobs/run?job=dispatch-workflow-dispatches",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/internal/jobs/run?job=dispatch-email-notifications",
       "schedule": "0 14 * * *"
     }

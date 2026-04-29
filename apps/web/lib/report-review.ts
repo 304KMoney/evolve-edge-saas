@@ -14,6 +14,7 @@ import {
 import { getAiExecutionProvider } from "./runtime-config";
 import { markCustomerRunQueuedForAnalysis } from "./customer-runs";
 import { requireRecordInOrganization } from "./scoped-access";
+import { getOrganizationAuditReadiness } from "./audit-intake";
 
 type ReportReviewDbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -51,6 +52,16 @@ export async function queueReportRegeneration(input: {
 
   const dispatchKey = createRegenerationDispatchKey(report.id);
   const latestPackage = report.latestInReportPackages[0] ?? null;
+  const readiness = await getOrganizationAuditReadiness({
+    organizationId: input.organizationId,
+    db
+  });
+
+  if (!readiness.readyForAudit) {
+    throw new Error(
+      "Required onboarding intake must be completed before report regeneration."
+    );
+  }
 
   const queuedJob = await db.analysisJob.create({
     data: {

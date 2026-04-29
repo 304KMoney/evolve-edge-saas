@@ -15,8 +15,10 @@ import { logServerEvent, sendOperationalAlert } from "./monitoring";
 import { getOptionalEnv, requireEnv } from "./runtime-config";
 import { getOrganizationUsageSnapshot } from "./usage";
 import { dispatchPendingWebhookDeliveries } from "./webhook-dispatcher";
+import { dispatchPendingWorkflowDispatches } from "./workflow-dispatch";
 
 type JobName =
+  | "dispatch-workflow-dispatches"
   | "dispatch-email-notifications"
   | "retry-webhook-deliveries"
   | "retry-ai-analysis"
@@ -34,6 +36,7 @@ type JobResult = {
 };
 
 const JOB_NAMES: JobName[] = [
+  "dispatch-workflow-dispatches",
   "dispatch-email-notifications",
   "retry-webhook-deliveries",
   "retry-ai-analysis",
@@ -78,6 +81,10 @@ function getLowActivityDays() {
 
 export function requireCronSecret() {
   return getCronSecret();
+}
+
+export function getScheduledJobNames() {
+  return [...JOB_NAMES];
 }
 
 async function recordJobRun(input: {
@@ -161,6 +168,12 @@ async function recordJobRun(input: {
 
 async function runWebhookRetryJob() {
   return dispatchPendingWebhookDeliveries({
+    limit: getWebhookJobLimit()
+  }) as Promise<Prisma.InputJsonValue>;
+}
+
+async function runWorkflowDispatchJob() {
+  return dispatchPendingWorkflowDispatches({
     limit: getWebhookJobLimit()
   }) as Promise<Prisma.InputJsonValue>;
 }
@@ -292,6 +305,8 @@ async function runLowActivityCheck() {
 
 async function executeNamedJob(jobName: JobName) {
   switch (jobName) {
+    case "dispatch-workflow-dispatches":
+      return runWorkflowDispatchJob();
     case "dispatch-email-notifications":
       return runEmailDispatchJob();
     case "retry-webhook-deliveries":

@@ -146,7 +146,7 @@ function runCommercialRoutingTests() {
   assert.equal(scaleDecision.hints.processing_tier, "scale");
   assert.equal(scaleDecision.hints.capability_profile.report_depth, "enhanced");
   assert.equal(scaleDecision.hints.capability_profile.max_findings, 10);
-  assert.equal(scaleDecision.hints.capability_profile.executive_briefing_eligible, true);
+  assert.equal(scaleDecision.hints.capability_profile.executive_briefing_eligible, false);
 
   const starterDecision = deriveCommercialWorkflowDecision({
     planCode: CommercialPlanCode.STARTER,

@@ -49,6 +49,7 @@ export const assessmentAnswerSchema = z.object({
 export const executeAuditWorkflowInputSchema = z.object({
   orgId: z.string().trim().min(1).max(200),
   assessmentId: z.string().trim().min(1).max(200),
+  routingSnapshotId: z.string().trim().min(1).max(200).optional(),
   workflowDispatchId: z.string().trim().min(1).max(200),
   dispatchId: z.string().trim().min(1).max(200),
   customerEmail: z.string().trim().email().nullable(),
@@ -265,6 +266,42 @@ export const auditWorkflowOutputSchema = z.object({
   }
 });
 
+const normalizedAuditListItemSchema = z.object({
+  title: z.string().trim().min(1).max(300),
+  summary: z.string().trim().min(1).max(2_000).optional(),
+  severity: z.string().trim().min(1).max(100).optional(),
+  priority: z.string().trim().min(1).max(100).optional(),
+  owner: z.string().trim().min(1).max(200).nullable().optional(),
+  timeline: z.string().trim().min(1).max(200).nullable().optional(),
+  frameworks: z.array(z.string().trim().min(1).max(200)).max(25).optional()
+});
+
+export const normalizedAuditExecutionOutputSchema = z.object({
+  executive_summary: z.string().trim().min(1).max(8_000),
+  risk_level: z.string().trim().min(1).max(100),
+  compliance_score: z.number().int().min(0).max(100),
+  top_risks: z.array(normalizedAuditListItemSchema).min(1).max(25),
+  governance_gaps: z.array(z.string().trim().min(1).max(1_000)).min(1).max(25),
+  priority_actions: z.array(normalizedAuditListItemSchema).min(1).max(30),
+  roadmap_30_60_90: z.object({
+    days_30: z.array(normalizedAuditListItemSchema).max(15),
+    days_60: z.array(normalizedAuditListItemSchema).max(15),
+    days_90: z.array(normalizedAuditListItemSchema).max(15)
+  }),
+  assumptions: z.array(z.string().trim().min(1).max(1_000)).min(1).max(10),
+  limitations: z.array(z.string().trim().min(1).max(1_000)).min(1).max(10)
+}).superRefine((value, ctx) => {
+  try {
+    validateAiOutputSafety(value, "normalized_audit_execution_output");
+  } catch (error) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        error instanceof Error ? error.message : "Unsafe normalized audit output content.",
+    });
+  }
+});
+
 export type ExecuteAuditWorkflowInput = z.infer<typeof executeAuditWorkflowInputSchema>;
 export type CommercialRoutingPolicy = z.infer<typeof commercialRoutingPolicySchema>;
 export type BusinessContextOutput = z.infer<typeof businessContextOutputSchema>;
@@ -275,6 +312,9 @@ export type RemediationRoadmapOutput = z.infer<typeof remediationRoadmapOutputSc
 export type FinalReportOutput = z.infer<typeof finalReportOutputSchema>;
 export type AuditWorkflowMetadata = z.infer<typeof auditWorkflowMetadataSchema>;
 export type AuditWorkflowOutput = z.infer<typeof auditWorkflowOutputSchema>;
+export type NormalizedAuditExecutionOutput = z.infer<
+  typeof normalizedAuditExecutionOutputSchema
+>;
 
 export type ExecuteAuditWorkflowOptions = {
   updateProgress?: (input: {

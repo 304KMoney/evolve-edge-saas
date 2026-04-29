@@ -24,6 +24,12 @@ import {
   getAuditWorkflowProgressPresentation,
   parseAuditWorkflowProgress
 } from "./customer-runs";
+import { isAuditIntakeCompleteFromRegulatoryProfile } from "./audit-intake";
+import {
+  buildAuditLifecycleTimeline,
+  getLatestAuditLifecycleTimelineForOrganization,
+  type AuditLifecycleStatus
+} from "./audit-lifecycle";
 
 function formatDate(date: Date | null | undefined) {
   if (!date) return "Draft";
@@ -33,6 +39,81 @@ function formatDate(date: Date | null | undefined) {
     day: "numeric",
     year: "numeric"
   }).format(date);
+}
+
+function formatLifecycleTimestamp(date: Date | null | undefined) {
+  if (!date) return null;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function mapAuditLifecycleForDashboard(input: Awaited<
+  ReturnType<typeof getLatestAuditLifecycleTimelineForOrganization>
+> | null) {
+  const timeline =
+    input ??
+    {
+      currentStatus: "intake_pending" as AuditLifecycleStatus,
+      stages: buildAuditLifecycleTimeline({
+        currentStatus: "intake_pending",
+        timestamps: {
+          intake_pending: null
+        }
+      })
+    };
+
+  return {
+    currentStatus: timeline.currentStatus,
+    stages: timeline.stages.map((stage) => ({
+      status: stage.status,
+      label: stage.label,
+      description: stage.description,
+      completed: stage.completed,
+      active: stage.active,
+      failed: stage.failed,
+      timestampLabel: formatLifecycleTimestamp(stage.timestamp)
+    }))
+  };
+}
+
+async function getLatestExecutiveBriefingForDashboard(organizationId: string) {
+  try {
+    const rows = await prisma.$queryRaw<Array<{
+      id: string;
+      reportId: string;
+      summary: string;
+      createdAt: Date;
+      reportTitle: string;
+    }>>(Prisma.sql`
+      SELECT
+        b."id",
+        b."reportId",
+        b."summary",
+        b."createdAt",
+        r."title" AS "reportTitle"
+      FROM "Briefing" b
+      INNER JOIN "Report" r ON r."id" = b."reportId"
+      WHERE b."organizationId" = ${organizationId}
+      ORDER BY b."createdAt" DESC
+      LIMIT 1
+    `);
+
+    return rows[0] ?? null;
+  } catch (error) {
+    if (isPrismaRuntimeCompatibilityError(error)) {
+      logPrismaRuntimeCompatibilityError("dashboard.latest_briefing", error, {
+        organizationId
+      });
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 function titleCaseSeverity(value: string) {
@@ -271,6 +352,21 @@ function buildFallbackDashboardData(organizationName: string): DashboardData {
       nextReviewLabel: "Monitoring will activate after the first live report sync.",
       trendDelta: 0
     },
+    auditIntake: {
+      complete: false,
+      statusLabel: "Intake incomplete",
+      summary: "Complete onboarding intake before dashboard access and audit readiness."
+    },
+    auditLifecycle: mapAuditLifecycleForDashboard(null),
+    executiveBriefing: {
+      available: false,
+      title: "Executive briefing",
+      summary:
+        "Executive briefing will appear after a validated report is ready and the active plan allows briefing delivery.",
+      href: null,
+      statusLabel: "Not available yet",
+      ctaLabel: "View reports"
+    },
     recommendedFocus: {
       label: "Getting started",
       title: "Create your first live records",
@@ -341,7 +437,7 @@ const dashboardOrganizationInclude = {
   },
   reports: {
     orderBy: { publishedAt: "desc" },
-    take: 2
+    take: 6
   }
 } satisfies Prisma.OrganizationInclude;
 
@@ -358,6 +454,12 @@ export async function getDashboardData(): Promise<DashboardData> {
   let auditsQuota: Awaited<ReturnType<typeof getUsageRemaining>>;
   let evidenceUploadsQuota: Awaited<ReturnType<typeof getUsageRemaining>>;
   let activation: Awaited<ReturnType<typeof getOrganizationActivationSnapshot>>;
+  let auditLifecycle: Awaited<
+    ReturnType<typeof getLatestAuditLifecycleTimelineForOrganization>
+  > | null = null;
+  let latestBriefing: Awaited<
+    ReturnType<typeof getLatestExecutiveBriefingForDashboard>
+  > | null = null;
   let visibleReports: Awaited<
     ReturnType<typeof listDashboardReportSummaryViewsForAccessSession>
   > = [];
@@ -381,6 +483,10 @@ export async function getDashboardData(): Promise<DashboardData> {
       })
     ]);
     activation = await getOrganizationActivationSnapshot(organizationId, entitlements);
+    [auditLifecycle, latestBriefing] = await Promise.all([
+      getLatestAuditLifecycleTimelineForOrganization(organizationId),
+      getLatestExecutiveBriefingForDashboard(organizationId)
+    ]);
     organization = await prisma.organization.findUnique({
       where: {
         id: organizationId
@@ -409,6 +515,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   const subscription = organization.subscriptions[0];
   const assessment = organization.assessments[0];
   const reports = organization.reports;
+  const latestVisibleReport = visibleReports[0] ?? null;
   const frameworks = organization.frameworkSelections.map((item) => item.framework.name);
   const frameworkResources = resolveFrameworkResourceSelections(
     organization.frameworkSelections.map((item) => ({
@@ -428,6 +535,31 @@ export async function getDashboardData(): Promise<DashboardData> {
   const activeWorkflowPresentation = activeWorkflowProgress
     ? getAuditWorkflowProgressPresentation(activeWorkflowProgress.status)
     : null;
+  const auditIntakeComplete = isAuditIntakeCompleteFromRegulatoryProfile(
+    organization.regulatoryProfile
+  );
+  const latestAnalysisStatus = assessment?.analysisJobs[0]?.status ?? null;
+  const analysisStatusLabel =
+    latestAnalysisStatus === "RUNNING"
+      ? "Analysis running"
+      : latestAnalysisStatus === "SUCCEEDED"
+        ? "Analysis complete - report draft available"
+        : latestAnalysisStatus === "FAILED"
+          ? "Analysis failed - review required"
+          : assessment?.status === AssessmentStatus.ANALYSIS_QUEUED
+            ? "Analysis pending"
+            : assessment?.status === AssessmentStatus.REPORT_DRAFT_READY
+              ? "Analysis complete - report draft available"
+              : "Analysis pending";
+  const analysisStatusSummary =
+    latestAnalysisStatus === "SUCCEEDED" ||
+    assessment?.status === AssessmentStatus.REPORT_DRAFT_READY
+      ? "Validated OpenAI/LangGraph output has been persisted by the backend. Report draft visibility remains governed by report review and entitlement controls."
+      : latestAnalysisStatus === "FAILED"
+        ? "The AI execution did not produce a validated report draft and is marked for operator review. Customer-visible reports remain blocked until validation succeeds."
+        : latestAnalysisStatus === "RUNNING"
+          ? "OpenAI/LangGraph analysis is running through the backend execution worker after routing snapshot creation."
+          : "Required audit intake is saved in Neon and marked ready_for_audit. Analysis waits for backend routing snapshot and workflow dispatch controls.";
   const currentPeriodEnd = subscription?.currentPeriodEnd;
   const primaryRecommendation = assessment?.recommendations[0];
   const latestNotification = organization.notifications[0];
@@ -602,6 +734,27 @@ export async function getDashboardData(): Promise<DashboardData> {
       date: formatDate(report.publishedAt ?? report.createdAt),
       href: `/dashboard/reports/${report.id}`
     })),
+    executiveBriefing: latestBriefing
+      ? {
+          available: true,
+          title: latestBriefing.reportTitle,
+          summary:
+            latestBriefing.summary ||
+            "Executive briefing available for leadership walkthrough and customer-facing presentation.",
+          href: `/briefings/${latestBriefing.id}`,
+          statusLabel: "Executive briefing available",
+          ctaLabel: "View briefing"
+        }
+      : {
+          available: false,
+          title: "Executive briefing",
+          summary: latestVisibleReport
+            ? "A report is available. Enterprise briefing access appears here after the briefing is generated from validated report data."
+            : "Executive briefing will appear after a validated report is ready and the active plan allows briefing delivery.",
+          href: latestVisibleReport ? `/dashboard/reports/${latestVisibleReport.id}` : null,
+          statusLabel: latestVisibleReport ? "Report ready" : "Pending report",
+          ctaLabel: latestVisibleReport ? "Open latest report" : "View reports"
+        },
     notifications: organization.notifications.map((notification) => ({
       title: notification.title,
       body: notification.body,
@@ -649,6 +802,16 @@ export async function getDashboardData(): Promise<DashboardData> {
         : "Monitoring review not scheduled yet",
       trendDelta: monitoring.summary.postureTrendDelta
     },
+    auditIntake: {
+      complete: auditIntakeComplete,
+      statusLabel: auditIntakeComplete
+        ? `Intake complete - ${analysisStatusLabel.toLowerCase()}`
+        : "Intake incomplete",
+      summary: auditIntakeComplete
+        ? analysisStatusSummary
+        : "Required audit intake is missing or invalid. Dashboard access should redirect back to onboarding."
+    },
+    auditLifecycle: mapAuditLifecycleForDashboard(auditLifecycle),
     isDemoMode: isDemoModeEnabled(),
     upsellOffers: getExpansionOffers({
       placement: "dashboard",

@@ -34,6 +34,7 @@ import {
 } from "./dify-adapter";
 import { getAppUrl, getDifyBaseUrl, getOptionalEnv, requireEnv } from "./runtime-config";
 import { listOrganizationWorkflowRoutingDecisions, type NormalizedWorkflowHints } from "./workflow-routing";
+import { isAuditIntakeCompleteFromRegulatoryProfile } from "./audit-intake";
 
 const DIFY_ANALYSIS_CONTRACT_VERSION = "assessment-analysis.v1";
 const DEFAULT_DIFY_TIMEOUT_MS = 20_000;
@@ -120,6 +121,13 @@ async function buildAssessmentPayload(
 
   if (!assessment) {
     throw new Error("Assessment not found for Dify execution.");
+  }
+
+  if (
+    !assessment.organization.onboardingCompletedAt ||
+    !isAuditIntakeCompleteFromRegulatoryProfile(assessment.organization.regulatoryProfile)
+  ) {
+    throw new Error("Required onboarding intake must be completed before Dify execution.");
   }
 
   const routingDecision =

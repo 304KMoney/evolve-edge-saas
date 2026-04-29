@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import React from "react";
 import { useState } from "react";
 import { ArrowRight, CheckCircle2, CircleHelp, ShieldCheck } from "lucide-react";
 import type { PricingCta, PricingPageData } from "../lib/pricing";
@@ -26,6 +27,7 @@ function appendBillingCadenceToHref(
   if (
     !href.startsWith("/") ||
     !(
+      href.startsWith("/signup") ||
       href.startsWith("/start") ||
       href.startsWith("/onboarding") ||
       href.startsWith("/pricing")
@@ -37,6 +39,28 @@ function appendBillingCadenceToHref(
   const [pathWithQuery, hashFragment] = href.split("#", 2);
   const [pathname, queryString = ""] = pathWithQuery.split("?", 2);
   const searchParams = new URLSearchParams(queryString);
+
+  if (pathname === "/signup") {
+    const redirectTo = searchParams.get("redirectTo");
+    if (redirectTo?.startsWith("/") && !redirectTo.startsWith("//")) {
+      const [redirectPathWithQuery, redirectHashFragment] = redirectTo.split("#", 2);
+      const [redirectPathname, redirectQueryString = ""] =
+        redirectPathWithQuery.split("?", 2);
+      const redirectSearchParams = new URLSearchParams(redirectQueryString);
+      redirectSearchParams.set("billingCadence", billingCadence);
+      searchParams.set(
+        "redirectTo",
+        `${redirectPathname}?${redirectSearchParams.toString()}${
+          redirectHashFragment ? `#${redirectHashFragment}` : ""
+        }`
+      );
+
+      return `${pathname}?${searchParams.toString()}${
+        hashFragment ? `#${hashFragment}` : ""
+      }`;
+    }
+  }
+
   searchParams.set("billingCadence", billingCadence);
   return `${pathname}?${searchParams.toString()}${hashFragment ? `#${hashFragment}` : ""}`;
 }

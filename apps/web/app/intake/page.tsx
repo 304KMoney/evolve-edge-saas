@@ -10,6 +10,8 @@ export const metadata: Metadata = {
     "Review how Evolve Edge captures intake, evidence, scope, and executive reporting inputs."
 };
 
+export const dynamic = "force-dynamic";
+
 const intakeSteps = [
   {
     icon: ClipboardList,

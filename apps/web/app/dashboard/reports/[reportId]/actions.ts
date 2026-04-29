@@ -33,6 +33,7 @@ import {
 import { appendOperatorWorkflowEventRecord } from "../../../../lib/operator-workflow-event-records";
 import { recordOperationalFinding } from "../../../../lib/operations-queues";
 import { trackProductAnalyticsEvent } from "../../../../lib/product-analytics";
+import { recordAuditLifecycleTransition } from "../../../../lib/audit-lifecycle";
 import { getReportAccessCandidateById } from "../../../../lib/report-records";
 import { queueReportRegeneration } from "../../../../lib/report-review";
 
@@ -417,6 +418,26 @@ export async function markReportDeliveredAction(formData: FormData) {
     });
 
     await markCustomerRunDelivered(report.id, tx);
+    await recordAuditLifecycleTransition({
+      db: tx,
+      organizationId: session.organization!.id,
+      assessmentId: report.assessmentId,
+      toStatus: "delivered",
+      actorUserId: session.user.id,
+      actorType: "USER",
+      actorLabel: session.user.email,
+      reasonCode: "report.delivered",
+      linkages: {
+        reportId: report.id
+      },
+      evidence: {
+        reportId: report.id,
+        deliveredAt
+      },
+      metadata: {
+        reportPackageId: deliveryPackage.id
+      }
+    });
 
     await syncOrganizationCustomerAccount(session.organization!.id, {
       db: tx,

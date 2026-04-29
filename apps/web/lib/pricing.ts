@@ -181,7 +181,7 @@ function buildPricingCta(input: {
       href: buildPricingAccessStartPath(plan.code),
       label: plan.ctaLabel,
       helperText:
-        "We will email secure login instructions and temporary credentials so you can start onboarding without waiting on a manual handoff."
+        "Create an account first so onboarding and checkout can stay bound to an app-owned workspace."
     };
   }
 

@@ -82,7 +82,16 @@ async function runAuthRoutingTests() {
               id: "org_report",
               slug: "report-org",
               name: "Report Org",
-              onboardingCompletedAt: new Date("2026-04-20T00:00:00.000Z")
+              onboardingCompletedAt: new Date("2026-04-20T00:00:00.000Z"),
+              regulatoryProfile: {
+                auditIntake: {
+                  intakeCompleted: true,
+                  intakeCompletedAt: "2026-04-20T00:00:00.000Z",
+                  readyForAudit: true,
+                  readyForAuditAt: "2026-04-20T00:00:00.000Z",
+                  status: "ready_for_audit"
+                }
+              }
             }
           };
         }
@@ -106,7 +115,16 @@ async function runAuthRoutingTests() {
               id: "org_viewer",
               slug: "viewer-org",
               name: "Viewer Org",
-              onboardingCompletedAt: new Date("2026-04-20T00:00:00.000Z")
+              onboardingCompletedAt: new Date("2026-04-20T00:00:00.000Z"),
+              regulatoryProfile: {
+                auditIntake: {
+                  intakeCompleted: true,
+                  intakeCompletedAt: "2026-04-20T00:00:00.000Z",
+                  readyForAudit: true,
+                  readyForAuditAt: "2026-04-20T00:00:00.000Z",
+                  status: "ready_for_audit"
+                }
+              }
             }
           };
         }

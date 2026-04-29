@@ -1,6 +1,7 @@
 import {
   createOpaqueToken,
   hashOpaqueToken,
+  Prisma,
   prisma,
   verifyPassword
 } from "@evolve-edge/db";
@@ -28,6 +29,7 @@ import {
   getRuntimeEnvironment,
   isPreviewGuestAccessEnabled
 } from "./runtime-config";
+import { isAuditIntakeCompleteFromRegulatoryProfile } from "./audit-intake";
 
 export type AppSession = {
   user: {
@@ -60,6 +62,10 @@ const AUTH_RATE_LIMIT_ACTIONS = ["auth.sign_in_failed", "auth.sign_in_rate_limit
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+export function normalizeAuthEmail(email: string) {
+  return normalizeEmail(email);
 }
 
 function getSeedOwnerEmail() {
@@ -134,6 +140,7 @@ type ScopedOrganizationMembershipRecord = {
     slug: string;
     name: string;
     onboardingCompletedAt: Date | null;
+    regulatoryProfile: Prisma.JsonValue | null;
   };
   role: string;
   isBillingAdmin: boolean;
@@ -156,7 +163,8 @@ type ScopedOrganizationSessionDbClient = {
             id: true;
             slug: true;
             name: true;
-            onboardingCompletedAt: true;
+            onboardingCompletedAt: true,
+            regulatoryProfile: true
           };
         };
       };
@@ -256,6 +264,16 @@ export function getSignInErrorMessage(error?: string) {
     default:
       return null;
   }
+}
+
+export function getPostAuthRedirectPath(input: {
+  redirectTo?: string | null;
+  membershipCount: number;
+}) {
+  return (
+    sanitizeInternalRedirect(input.redirectTo, "") ||
+    (input.membershipCount > 0 ? "/dashboard" : "/onboarding")
+  );
 }
 
 async function redirectToSignIn(error?: string): Promise<never> {
@@ -562,30 +580,17 @@ async function resolveCurrentSession(options?: {
     return null;
   }
 
-  const config = getPasswordAuthConfig();
-  if (!config.isComplete) {
-    const previewGuestSession = await resolvePreviewGuestSession(requestPath);
-    if (previewGuestSession) {
-      return previewGuestSession;
-    }
-
-    if (options?.redirectOnMissing ?? true) {
-      await redirectToSignIn("config");
-    }
-
-    return null;
-  }
-
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_SESSION_COOKIE)?.value;
   if (!token) {
+    const config = getPasswordAuthConfig();
     const previewGuestSession = await resolvePreviewGuestSession(requestPath);
     if (previewGuestSession) {
       return previewGuestSession;
     }
 
     if (options?.redirectOnMissing ?? true) {
-      await redirectToSignIn();
+      await redirectToSignIn(config.isComplete ? undefined : "config");
     }
 
     return null;
@@ -655,7 +660,10 @@ async function resolveCurrentSession(options?: {
   const onboardingRequired =
     !membership ||
     !membership.organization.onboardingCompletedAt ||
-    !dbSession.user.onboardingCompletedAt;
+    !dbSession.user.onboardingCompletedAt ||
+    !isAuditIntakeCompleteFromRegulatoryProfile(
+      membership.organization.regulatoryProfile
+    );
 
   return {
     user: {
@@ -781,7 +789,8 @@ export async function resolveScopedOrganizationSession(input: {
           id: true,
           slug: true,
           name: true,
-          onboardingCompletedAt: true
+          onboardingCompletedAt: true,
+          regulatoryProfile: true
         }
       }
     }
@@ -804,8 +813,10 @@ export async function resolveScopedOrganizationSession(input: {
       isBillingAdmin: membership.isBillingAdmin
     },
     onboardingRequired:
-      input.session.onboardingRequired &&
-      !membership.organization.onboardingCompletedAt
+      !membership.organization.onboardingCompletedAt ||
+      !isAuditIntakeCompleteFromRegulatoryProfile(
+        membership.organization.regulatoryProfile
+      )
   };
 
   return hasPermission(getSessionAuthorizationContext(scopedSession), input.permission)

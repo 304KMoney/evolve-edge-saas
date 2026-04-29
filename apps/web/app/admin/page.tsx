@@ -428,6 +428,12 @@ export default async function AdminPage({
             >
               View proactive queues
             </Link>
+            <Link
+              href={"/admin/system-state" as Route}
+              className="rounded-full border border-line px-4 py-2 font-medium text-ink transition hover:border-accent hover:text-accent"
+            >
+              Debug system state
+            </Link>
             <span>Signed in as {session.user.email}</span>
           </div>
         </div>

@@ -20,6 +20,7 @@ import {
   getAiExecutionWorkflowRateLimitMaxRequests,
   getAiExecutionWorkflowRateLimitWindowMs,
 } from "../../../../../../lib/runtime-config";
+import { getOrganizationAuditReadiness } from "../../../../../../lib/audit-intake";
 
 export async function POST(request: Request) {
   try {
@@ -62,6 +63,22 @@ export async function POST(request: Request) {
         : "";
 
     if (orgId) {
+      const readiness = await getOrganizationAuditReadiness({
+        organizationId: orgId
+      });
+
+      if (!readiness.readyForAudit) {
+        return NextResponse.json(
+          {
+            accepted: false,
+            code: "intake_incomplete",
+            message:
+              "Required onboarding intake must be completed before AI execution."
+          },
+          { status: 409 }
+        );
+      }
+
       const orgRateLimit = await consumeRateLimit({
         storeKey: `internal-ai-execute:org:${orgId}`,
         maxRequests: getAiExecutionOrgRateLimitMaxRequests(),

@@ -39,11 +39,12 @@ export function buildPricingAccessStartPath(
   planCode: CanonicalPlanCode,
   billingCadence?: CanonicalBillingCadence | null
 ) {
+  const onboardingPath = buildPricingAccessOnboardingPath(planCode, billingCadence);
   const searchParams = new URLSearchParams({
-    plan: planCode
+    redirectTo: onboardingPath
   });
-  appendBillingCadence(searchParams, billingCadence);
-  return `/start?${searchParams.toString()}`;
+
+  return `/signup?${searchParams.toString()}`;
 }
 
 export function buildPricingAccessSignInPath(input: {

@@ -12,6 +12,7 @@ async function runAiExecutionWorkerTests() {
   const { isAnalysisJobReadyForRetry, runOpenAiAnalysisJob } = await import("../lib/ai-execution");
   const assessmentUpdates: Array<Record<string, unknown>> = [];
   const analysisUpdates: Array<Record<string, unknown>> = [];
+  const queuedEmails: Array<Record<string, unknown>> = [];
 
   const db = {
     analysisJob: {
@@ -79,6 +80,9 @@ async function runAiExecutionWorkerTests() {
             ...(input.data as Record<string, unknown>)
           })
         },
+        deliveryStateRecord: {
+          updateMany: async () => ({ count: 1 })
+        },
         domainEvent: {
           create: async () => ({ id: "evt_123" })
         },
@@ -109,6 +113,7 @@ async function runAiExecutionWorkerTests() {
   const payload = {
     orgId: "org_123",
     assessmentId: "asm_123",
+    routingSnapshotId: "rs_123",
     workflowDispatchId: "wd_123",
     dispatchId: "disp_123",
     customerEmail: "buyer@example.com",
@@ -266,15 +271,26 @@ async function runAiExecutionWorkerTests() {
     persistValidatedWorkflowReportFn: (async () => ({
       id: "report_123",
       assessmentId: "asm_123",
+      title: "Assessment 123 Executive Audit Report",
       status: "GENERATED"
     })) as never,
+    queueEmailNotificationFn: (async (_db: unknown, input: Record<string, unknown>) => {
+      queuedEmails.push(input);
+      return { id: "email_123" };
+    }) as never,
     recordOperationalFindingFn: (async () => ({ id: "finding_1" })) as never,
     upsertExecutiveDeliveryPackageForReportFn: (async () => null) as never,
     logServerEventFn: () => undefined,
     sendOperationalAlertFn: async () => undefined,
+    auditReadinessOverride: true,
+    enforcePlanAccessFn: (async () => ({ entitlements: {}, strictPlan: { plan: "scale" } })) as never,
   });
 
   assert.equal(completedResult.status, "completed");
+  assert.equal(queuedEmails.length, 1);
+  assert.equal(queuedEmails[0]?.templateKey, "report-ready");
+  assert.equal(queuedEmails[0]?.recipientEmail, "buyer@example.com");
+  assert.equal(queuedEmails[0]?.idempotencyKey, "email:report-ready:report_123:ai-execution");
   assert.equal(
     (assessmentUpdates[assessmentUpdates.length - 1]?.data as Record<string, unknown>).status,
     AssessmentStatus.REPORT_DRAFT_READY
@@ -290,6 +306,7 @@ async function runAiExecutionWorkerTests() {
       db: db as never,
       payload: {
         ...payload,
+        routingSnapshotId: "rs_failed",
         workflowDispatchId: "wd_failed",
       },
       provider: {
@@ -305,11 +322,72 @@ async function runAiExecutionWorkerTests() {
       recordOperationalFindingFn: (async () => ({ id: "finding_2" })) as never,
       logServerEventFn: () => undefined,
       sendOperationalAlertFn: async () => undefined,
+      auditReadinessOverride: true,
+    enforcePlanAccessFn: (async () => ({ entitlements: {}, strictPlan: { plan: "scale" } })) as never,
     }
   );
 
   assert.equal(failedResult.status, "failed");
   assert.doesNotMatch(failedResult.safeError, /sk-test-123/);
+
+  const malformedResult = await runOpenAiAnalysisJob(
+    {
+      ...job,
+      id: "job_malformed",
+    },
+    {
+      db: db as never,
+      payload: {
+        ...payload,
+        routingSnapshotId: "rs_malformed",
+        workflowDispatchId: "wd_malformed",
+      },
+      provider: {
+        provider: "openai_langgraph",
+        async executeAuditWorkflow() {
+          return {
+            provider: "openai_langgraph",
+            workflowDispatchId: "wd_malformed",
+            status: "completed",
+          };
+        },
+      } as never,
+      publishDomainEventsFn: (async () => []) as never,
+      markCustomerRunAnalysisCompletedFn: async () => null,
+      markCustomerRunAnalysisFailedFn: async () => null,
+      markCustomerRunReportGeneratedFn: async () => null,
+      recordOperationalFindingFn: (async () => ({ id: "finding_3" })) as never,
+      logServerEventFn: () => undefined,
+      sendOperationalAlertFn: async () => undefined,
+      auditReadinessOverride: true,
+    enforcePlanAccessFn: (async () => ({ entitlements: {}, strictPlan: { plan: "scale" } })) as never,
+    }
+  );
+
+  assert.equal(malformedResult.status, "failed");
+  assert.equal(malformedResult.safeError, "AI output validation failed; failed_review_required.");
+
+  const blockedResult = await runOpenAiAnalysisJob(
+    {
+      ...job,
+      id: "job_blocked",
+    },
+    {
+      db: db as never,
+      payload,
+      provider: {
+        provider: "openai_langgraph",
+        async executeAuditWorkflow() {
+          throw new Error("Provider should not run without intake readiness.");
+        },
+      } as never,
+      logServerEventFn: () => undefined,
+      auditReadinessOverride: false,
+    }
+  );
+
+  assert.equal(blockedResult.status, "blocked");
+  assert.equal(blockedResult.reason, "audit_intake_incomplete");
 
   assert.equal(
     isAnalysisJobReadyForRetry(
@@ -338,3 +416,4 @@ async function runAiExecutionWorkerTests() {
 }
 
 void runAiExecutionWorkerTests();
+

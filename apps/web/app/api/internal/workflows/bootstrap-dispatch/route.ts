@@ -17,6 +17,7 @@ import {
   queueAuditRequestedDispatch
 } from "../../../../../lib/workflow-dispatch";
 import { requireOutboundDispatchSecret } from "../../../../../lib/webhook-dispatcher";
+import { getOrganizationAuditReadiness } from "../../../../../lib/audit-intake";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -97,6 +98,19 @@ export async function POST(request: Request) {
 
     const payload = expectObject(await parseJsonRequestBody(request));
     const normalized = readBootstrapPayload(payload);
+    const readiness = await getOrganizationAuditReadiness({
+      organizationId: normalized.organizationId
+    });
+
+    if (!readiness.readyForAudit) {
+      return NextResponse.json(
+        {
+          error:
+            "Required onboarding intake must be completed before workflow dispatch."
+        },
+        { status: 409 }
+      );
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const routingSnapshot = await computeAndPersistRoutingSnapshot({

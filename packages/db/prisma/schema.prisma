@@ -114,6 +114,19 @@ enum DeliveryStateStatus {
   FAILED
 }
 
+enum AuditLifecycleStatus {
+  INTAKE_PENDING
+  INTAKE_COMPLETE
+  ROUTING_COMPLETE
+  ANALYSIS_PENDING
+  ANALYSIS_RUNNING
+  ANALYSIS_COMPLETE
+  REPORT_READY
+  BRIEFING_READY
+  DELIVERED
+  FAILED_REVIEW_REQUIRED
+}
+
 enum EntitlementOverrideSource {
   ENTERPRISE
   PROMO
@@ -643,6 +656,7 @@ model User {
   routingSnapshots       RoutingSnapshot[]          @relation("RoutingSnapshotUser")
   deliveryStates         DeliveryStateRecord[]      @relation("DeliveryStateUser")
   deliveryStateTransitions DeliveryStateTransition[] @relation("DeliveryStateTransitionActor")
+  auditLifecycleTransitions AuditLifecycleTransition[] @relation("AuditLifecycleTransitionActor")
   customerAccessGrants   CustomerAccessGrantRecord[] @relation("CustomerAccessGrantUser")
   passwordResetTokens    PasswordResetToken[]
 }
@@ -676,6 +690,7 @@ model Organization {
   usageEvents         UsageEvent[]
   assessments         Assessment[]
   reports             Report[]
+  briefings           Briefing[]
   frameworkSelections OrganizationFramework[]
   vendors             Vendor[]
   models              AIModel[]
@@ -716,6 +731,8 @@ model Organization {
   routingSnapshots      RoutingSnapshot[]
   deliveryStates        DeliveryStateRecord[]
   deliveryStateTransitions DeliveryStateTransition[]
+  auditLifecycles       AuditLifecycle[]
+  auditLifecycleTransitions AuditLifecycleTransition[]
   aiWorkflowFeedbackEntries AiWorkflowFeedback[]
 }
 
@@ -1786,6 +1803,7 @@ model Assessment {
   frameworkPostureSnapshots FrameworkPostureSnapshot[]
   engagementProgram EngagementProgram? @relation(fields: [engagementProgramId], references: [id], onDelete: SetNull)
   engagementDeliverables EngagementDeliverable[]
+  auditLifecycle        AuditLifecycle?
 
   @@index([engagementProgramId, createdAt])
 }
@@ -2193,11 +2211,85 @@ model Report {
   customerAccessGrants CustomerAccessGrantRecord[]
   operatorWorkflowEvents OperatorWorkflowEventRecord[]
   aiWorkflowFeedbackEntries AiWorkflowFeedback[]
+  briefing          Briefing?
+  auditLifecycle    AuditLifecycle?
 
   @@index([organizationId, status, publishedAt])
   @@index([customerAccountId, createdAt])
   @@index([selectedPlan, createdAt])
   @@index([engagementProgramId, createdAt])
+}
+
+model Briefing {
+  id                 String       @id @default(cuid())
+  reportId           String       @unique
+  organizationId     String
+  summary            String
+  structuredSections Json
+  createdAt          DateTime     @default(now())
+  report             Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+model AuditLifecycle {
+  id                     String               @id @default(cuid())
+  organizationId         String
+  assessmentId           String               @unique
+  routingSnapshotId      String?
+  workflowDispatchId     String?
+  reportId               String?              @unique
+  briefingId             String?
+  status                 AuditLifecycleStatus @default(INTAKE_PENDING)
+  statusReason           String?
+  currentMetadata        Json?
+  intakePendingAt        DateTime?
+  intakeCompleteAt       DateTime?
+  routingCompleteAt      DateTime?
+  analysisPendingAt      DateTime?
+  analysisRunningAt      DateTime?
+  analysisCompleteAt     DateTime?
+  reportReadyAt          DateTime?
+  briefingReadyAt        DateTime?
+  deliveredAt            DateTime?
+  failedReviewRequiredAt DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assessment             Assessment           @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  report                 Report?              @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  transitions            AuditLifecycleTransition[]
+
+  @@index([organizationId, status, updatedAt])
+  @@index([routingSnapshotId])
+  @@index([workflowDispatchId])
+  @@index([briefingId])
+}
+
+model AuditLifecycleTransition {
+  id               String                @id @default(cuid())
+  auditLifecycleId String
+  organizationId   String
+  assessmentId     String
+  actorUserId      String?
+  actorType        AuditActorType        @default(SYSTEM)
+  actorLabel       String?
+  fromStatus       AuditLifecycleStatus?
+  toStatus         AuditLifecycleStatus
+  reasonCode       String?
+  note             String?
+  metadata         Json?
+  occurredAt       DateTime              @default(now())
+  createdAt        DateTime              @default(now())
+  auditLifecycle   AuditLifecycle        @relation(fields: [auditLifecycleId], references: [id], onDelete: Cascade)
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUser        User?                 @relation("AuditLifecycleTransitionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([auditLifecycleId, occurredAt])
+  @@index([organizationId, occurredAt])
+  @@index([assessmentId, occurredAt])
+  @@index([toStatus, occurredAt])
 }
 
 model ReportPackage {

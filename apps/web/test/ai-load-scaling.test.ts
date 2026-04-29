@@ -12,6 +12,7 @@ function buildPayload(index: number) {
   return {
     orgId: `org_${index}`,
     assessmentId: `asm_${index}`,
+    routingSnapshotId: `rs_${index}`,
     workflowDispatchId: `wd_${index}`,
     dispatchId: `disp_${index}`,
     customerEmail: `buyer${index}@example.com`,
@@ -337,6 +338,9 @@ async function runAiLoadScalingTests() {
             ...(input.data as Record<string, unknown>),
           }),
         },
+        deliveryStateRecord: {
+          updateMany: async () => ({ count: 1 })
+        },
         domainEvent: {
           create: async () => ({ id: "evt_123" }),
         },
@@ -380,6 +384,8 @@ async function runAiLoadScalingTests() {
       sendOperationalAlertFn: async () => null,
       ensurePendingAssessmentReportFn: async () => ({ id: "report_1" }),
       persistValidatedWorkflowReportFn: async ({ reportId }: { reportId: string }) => ({ id: reportId }),
+      auditReadinessOverride: true,
+      enforcePlanAccessFn: async () => ({ entitlements: {}, strictPlan: { plan: "scale" } }),
     } as never),
     runOpenAiAnalysisJob(jobTwo as never, {
       db: db as never,
@@ -401,6 +407,8 @@ async function runAiLoadScalingTests() {
       sendOperationalAlertFn: async () => null,
       ensurePendingAssessmentReportFn: async () => ({ id: "report_2" }),
       persistValidatedWorkflowReportFn: async ({ reportId }: { reportId: string }) => ({ id: reportId }),
+      auditReadinessOverride: true,
+      enforcePlanAccessFn: async () => ({ entitlements: {}, strictPlan: { plan: "scale" } }),
     } as never),
   ]);
 
@@ -470,6 +478,8 @@ async function runAiLoadScalingTests() {
       sendOperationalAlertFn: async () => null,
       ensurePendingAssessmentReportFn: async () => ({ id: "report_dup" }),
       persistValidatedWorkflowReportFn: async ({ reportId }: { reportId: string }) => ({ id: reportId }),
+      auditReadinessOverride: true,
+      enforcePlanAccessFn: async () => ({ entitlements: {}, strictPlan: { plan: "scale" } }),
     } as never),
     runOpenAiAnalysisJob(duplicateState as never, {
       db: duplicateDb as never,
@@ -491,6 +501,8 @@ async function runAiLoadScalingTests() {
       sendOperationalAlertFn: async () => null,
       ensurePendingAssessmentReportFn: async () => ({ id: "report_dup" }),
       persistValidatedWorkflowReportFn: async ({ reportId }: { reportId: string }) => ({ id: reportId }),
+      auditReadinessOverride: true,
+      enforcePlanAccessFn: async () => ({ entitlements: {}, strictPlan: { plan: "scale" } }),
     } as never),
   ]);
 
@@ -501,3 +513,5 @@ async function runAiLoadScalingTests() {
 }
 
 void runAiLoadScalingTests();
+
+

@@ -41,6 +41,8 @@ import {
   dispatchWorkflowById,
   queueAuditRequestedDispatch
 } from "../../../../lib/workflow-dispatch";
+import { getOrganizationAuditReadiness } from "../../../../lib/audit-intake";
+import { resolveAppOwnedPaidPlanForDispatch } from "../../../../lib/public-app-dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -510,7 +512,6 @@ export async function POST(request: Request) {
       }
     });
 
-    const planCode = toCommercialPlanCode(normalized.purchased_plan_code);
     const sourceRecord = buildSourceRecordMetadata(normalized);
     const statusReasonJson = buildIntakeStatusReason(normalized);
 
@@ -520,6 +521,22 @@ export async function POST(request: Request) {
         db: tx
       });
       organizationId = context.organization.id;
+
+      const readiness = await getOrganizationAuditReadiness({
+        organizationId: context.organization.id,
+        db: tx
+      });
+
+      if (!readiness.readyForAudit) {
+        throw new ValidationError(
+          "Required app onboarding intake must be completed before workflow dispatch."
+        );
+      }
+
+      const paidPlan = await resolveAppOwnedPaidPlanForDispatch({
+        organizationId: context.organization.id,
+        db: tx
+      });
 
       const deliveryState = await createDeliveryStateFromPaidRequest({
         db: tx,
@@ -531,7 +548,7 @@ export async function POST(request: Request) {
         sourceRecordType: sourceRecord.sourceRecordType,
         sourceRecordId: sourceRecord.sourceRecordId,
         idempotencyKey: `public-app-intake:${normalized.request_id}:delivery-state`,
-        planCode,
+        planCode: paidPlan.planCode,
         statusReasonJson
       });
 
@@ -544,7 +561,7 @@ export async function POST(request: Request) {
         sourceEventId: normalized.request_id,
         sourceRecordType: sourceRecord.sourceRecordType,
         sourceRecordId: sourceRecord.sourceRecordId,
-        planCode,
+        planCode: paidPlan.planCode,
         idempotencyKey: `public-app-intake:${normalized.request_id}:routing`
       });
 

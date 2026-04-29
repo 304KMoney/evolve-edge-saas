@@ -30,6 +30,9 @@ export default async function SignInPage({
   }
   const errorMessage = getSignInErrorMessage(params.error);
   const { email, isComplete } = getPasswordAuthConfig();
+  const signupHref = redirectTo
+    ? `/signup?redirectTo=${encodeURIComponent(redirectTo)}`
+    : "/signup";
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-10">
@@ -132,7 +135,10 @@ export default async function SignInPage({
           </form>
         ) : null}
 
-        <div className="mt-6 text-sm text-steel">
+        <div className="mt-6 flex items-center justify-between gap-4 text-sm text-steel">
+          <Link href={signupHref as Route} className="font-semibold text-accent">
+            Create an account
+          </Link>
           <Link href="/" className="font-semibold text-accent">
             Back to home
           </Link>

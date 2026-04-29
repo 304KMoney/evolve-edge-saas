@@ -1,18 +1,33 @@
 "use server";
 
-import { Prisma, UserRole, hashPassword, prisma } from "@evolve-edge/db";
+import { AssessmentStatus, Prisma, UserRole, hashPassword, prisma } from "@evolve-edge/db";
 import { redirect } from "next/navigation";
-import { createTrialSubscription, ensureDefaultPlans } from "../../lib/billing";
+import {
+  createStripeCheckoutSession,
+  createTrialSubscription,
+  ensureDefaultPlans,
+  hasStripeBillingConfig
+} from "../../lib/billing";
 import { getServerAuditRequestContext, writeAuditLog } from "../../lib/audit";
 import { syncOrganizationCustomerAccount } from "../../lib/customer-accounts";
 import { publishDomainEvents } from "../../lib/domain-events";
 import { requireCurrentSession } from "../../lib/auth";
 import { queueEmailNotification } from "../../lib/email";
 import {
+  resolveCanonicalBillingCadence,
   resolveCanonicalPlanCode,
   resolveCanonicalPlanCodeFromRevenuePlanCode,
   resolveRevenuePlanCodeForCommercialSelection
 } from "../../lib/commercial-catalog";
+import { resolveCheckoutAfterOnboardingDecision } from "../../lib/checkout-handoff";
+import {
+  buildAuditIntakePayload,
+  getAuditDataClassification,
+  mergeAuditIntakeIntoRegulatoryProfile,
+  normalizeAuditIntakeFormData
+} from "../../lib/audit-intake";
+import { recordAuditLifecycleTransition } from "../../lib/audit-lifecycle";
+import { shouldBlockDemoExternalSideEffects } from "../../lib/demo-mode";
 import {
   captureLeadSubmission,
   markLeadConverted,
@@ -21,6 +36,8 @@ import {
 import { trackProductAnalyticsEvent } from "../../lib/product-analytics";
 import { getRevenuePlanDefinition } from "../../lib/revenue-catalog";
 import { getAppUrl } from "../../lib/runtime-config";
+import { resumeFirstCustomerJourneyAfterReadiness } from "../../lib/first-customer-journey";
+import { logServerEvent } from "../../lib/monitoring";
 import {
   ensureDefaultFrameworkCatalog,
   ensureUniqueOrganizationSlug,
@@ -41,8 +58,8 @@ export async function completeOnboardingAction(formData: FormData) {
   const industry = String(formData.get("industry") ?? "").trim();
   const sizeBand = String(formData.get("sizeBand") ?? "").trim();
   const country = String(formData.get("country") ?? "").trim();
-  const aiUsageSummary = String(formData.get("aiUsageSummary") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const intakeResult = normalizeAuditIntakeFormData(formData);
   const selectedFrameworkCodes = formData
     .getAll("frameworkCodes")
     .map((value) => String(value))
@@ -51,13 +68,19 @@ export async function completeOnboardingAction(formData: FormData) {
     formData.get("firstAssessmentName") ?? ""
   ).trim();
   const requestedPlanCode = String(formData.get("planCode") ?? "").trim();
+  const billingCadence = resolveCanonicalBillingCadence(
+    String(formData.get("billingCadence") ?? ""),
+    "monthly"
+  );
+  const checkoutAfterOnboarding =
+    String(formData.get("checkoutAfterOnboarding") ?? "") === "1";
   const leadSource = String(formData.get("leadSource") ?? "").trim();
   const leadIntent = String(formData.get("leadIntent") ?? "").trim();
   const leadPlanCode = String(formData.get("leadPlanCode") ?? "").trim();
   const sourcePath = String(formData.get("sourcePath") ?? "").trim() || "/onboarding";
   const selectedPlanCode =
     getRevenuePlanDefinition(requestedPlanCode)?.code ??
-    resolveRevenuePlanCodeForCommercialSelection(requestedPlanCode) ??
+    resolveRevenuePlanCodeForCommercialSelection(requestedPlanCode, billingCadence) ??
     "";
   const selectedCanonicalPlanCode =
     resolveCanonicalPlanCode(leadPlanCode) ??
@@ -70,11 +93,30 @@ export async function completeOnboardingAction(formData: FormData) {
     redirect("/onboarding?error=missing-account");
   }
 
+  if (!intakeResult.ok) {
+    redirect(
+      `/onboarding?error=${
+        intakeResult.code === "missing-required" ? "missing-intake" : "invalid-intake"
+      }`
+    );
+  }
+
   const frameworkCodes =
     selectedFrameworkCodes.length > 0
       ? selectedFrameworkCodes
       : DEFAULT_FRAMEWORK_CODES;
   const completedAt = new Date();
+  const auditIntake = buildAuditIntakePayload({
+    intake: intakeResult.intake,
+    submittedByUserId: session.user.id,
+    completedAt
+  });
+  const aiUsageSummary =
+    auditIntake.aiToolsDetails ??
+    (auditIntake.usesAiTools
+      ? "AI tools are used; details were not provided."
+      : "No current AI tool usage was reported.");
+  const dataClassification = getAuditDataClassification(auditIntake.dataSensitivity);
   const requestContext = await getServerAuditRequestContext();
   const attribution = await readLeadAttributionFromCookies();
 
@@ -92,7 +134,20 @@ export async function completeOnboardingAction(formData: FormData) {
     }
   });
 
+  let completedOrganizationId: string | null = session.organization?.id ?? null;
+
   await prisma.$transaction(async (tx) => {
+    const existingOrganizationProfile = session.organization
+      ? await tx.organization.findUnique({
+          where: { id: session.organization.id },
+          select: { regulatoryProfile: true }
+        })
+      : null;
+    const regulatoryProfile = mergeAuditIntakeIntoRegulatoryProfile({
+      currentProfile: existingOrganizationProfile?.regulatoryProfile ?? null,
+      frameworkCodes,
+      auditIntake
+    });
     const organization = session.organization
       ? await tx.organization.update({
           where: { id: session.organization.id },
@@ -102,10 +157,9 @@ export async function completeOnboardingAction(formData: FormData) {
             sizeBand: sizeBand || null,
             country: country || null,
             aiUsageSummary: aiUsageSummary || null,
+            dataClassification,
             onboardingCompletedAt: completedAt,
-            regulatoryProfile: {
-              frameworks: frameworkCodes
-            }
+            regulatoryProfile
           }
         })
       : await tx.organization.create({
@@ -116,13 +170,14 @@ export async function completeOnboardingAction(formData: FormData) {
             sizeBand: sizeBand || null,
             country: country || null,
             aiUsageSummary: aiUsageSummary || null,
+            dataClassification,
             onboardingCompletedAt: completedAt,
             createdByUserId: session.user.id,
-            regulatoryProfile: {
-              frameworks: frameworkCodes
-            }
+            regulatoryProfile
           }
         });
+
+    completedOrganizationId = organization.id;
 
     const existingMembership = await tx.organizationMember.findUnique({
       where: {
@@ -208,19 +263,81 @@ export async function completeOnboardingAction(formData: FormData) {
       });
 
       if (!existingAssessment) {
-        await tx.assessment.create({
+        const createdAssessment = await tx.assessment.create({
           data: {
             organizationId: organization.id,
             createdByUserId: session.user.id,
             name: firstAssessmentName,
+            status: AssessmentStatus.INTAKE_SUBMITTED,
+            submittedAt: completedAt,
             sections: {
               create: DEFAULT_ASSESSMENT_SECTIONS.map((section, index) => ({
                 key: section.key,
                 title: section.title,
-                status: index === 0 ? "in_progress" : "not_started",
+                status: index === 0 ? "completed" : "not_started",
+                responses:
+                  section.key === "company-profile"
+                    ? ({
+                        companyName: auditIntake.companyName,
+                        industry: auditIntake.industry,
+                        companySize: auditIntake.companySize,
+                        dataSensitivity: auditIntake.dataSensitivity,
+                        notes: auditIntake.optionalNotes
+                      } satisfies Prisma.InputJsonValue)
+                    : section.key === "ai-usage"
+                      ? ({
+                          usesAiTools: auditIntake.usesAiTools,
+                          aiToolsDetails: auditIntake.aiToolsDetails,
+                          toolsPlatforms: auditIntake.toolsPlatforms,
+                          topConcerns: auditIntake.topConcerns
+                        } satisfies Prisma.InputJsonValue)
+                      : undefined,
+                completedAt: index === 0 ? completedAt : undefined,
                 orderIndex: index + 1
               }))
             }
+          }
+        });
+        await recordAuditLifecycleTransition({
+          db: tx,
+          organizationId: organization.id,
+          assessmentId: createdAssessment.id,
+          toStatus: "intake_complete",
+          actorUserId: session.user.id,
+          actorType: "USER",
+          actorLabel: session.user.email,
+          reasonCode: "intake.completed",
+          evidence: {
+            intakeComplete: auditIntake.readyForAudit
+          },
+          metadata: {
+            source: "onboarding",
+            firstAssessmentName
+          }
+        });
+      } else {
+        await tx.assessment.update({
+          where: { id: existingAssessment.id },
+          data: {
+            status: AssessmentStatus.INTAKE_SUBMITTED,
+            submittedAt: existingAssessment.submittedAt ?? completedAt
+          }
+        });
+        await recordAuditLifecycleTransition({
+          db: tx,
+          organizationId: organization.id,
+          assessmentId: existingAssessment.id,
+          toStatus: "intake_complete",
+          actorUserId: session.user.id,
+          actorType: "USER",
+          actorLabel: session.user.email,
+          reasonCode: "intake.completed",
+          evidence: {
+            intakeComplete: auditIntake.readyForAudit
+          },
+          metadata: {
+            source: "onboarding",
+            firstAssessmentName
           }
         });
       }
@@ -237,10 +354,10 @@ export async function completeOnboardingAction(formData: FormData) {
       data: {
         organizationId: organization.id,
         type: "onboarding_completed",
-        title: "Workspace ready",
+        title: "Intake complete",
         body: firstAssessmentName
-          ? `Your workspace is live and "${firstAssessmentName}" is ready for intake.`
-          : "Your workspace is live. Create your first assessment to begin."
+          ? `Your workspace is live and "${firstAssessmentName}" is intake complete. Analysis is pending controlled dispatch.`
+          : "Your workspace is live and intake complete. Analysis is pending controlled dispatch."
       }
     });
 
@@ -312,7 +429,9 @@ export async function completeOnboardingAction(formData: FormData) {
         organizationId: organization.id,
         userId: session.user.id,
         frameworkCodes,
-        firstAssessmentName: firstAssessmentName || null
+        firstAssessmentName: firstAssessmentName || null,
+        auditIntakeStatus: auditIntake.status,
+        readyForAudit: auditIntake.readyForAudit
       } satisfies Prisma.InputJsonValue
     });
 
@@ -339,7 +458,8 @@ export async function completeOnboardingAction(formData: FormData) {
           industry: industry || null,
           country: country || null,
           frameworkCodes,
-          firstAssessmentName: firstAssessmentName || null
+          firstAssessmentName: firstAssessmentName || null,
+          auditIntake
         },
         actorLabel: session.user.email,
         requestContext
@@ -422,7 +542,9 @@ export async function completeOnboardingAction(formData: FormData) {
       entityId: organization.id,
       metadata: {
         frameworkCodes,
-        firstAssessmentName: firstAssessmentName || null
+        firstAssessmentName: firstAssessmentName || null,
+        auditIntakeStatus: auditIntake.status,
+        readyForAudit: auditIntake.readyForAudit
       },
       requestContext
     });
@@ -448,6 +570,87 @@ export async function completeOnboardingAction(formData: FormData) {
       reason: "Onboarding completion synced the operator lifecycle control plane."
     });
   });
+
+  const handoffDecision = resolveCheckoutAfterOnboardingDecision({
+    checkoutAfterOnboarding,
+    leadSource,
+    canonicalPlanCode: selectedCanonicalPlanCode,
+    hasStripeBillingConfig: hasStripeBillingConfig(),
+    demoExternalSideEffectsBlocked: shouldBlockDemoExternalSideEffects(),
+    organizationId: completedOrganizationId
+  });
+
+  if (handoffDecision.action === "contact_sales") {
+    redirect(
+      `/contact-sales?intent=enterprise-plan&source=onboarding&plan=${encodeURIComponent(
+        selectedCanonicalPlanCode ?? "enterprise"
+      )}` as never
+    );
+  }
+
+  if (handoffDecision.action === "billing_settings") {
+    const billingStatus =
+      handoffDecision.reason === "demo_mode"
+        ? "demo-mode"
+        : handoffDecision.reason === "stripe_config_missing"
+          ? "checkout-config"
+          : "checkout-missing-organization";
+
+    redirect(
+      `/dashboard/settings?billing=${billingStatus}&planCode=${encodeURIComponent(
+        selectedCanonicalPlanCode ?? selectedPlanCode
+      )}&billingCadence=${encodeURIComponent(billingCadence)}` as never
+    );
+  }
+
+  if (handoffDecision.action === "checkout" && completedOrganizationId) {
+    let checkoutUrl: string | null = null;
+
+    try {
+      const appUrl = getAppUrl();
+      const checkoutSession = await createStripeCheckoutSession({
+        organizationId: completedOrganizationId,
+        email: session.user.email,
+        planCode: selectedCanonicalPlanCode ?? selectedPlanCode,
+        billingCadence,
+        successUrl: `${appUrl}/billing/return?status=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${appUrl}/billing/return?status=cancelled&planCode=${encodeURIComponent(
+          selectedCanonicalPlanCode ?? selectedPlanCode
+        )}&billingCadence=${encodeURIComponent(billingCadence)}`
+      });
+
+      checkoutUrl = checkoutSession.checkoutUrl;
+    } catch (error) {
+      console.error("[onboarding] Failed to start post-onboarding checkout.", error);
+      redirect(
+        `/dashboard/settings?billing=checkout-error&planCode=${encodeURIComponent(
+          selectedCanonicalPlanCode ?? selectedPlanCode
+        )}&billingCadence=${encodeURIComponent(billingCadence)}` as never
+      );
+    }
+
+    redirect(checkoutUrl as never);
+  }
+
+  if (completedOrganizationId) {
+    try {
+      await resumeFirstCustomerJourneyAfterReadiness({
+        organizationId: completedOrganizationId,
+        userId: session.user.id,
+        source: "onboarding_completed"
+      });
+    } catch (error) {
+      logServerEvent("warn", "onboarding.first_customer_resume_failed", {
+        org_id: completedOrganizationId,
+        user_id: session.user.id,
+        status: "deferred",
+        source: "onboarding",
+        metadata: {
+          message: error instanceof Error ? error.message : "Unknown resume error"
+        }
+      });
+    }
+  }
 
   redirect("/dashboard");
 }

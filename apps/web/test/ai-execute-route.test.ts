@@ -49,6 +49,10 @@ async function runAiExecuteRouteTests() {
       async findUnique() {
         return {
           routingSnapshot: {
+            id: "rs_123",
+            organizationId: "org_123",
+            workflowCode: "audit_scale",
+            status: "DISPATCHED",
             normalizedHintsJson: {
               workflow_code: "audit_scale",
               entitlement_source: "subscription",
@@ -88,7 +92,8 @@ async function runAiExecuteRouteTests() {
       planTier: "scale"
     },
     {
-      db: mockDb as never
+      db: mockDb as never,
+      auditReadinessOverride: true
     }
   );
 
@@ -104,6 +109,11 @@ async function runAiExecuteRouteTests() {
       ? true
       : false,
     true
+  );
+  assert.equal(
+    ((createdJobs[0]?.data as Record<string, unknown>)?.inputPayload as Record<string, unknown>)
+      ?.routingSnapshotId,
+    "rs_123"
   );
 
   const duplicateResult = await handleAiExecutionDispatch(
@@ -127,7 +137,8 @@ async function runAiExecuteRouteTests() {
       planTier: "scale"
     },
     {
-      db: mockDb as never
+      db: mockDb as never,
+      auditReadinessOverride: true
     }
   );
 
@@ -158,11 +169,42 @@ async function runAiExecuteRouteTests() {
           planTier: "scale"
         } as never,
         {
-          db: mockDb as never
+          db: mockDb as never,
+          auditReadinessOverride: true
         }
       ),
     /String must contain at least 1 character/
   );
+
+  const blockedResult = await handleAiExecutionDispatch(
+    {
+      orgId: "org_123",
+      assessmentId: "asm_123",
+      workflowDispatchId: "wd_blocked",
+      dispatchId: "disp_blocked",
+      customerEmail: "buyer@example.com",
+      companyName: "Acme",
+      industry: "Healthcare",
+      companySize: "51-200",
+      selectedFrameworks: ["SOC 2"],
+      assessmentAnswers: [
+        {
+          question: "Do you have formal policies?",
+          answer: "No"
+        }
+      ],
+      evidenceSummary: "No policy artifacts were provided.",
+      planTier: "scale"
+    },
+    {
+      db: mockDb as never,
+      auditReadinessOverride: false
+    }
+  );
+
+  assert.equal(blockedResult.accepted, false);
+  assert.equal(blockedResult.status, "blocked");
+  assert.equal(blockedResult.code, "intake_incomplete");
 
   console.log("ai-execute-route tests passed");
 }

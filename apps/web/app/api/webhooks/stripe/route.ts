@@ -17,6 +17,7 @@ import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
 import { expectObject, ValidationError } from "../../../../lib/security-validation";
 import { verifyStripeWebhookSignature } from "../../../../lib/security-webhooks";
 import { queueAuditRequestedDispatch } from "../../../../lib/workflow-dispatch";
+import { getOrganizationAuditReadiness } from "../../../../lib/audit-intake";
 
 export const runtime = "nodejs";
 
@@ -149,10 +150,15 @@ export async function POST(request: Request) {
       idempotencyKey: `routing-snapshot:stripe-checkout-session:${checkoutSessionId}`
     });
 
-    const workflowDispatch = await queueAuditRequestedDispatch({
-      routingSnapshotId: routingSnapshot.id,
-      deliveryStateRecordId: deliveryState.id
+    const readiness = await getOrganizationAuditReadiness({
+      organizationId: commercialContext.organization.id
     });
+    const workflowDispatch = readiness.readyForAudit
+      ? await queueAuditRequestedDispatch({
+          routingSnapshotId: routingSnapshot.id,
+          deliveryStateRecordId: deliveryState.id
+        })
+      : null;
 
     logServerEvent("info", "stripe.webhook_v2.checkout_completed", {
       event_id: event.id,
@@ -166,7 +172,10 @@ export async function POST(request: Request) {
         customerEmailMasked: maskEmail(commercialContext.user.email),
         deliveryStateId: deliveryState.id,
         routingSnapshotId: routingSnapshot.id,
-        workflowDispatchId: workflowDispatch.id
+        workflowDispatchId: workflowDispatch?.id ?? null,
+        dispatchBlockedReason: readiness.readyForAudit
+          ? null
+          : "audit_intake_incomplete"
       }
     });
 
@@ -178,7 +187,8 @@ export async function POST(request: Request) {
       organizationId: commercialContext.organization.id,
       deliveryStateId: deliveryState.id,
       routingSnapshotId: routingSnapshot.id,
-      workflowDispatchId: workflowDispatch.id
+      workflowDispatchId: workflowDispatch?.id ?? null,
+      dispatchBlocked: !readiness.readyForAudit
     });
   } catch (error) {
     if (error instanceof ValidationError) {

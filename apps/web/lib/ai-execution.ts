@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import {
   AssessmentStatus,
+  DeliveryStateStatus,
   JobStatus,
   OperationsQueueSeverity,
   OperationsQueueSourceSystem,
   OperationsQueueType,
   Prisma,
+  RoutingSnapshotStatus,
   prisma
 } from "@evolve-edge/db";
 import {
@@ -27,16 +29,26 @@ import { getAuditAiExecutionProvider } from "./ai-provider";
 import {
   getAiExecutionMaxConcurrency,
   getAiExecutionMaxConcurrentPerOrg,
+  getAppUrl,
   getOptionalEnv
 } from "./runtime-config";
+import { queueEmailNotification } from "./email";
 import { isAuthorizedRequestWithSecrets } from "./security-auth";
 import {
   auditWorkflowOutputSchema,
   executeAuditWorkflowInputSchema,
+  normalizedAuditExecutionOutputSchema,
   planTierSchema,
   type AuditWorkflowOutput,
   type ExecuteAuditWorkflowInput
 } from "../src/server/ai/providers/types";
+import type { NormalizedAuditReportInput } from "./report-builder";
+import {
+  getOrganizationAuditReadiness,
+  isAuditIntakeCompleteFromRegulatoryProfile
+} from "./audit-intake";
+import { recordAuditLifecycleTransition } from "./audit-lifecycle";
+import { requirePlanCapability } from "./plan-enforcement";
 import {
   buildSafeWorkflowFailure,
   sanitizeWorkflowErrorMessage,
@@ -107,10 +119,27 @@ type PersistValidatedWorkflowReportFn = (input: {
   db?: AiExecutionDbClient;
   reportId: string;
   result: AuditWorkflowOutput;
+  normalizedOutput: NormalizedAuditReportInput;
+  routingSnapshotId?: string | null;
+  workflowCode?: string | null;
   organizationNameSnapshot?: string | null;
   customerEmailSnapshot?: string | null;
   selectedPlan?: "starter" | "scale" | "enterprise" | null;
-}) => Promise<{ id: string }>;
+}) => Promise<{ id: string; title: string }>;
+
+type RunAuditExecutionInput = {
+  snapshot_id: string;
+  workflow_code: string;
+  organization_id: string;
+  intake_data: unknown;
+};
+
+type RunAuditExecutionDependencies = {
+  db?: typeof prisma;
+  runAnalysisJobFn?: typeof runOpenAiAnalysisJob;
+  enforcePlanAccessFn?: typeof requirePlanCapability;
+  now?: Date;
+};
 
 async function loadReportRecordHelpers() {
   return import("./report-records");
@@ -257,6 +286,229 @@ function toGenericJsonValue(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
+function readJsonObject(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function mapWorkflowCodeToPlanTier(workflowCode: string) {
+  switch (workflowCode) {
+    case "audit_starter":
+      return "starter" as const;
+    case "audit_enterprise":
+      return "enterprise" as const;
+    case "audit_scale":
+    default:
+      return "scale" as const;
+  }
+}
+
+function isRoutingSnapshotExecutableStatus(status: RoutingSnapshotStatus) {
+  return (
+    status === RoutingSnapshotStatus.PENDING ||
+    status === RoutingSnapshotStatus.DISPATCH_QUEUED ||
+    status === RoutingSnapshotStatus.DISPATCHED ||
+    status === RoutingSnapshotStatus.STATUS_UPDATED
+  );
+}
+
+function normalizeDbWorkflowCode(value: unknown) {
+  const raw = String(value ?? "").toLowerCase();
+
+  switch (raw) {
+    case "audit_starter":
+    case "audit_scale":
+    case "audit_enterprise":
+    case "briefing_only":
+    case "intake_review":
+      return raw;
+    case "audit_starter".toUpperCase():
+      return "audit_starter";
+    case "audit_scale".toUpperCase():
+      return "audit_scale";
+    case "audit_enterprise".toUpperCase():
+      return "audit_enterprise";
+    case "briefing_only".toUpperCase():
+      return "briefing_only";
+    case "intake_review".toUpperCase():
+      return "intake_review";
+    default:
+      return raw.replace(/^canonicalworkflowcode\./, "").toLowerCase();
+  }
+}
+
+function isCompleteAuditExecutionIntakeData(value: unknown) {
+  const record = readJsonObject(value);
+  const auditIntake = readJsonObject(record?.auditIntake) ?? record;
+  const hasRequiredText =
+    Boolean(readString(auditIntake?.companyName) ?? readString(auditIntake?.company_name)) &&
+    Boolean(readString(auditIntake?.industry)) &&
+    Boolean(readString(auditIntake?.companySize) ?? readString(auditIntake?.company_size)) &&
+    Boolean(readString(auditIntake?.dataSensitivity) ?? readString(auditIntake?.data_sensitivity));
+  const hasAiUsage = typeof auditIntake?.usesAiTools === "boolean" ||
+    typeof auditIntake?.uses_ai_tools === "boolean";
+  const concerns = Array.isArray(auditIntake?.topConcerns)
+    ? auditIntake.topConcerns
+    : Array.isArray(auditIntake?.top_concerns)
+      ? auditIntake.top_concerns
+      : [];
+
+  return hasRequiredText && hasAiUsage && concerns.length > 0;
+}
+
+function buildAssessmentAnswersFromIntake(intakeData: unknown) {
+  const record = readJsonObject(intakeData);
+  const auditIntake = readJsonObject(record?.auditIntake) ?? record ?? {};
+  const topConcerns = Array.isArray(auditIntake.topConcerns)
+    ? auditIntake.topConcerns
+    : Array.isArray(auditIntake.top_concerns)
+      ? auditIntake.top_concerns
+      : [];
+  const toolsPlatforms = Array.isArray(auditIntake.toolsPlatforms)
+    ? auditIntake.toolsPlatforms
+    : Array.isArray(auditIntake.tools_platforms)
+      ? auditIntake.tools_platforms
+      : [];
+
+  return [
+    {
+      key: "company-profile",
+      question: "Company profile",
+      answer: {
+        companyName: readString(auditIntake.companyName) ?? readString(auditIntake.company_name),
+        industry: readString(auditIntake.industry),
+        companySize: readString(auditIntake.companySize) ?? readString(auditIntake.company_size),
+        dataSensitivity:
+          readString(auditIntake.dataSensitivity) ?? readString(auditIntake.data_sensitivity)
+      }
+    },
+    {
+      key: "ai-usage",
+      question: "AI usage inventory",
+      answer: {
+        usesAiTools: auditIntake.usesAiTools ?? auditIntake.uses_ai_tools ?? false,
+        aiToolsDetails:
+          readString(auditIntake.aiToolsDetails) ?? readString(auditIntake.ai_tools_details),
+        toolsPlatforms
+      }
+    },
+    {
+      key: "top-concerns",
+      question: "Top audit concerns",
+      answer: topConcerns
+    }
+  ];
+}
+
+function buildEvidenceSummaryFromIntake(intakeData: unknown) {
+  const record = readJsonObject(intakeData);
+  const auditIntake = readJsonObject(record?.auditIntake) ?? record ?? {};
+  const notes = readString(auditIntake.optionalNotes) ?? readString(auditIntake.optional_notes);
+  const tools = Array.isArray(auditIntake.toolsPlatforms)
+    ? auditIntake.toolsPlatforms.join(", ")
+    : Array.isArray(auditIntake.tools_platforms)
+      ? auditIntake.tools_platforms.join(", ")
+      : null;
+
+  return [notes ? `Notes: ${notes}` : null, tools ? `Tools/platforms: ${tools}` : null]
+    .filter(Boolean)
+    .join("\n\n") || null;
+}
+
+function assertAuditExecutionPayloadRouted(payload: ExecuteAuditWorkflowInput) {
+  if (!payload.routingSnapshotId) {
+    throw new Error("AI execution requires a backend routing snapshot.");
+  }
+
+  if (!payload.workflowDispatchId) {
+    throw new Error("AI execution requires a backend workflow dispatch.");
+  }
+}
+
+function buildRoadmapBuckets(result: AuditWorkflowOutput) {
+  const normalizeAction = (action: AuditWorkflowOutput["roadmap"][number]) => ({
+    title: action.title,
+    summary: action.description,
+    priority: action.priority,
+    owner: action.ownerRole,
+    timeline: action.targetTimeline
+  });
+  const buckets = {
+    days_30: [] as ReturnType<typeof normalizeAction>[],
+    days_60: [] as ReturnType<typeof normalizeAction>[],
+    days_90: [] as ReturnType<typeof normalizeAction>[]
+  };
+
+  for (const action of result.roadmap) {
+    const timeline = action.targetTimeline?.toLowerCase() ?? "";
+    const normalized = normalizeAction(action);
+
+    if (timeline.includes("90") || timeline.includes("strategic") || timeline.includes("quarter")) {
+      buckets.days_90.push(normalized);
+    } else if (timeline.includes("60") || timeline.includes("near")) {
+      buckets.days_60.push(normalized);
+    } else {
+      buckets.days_30.push(normalized);
+    }
+  }
+
+  return buckets;
+}
+
+export function normalizeAuditExecutionOutput(
+  result: AuditWorkflowOutput
+): NormalizedAuditReportInput {
+  const topRisks = result.findings.map((finding: AuditWorkflowOutput["findings"][number]) => ({
+    title: finding.title,
+    summary: finding.summary,
+    severity: finding.severity,
+    frameworks: finding.impactedFrameworks
+  }));
+  const governanceGaps = [
+    ...result.riskAnalysis.systemicThemes,
+    ...result.findings
+      .filter((finding: AuditWorkflowOutput["findings"][number]) =>
+        finding.riskDomain.toLowerCase().includes("govern")
+      )
+      .map((finding: AuditWorkflowOutput["findings"][number]) => finding.title)
+  ];
+  const priorityActions = result.recommendations.map(
+    (recommendation: AuditWorkflowOutput["recommendations"][number]) => ({
+    title: recommendation.title,
+    summary: recommendation.description,
+    priority: recommendation.priority,
+    owner: recommendation.ownerRole,
+    timeline: recommendation.targetTimeline
+    })
+  );
+
+  return normalizedAuditExecutionOutputSchema.parse({
+    executive_summary: result.executiveSummary,
+    risk_level: result.riskLevel,
+    compliance_score: result.postureScore,
+    top_risks: topRisks,
+    governance_gaps:
+      governanceGaps.length > 0
+        ? Array.from(new Set(governanceGaps))
+        : ["No governance gaps were identified in the validated workflow output."],
+    priority_actions: priorityActions,
+    roadmap_30_60_90: buildRoadmapBuckets(result),
+    assumptions: [
+      "Analysis is based on the completed onboarding intake, selected frameworks, and evidence summaries available at execution time.",
+      "Recommendations are business-level summaries and must be reviewed before customer delivery."
+    ],
+    limitations: [
+      "This draft does not reproduce secrets, payment card data, SSNs, PHI, or other sensitive raw records.",
+      "This AI execution output is not a final certification or legal opinion."
+    ]
+  }) as NormalizedAuditReportInput;
+}
+
 function applyCommercialRoutingPolicy(
   result: AuditWorkflowOutput,
   payload: ExecuteAuditWorkflowInput
@@ -307,7 +559,11 @@ async function buildExecutionInputFromAssessment(
     include: {
       organization: {
         include: {
-          frameworkSelections: true
+          frameworkSelections: {
+            include: {
+              framework: true
+            }
+          }
         }
       },
       sections: {
@@ -320,13 +576,20 @@ async function buildExecutionInputFromAssessment(
     throw new Error("Assessment not found for AI execution.");
   }
 
+  if (
+    !assessment.organization.onboardingCompletedAt ||
+    !isAuditIntakeCompleteFromRegulatoryProfile(assessment.organization.regulatoryProfile)
+  ) {
+    throw new Error("Required onboarding intake must be completed before AI execution.");
+  }
+
   const payloadRecord =
     jobInputPayload && typeof jobInputPayload === "object" && !Array.isArray(jobInputPayload)
       ? (jobInputPayload as Record<string, unknown>)
       : null;
 
   const frameworks = assessment.organization.frameworkSelections.map(
-    (selection) => selection.frameworkId
+    (selection) => selection.framework.name || selection.framework.code || selection.frameworkId
   );
   const planTier = planTierSchema.catch("scale").parse(
     typeof payloadRecord?.planTier === "string"
@@ -341,16 +604,20 @@ async function buildExecutionInputFromAssessment(
   return executeAuditWorkflowInputSchema.parse({
     orgId: assessment.organizationId,
     assessmentId: assessment.id,
+    routingSnapshotId:
+      typeof payloadRecord?.routingSnapshotId === "string"
+        ? payloadRecord.routingSnapshotId
+        : undefined,
     workflowDispatchId:
       typeof payloadRecord?.workflowDispatchId === "string"
         ? payloadRecord.workflowDispatchId
-        : assessment.id,
+        : "",
     dispatchId:
       typeof payloadRecord?.dispatchId === "string"
         ? payloadRecord.dispatchId
         : typeof payloadRecord?.workflowDispatchId === "string"
           ? payloadRecord.workflowDispatchId
-          : assessment.id,
+          : "",
     customerEmail:
       typeof payloadRecord?.customerEmail === "string" ? payloadRecord.customerEmail : null,
     companyName:
@@ -481,12 +748,16 @@ async function markOpenAiJobFailed(
       status: JobStatus.FAILED,
       errorMessage: message,
       completedAt: new Date(),
-      outputPayload: trace
-        ? toGenericJsonValue({
-            trace,
-            failure: buildSafeWorkflowFailure(trace),
-          })
-        : Prisma.JsonNull
+      outputPayload: toGenericJsonValue({
+        status: "failed_review_required",
+        failureReason: message,
+        ...(trace
+          ? {
+              trace,
+              failure: buildSafeWorkflowFailure(trace),
+            }
+          : {})
+      })
     },
     include: {
       assessment: true
@@ -539,6 +810,9 @@ export async function runOpenAiAnalysisJob(
     sendOperationalAlertFn?: typeof sendOperationalAlert;
     ensurePendingAssessmentReportFn?: EnsurePendingAssessmentReportFn;
     persistValidatedWorkflowReportFn?: PersistValidatedWorkflowReportFn;
+    queueEmailNotificationFn?: typeof queueEmailNotification;
+    enforcePlanAccessFn?: typeof requirePlanCapability;
+    auditReadinessOverride?: boolean;
   }
 ) {
   const db = dependencies?.db ?? prisma;
@@ -567,10 +841,69 @@ export async function runOpenAiAnalysisJob(
   const persistValidatedWorkflowReportFn =
     dependencies?.persistValidatedWorkflowReportFn ??
     (await loadReportRecordHelpers()).persistValidatedWorkflowReport;
+  const queueEmailNotificationFn =
+    dependencies?.queueEmailNotificationFn ?? queueEmailNotification;
+  const enforcePlanAccessFn =
+    dependencies?.enforcePlanAccessFn ?? requirePlanCapability;
+  const readiness =
+    dependencies?.auditReadinessOverride === undefined
+      ? await getOrganizationAuditReadiness({
+          organizationId: job.assessment.organizationId
+        })
+      : {
+          organizationId: job.assessment.organizationId,
+          readyForAudit: dependencies.auditReadinessOverride
+        };
+
+  if (!readiness.readyForAudit) {
+    logServerEventFn("warn", "ai.execution.blocked_intake_incomplete", {
+      org_id: job.assessment.organizationId,
+      resource_id: job.id,
+      status: "blocked",
+      source: "openai_langgraph.analysis",
+      metadata: {
+        assessmentId: job.assessmentId,
+        reason: "audit_intake_incomplete"
+      }
+    });
+
+    return {
+      status: "blocked" as const,
+      reason: "audit_intake_incomplete" as const
+    };
+  }
+
   const claimedAt = new Date();
-  const payload =
-    dependencies?.payload ??
-    (await buildExecutionInputFromAssessment(job.assessmentId, job.inputPayload, db));
+  let payload: ExecuteAuditWorkflowInput;
+  try {
+    payload =
+      dependencies?.payload ??
+      (await buildExecutionInputFromAssessment(job.assessmentId, job.inputPayload, db));
+    assertAuditExecutionPayloadRouted(payload);
+    await enforcePlanAccessFn({
+      organizationId: job.assessment.organizationId,
+      capability: "ai_execution",
+      workflowCode: payload.commercialRouting?.workflowCode ?? null,
+      requestedPlan: payload.planTier,
+      db: db as AiExecutionDbClient
+    });
+  } catch (error) {
+    const safeErrorMessage = sanitizeWorkflowErrorMessage(
+      error instanceof Error ? error.message : "AI execution preflight failed."
+    );
+    await markOpenAiJobFailed(
+      db as AiExecutionDbClient,
+      job.id,
+      new Error(safeErrorMessage),
+      null,
+      publishDomainEventsFn
+    );
+
+    return {
+      status: "failed" as const,
+      safeError: safeErrorMessage
+    };
+  }
   const requestHash = hashPayload(payload);
   const claim = await db.analysisJob.updateMany({
     where: {
@@ -605,6 +938,80 @@ export async function runOpenAiAnalysisJob(
       status: AssessmentStatus.ANALYSIS_RUNNING
     }
   });
+  await recordAuditLifecycleTransition({
+    db,
+    organizationId: job.assessment.organizationId,
+    assessmentId: job.assessmentId,
+    toStatus: "intake_complete",
+    actorType: "SYSTEM",
+    actorLabel: "openai-langgraph-worker",
+    reasonCode: "intake.ready_for_analysis",
+    evidence: {
+      intakeComplete: readiness.readyForAudit
+    },
+    metadata: {
+      provider: "openai_langgraph"
+    }
+  });
+  if (payload.routingSnapshotId) {
+    await recordAuditLifecycleTransition({
+      db,
+      organizationId: job.assessment.organizationId,
+      assessmentId: job.assessmentId,
+      toStatus: "routing_complete",
+      actorType: "SYSTEM",
+      actorLabel: "openai-langgraph-worker",
+      reasonCode: "routing.snapshot.ready",
+      linkages: {
+        routingSnapshotId: payload.routingSnapshotId,
+        workflowDispatchId: payload.workflowDispatchId ?? null
+      },
+      evidence: {
+        routingSnapshotId: payload.routingSnapshotId
+      },
+      metadata: {
+        provider: "openai_langgraph"
+      }
+    });
+    await recordAuditLifecycleTransition({
+      db,
+      organizationId: job.assessment.organizationId,
+      assessmentId: job.assessmentId,
+      toStatus: "analysis_pending",
+      actorType: "SYSTEM",
+      actorLabel: "openai-langgraph-worker",
+      reasonCode: "analysis.job.queued",
+      linkages: {
+        routingSnapshotId: payload.routingSnapshotId,
+        workflowDispatchId: payload.workflowDispatchId ?? null
+      },
+      evidence: {
+        analysisJobId: job.id
+      },
+      metadata: {
+        provider: "openai_langgraph"
+      }
+    });
+    await recordAuditLifecycleTransition({
+      db,
+      organizationId: job.assessment.organizationId,
+      assessmentId: job.assessmentId,
+      toStatus: "analysis_running",
+      actorType: "JOB",
+      actorLabel: "openai-langgraph-worker",
+      reasonCode: "analysis.running",
+      linkages: {
+        routingSnapshotId: payload.routingSnapshotId,
+        workflowDispatchId: payload.workflowDispatchId ?? null
+      },
+      evidence: {
+        analysisJobId: job.id
+      },
+      metadata: {
+        provider: "openai_langgraph"
+      }
+    });
+  }
 
   await publishDomainEventsFn(prisma, [
     {
@@ -637,6 +1044,7 @@ export async function runOpenAiAnalysisJob(
       })
     );
     const result = applyCommercialRoutingPolicy(rawResult, payload);
+    const normalizedOutput = normalizeAuditExecutionOutput(result);
     const trace = extractWorkflowTrace(payload.workflowDispatchId);
     const completedAt = new Date();
     const correlationId = buildCorrelationId("openai-langgraph");
@@ -661,7 +1069,15 @@ export async function runOpenAiAnalysisJob(
             contractVersion: AI_ANALYSIS_CONTRACT_VERSION,
             workflowVersion: AI_ANALYSIS_CONTRACT_VERSION,
             requestHash,
+            status: "validated",
+            routingSnapshotId: payload.routingSnapshotId,
+            normalizedOutput,
             result,
+            reportDraft: {
+              available: true,
+              validation: "passed",
+              validatedAt: completedAt.toISOString()
+            },
             trace
           }),
           completedAt,
@@ -673,16 +1089,90 @@ export async function runOpenAiAnalysisJob(
         db: tx,
         reportId: pendingReport.id,
         result,
+        normalizedOutput,
+        routingSnapshotId: payload.routingSnapshotId,
+        workflowCode: payload.commercialRouting?.workflowCode ?? null,
         organizationNameSnapshot: payload.companyName,
         customerEmailSnapshot: payload.customerEmail,
         selectedPlan: payload.planTier
       });
+      await recordAuditLifecycleTransition({
+        db: tx,
+        organizationId: job.assessment.organizationId,
+        assessmentId: job.assessmentId,
+        toStatus: "analysis_complete",
+        actorType: "JOB",
+        actorLabel: "openai-langgraph-worker",
+        reasonCode: "analysis.completed",
+        linkages: {
+          routingSnapshotId: payload.routingSnapshotId ?? null,
+          workflowDispatchId: payload.workflowDispatchId ?? null,
+          reportId: report.id
+        },
+        evidence: {
+          reportId: report.id
+        },
+        metadata: {
+          analysisJobId: job.id
+        }
+      });
+      await recordAuditLifecycleTransition({
+        db: tx,
+        organizationId: job.assessment.organizationId,
+        assessmentId: job.assessmentId,
+        toStatus: "report_ready",
+        actorType: "SYSTEM",
+        actorLabel: "report-builder",
+        reasonCode: "report.ready",
+        linkages: {
+          routingSnapshotId: payload.routingSnapshotId ?? null,
+          workflowDispatchId: payload.workflowDispatchId ?? null,
+          reportId: report.id
+        },
+        evidence: {
+          reportId: report.id
+        },
+        metadata: {
+          analysisJobId: job.id
+        }
+      });
+
+      if (payload.routingSnapshotId) {
+        await tx.deliveryStateRecord.updateMany({
+          where: { routingSnapshotId: payload.routingSnapshotId },
+          data: {
+            reportId: report.id,
+            latestExecutionResultJson: toGenericJsonValue({
+              status: "report_ready",
+              normalizedOutput,
+              reportId: report.id,
+              reportGeneratedAt: completedAt.toISOString()
+            })
+          }
+        });
+      }
 
       await upsertExecutiveDeliveryPackageForReportFn({
         db: tx,
         reportId: report.id,
         actorUserId: null
       });
+
+      if (payload.customerEmail) {
+        await queueEmailNotificationFn(tx, {
+          templateKey: "report-ready",
+          recipientEmail: payload.customerEmail,
+          recipientName: null,
+          orgId: job.assessment.organizationId,
+          userId: null,
+          idempotencyKey: `email:report-ready:${report.id}:ai-execution`,
+          payload: {
+            organizationName: payload.companyName,
+            reportTitle: report.title,
+            reportUrl: `${getAppUrl()}/dashboard/reports/${report.id}`
+          }
+        });
+      }
 
       await markCustomerRunReportGeneratedFn({
         assessmentId: job.assessmentId,
@@ -740,7 +1230,13 @@ export async function runOpenAiAnalysisJob(
       error,
       "OpenAI/LangGraph analysis failed."
     );
-    const safeErrorMessage = sanitizeWorkflowErrorMessage(normalizedError.message);
+    const isValidationFailure =
+      Boolean(error && typeof error === "object" && "issues" in error) ||
+      normalizedError.message.includes('"path"') ||
+      normalizedError.message.includes("invalid_type");
+    const safeErrorMessage = isValidationFailure
+      ? "AI output validation failed; failed_review_required."
+      : sanitizeWorkflowErrorMessage(normalizedError.message);
     const trace = extractWorkflowTrace(payload.workflowDispatchId);
     const failedJob: FailedAnalysisJobRecord = await markOpenAiJobFailed(
       db as AiExecutionDbClient,
@@ -749,6 +1245,27 @@ export async function runOpenAiAnalysisJob(
       trace,
       publishDomainEventsFn
     );
+    await recordAuditLifecycleTransition({
+      db,
+      organizationId: job.assessment.organizationId,
+      assessmentId: job.assessmentId,
+      toStatus: "failed_review_required",
+      actorType: "JOB",
+      actorLabel: "openai-langgraph-worker",
+      reasonCode: "analysis.failed_review_required",
+      linkages: {
+        routingSnapshotId: payload.routingSnapshotId ?? null,
+        workflowDispatchId: payload.workflowDispatchId ?? null
+      },
+      evidence: {
+        failureReason: safeErrorMessage
+      },
+      metadata: {
+        analysisJobId: job.id,
+        retryable: normalizedError.retryable,
+        category: normalizedError.category
+      }
+    });
     await markCustomerRunAnalysisFailedFn(job.assessmentId, safeErrorMessage);
     await recordOperationalFindingFn(
       {
@@ -811,6 +1328,339 @@ export async function runOpenAiAnalysisJob(
       safeError: safeErrorMessage
     };
   }
+}
+
+export async function runAuditExecution(
+  input: RunAuditExecutionInput,
+  dependencies?: RunAuditExecutionDependencies
+) {
+  const db = dependencies?.db ?? prisma;
+  const runAnalysisJobFn = dependencies?.runAnalysisJobFn ?? runOpenAiAnalysisJob;
+  const enforcePlanAccessFn = dependencies?.enforcePlanAccessFn ?? requirePlanCapability;
+  const now = dependencies?.now ?? new Date();
+  const snapshotId = input.snapshot_id.trim();
+  const workflowCode = input.workflow_code.trim();
+  const organizationId = input.organization_id.trim();
+
+  if (!snapshotId) {
+    throw new Error("AI execution requires snapshot_id.");
+  }
+
+  if (!workflowCode) {
+    throw new Error("AI execution requires workflow_code.");
+  }
+
+  if (!organizationId) {
+    throw new Error("AI execution requires organization_id.");
+  }
+
+  if (!isCompleteAuditExecutionIntakeData(input.intake_data)) {
+    throw new Error("Completed intake_data is required before AI execution.");
+  }
+
+  const snapshot = await db.routingSnapshot.findUnique({
+    where: { id: snapshotId },
+    include: {
+      workflowDispatches: {
+        orderBy: { createdAt: "desc" },
+        take: 1
+      },
+      organization: {
+        include: {
+          frameworkSelections: {
+            include: {
+              framework: true
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (!snapshot) {
+    throw new Error("Routing snapshot not found for AI execution.");
+  }
+
+  if (snapshot.organizationId !== organizationId) {
+    throw new Error("Routing snapshot organization does not match AI execution request.");
+  }
+
+  if (normalizeDbWorkflowCode(snapshot.workflowCode) !== normalizeDbWorkflowCode(workflowCode)) {
+    throw new Error("Routing snapshot workflow_code does not match AI execution request.");
+  }
+
+  if (!isRoutingSnapshotExecutableStatus(snapshot.status)) {
+    throw new Error("Routing snapshot status does not allow AI execution.");
+  }
+
+  await enforcePlanAccessFn({
+    organizationId,
+    capability: "ai_execution",
+    workflowCode,
+    requestedPlan: mapWorkflowCodeToPlanTier(workflowCode),
+    db
+  });
+
+  const readiness = await getOrganizationAuditReadiness({
+    organizationId,
+    db
+  });
+
+  if (!readiness.readyForAudit) {
+    throw new Error("Required onboarding intake must be completed before AI execution.");
+  }
+
+  const workflowDispatch = snapshot.workflowDispatches[0] ?? null;
+  if (!workflowDispatch) {
+    throw new Error("AI execution requires a workflow dispatch tied to the routing snapshot.");
+  }
+
+  const assessment = await db.assessment.findFirst({
+    where: {
+      organizationId,
+      status: {
+        in: [
+          AssessmentStatus.INTAKE_SUBMITTED,
+          AssessmentStatus.ANALYSIS_QUEUED,
+          AssessmentStatus.ANALYSIS_RUNNING,
+          AssessmentStatus.REPORT_DRAFT_READY
+        ]
+      }
+    },
+    orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }]
+  });
+
+  if (!assessment) {
+    throw new Error("No intake-submitted assessment was found for AI execution.");
+  }
+
+  const hints = readJsonObject(snapshot.normalizedHintsJson);
+  const selectedFrameworks =
+    snapshot.organization.frameworkSelections.length > 0
+      ? snapshot.organization.frameworkSelections.map(
+          (selection) => selection.framework.name || selection.framework.code || selection.frameworkId
+        )
+      : ["SOC 2"];
+  const planTier = mapWorkflowCodeToPlanTier(workflowCode);
+  const payload = executeAuditWorkflowInputSchema.parse({
+    orgId: organizationId,
+    assessmentId: assessment.id,
+    routingSnapshotId: snapshot.id,
+    workflowDispatchId: workflowDispatch.id,
+    dispatchId: workflowDispatch.id,
+    customerEmail: null,
+    companyName: snapshot.organization.name,
+    industry: snapshot.organization.industry ?? "Unspecified",
+    companySize: snapshot.organization.sizeBand ?? "Unspecified",
+    selectedFrameworks,
+    assessmentAnswers: buildAssessmentAnswersFromIntake(input.intake_data),
+    evidenceSummary: buildEvidenceSummaryFromIntake(input.intake_data),
+    planTier,
+    commercialRouting:
+      hints && readJsonObject(hints.capability_profile)
+        ? {
+            planTier,
+            workflowCode,
+            entitlementSource:
+              readString(hints.entitlement_source) === "trial"
+                ? "trial"
+                : readString(hints.entitlement_source) === "override"
+                  ? "override"
+                  : readString(hints.entitlement_source) === "blocked"
+                    ? "blocked"
+                    : "subscription",
+            reportDepth:
+              readString(readJsonObject(hints.capability_profile)?.report_depth) === "custom"
+                ? "custom"
+                : readString(readJsonObject(hints.capability_profile)?.report_depth) === "enhanced"
+                  ? "enhanced"
+                  : readString(readJsonObject(hints.capability_profile)?.report_depth) === "standard"
+                    ? "standard"
+                    : "concise",
+            maxFindings:
+              typeof readJsonObject(hints.capability_profile)?.max_findings === "number"
+                ? (readJsonObject(hints.capability_profile)?.max_findings as number)
+                : 5,
+            roadmapDetail:
+              readString(readJsonObject(hints.capability_profile)?.roadmap_detail) === "full"
+                ? "full"
+                : readString(readJsonObject(hints.capability_profile)?.roadmap_detail) === "detailed"
+                  ? "detailed"
+                  : "standard",
+            executiveBriefingEligible:
+              readJsonObject(hints.capability_profile)?.executive_briefing_eligible === true,
+            monitoringAddOnEligible:
+              readJsonObject(hints.capability_profile)?.monitoring_add_on_eligible === true,
+            addOnEligible: readJsonObject(hints.capability_profile)?.add_on_eligible === true,
+            immutable: true
+          }
+        : undefined
+  });
+  const existingJob = await db.analysisJob.findFirst({
+    where: {
+      jobType: "assessment_analysis",
+      inputPayload: {
+        path: ["routingSnapshotId"],
+        equals: snapshot.id
+      }
+    },
+    include: {
+      assessment: {
+        select: {
+          organizationId: true,
+          name: true
+        }
+      }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+  const job =
+    existingJob ??
+    (await db.analysisJob.create({
+      data: {
+        assessmentId: assessment.id,
+        provider: "openai_langgraph",
+        status: JobStatus.QUEUED,
+        jobType: "assessment_analysis",
+        contractVersion: AI_ANALYSIS_CONTRACT_VERSION,
+        workflowVersion: AI_ANALYSIS_CONTRACT_VERSION,
+        inputPayload: toJsonValue(payload)
+      },
+      include: {
+        assessment: {
+          select: {
+            organizationId: true,
+            name: true
+          }
+        }
+      }
+    }));
+
+  await db.routingSnapshot.update({
+    where: { id: snapshot.id },
+    data: { status: RoutingSnapshotStatus.STATUS_UPDATED }
+  });
+  await recordAuditLifecycleTransition({
+    db,
+    organizationId,
+    assessmentId: assessment.id,
+    toStatus: "intake_complete",
+    actorType: "SYSTEM",
+    actorLabel: "ai-execution",
+    reasonCode: "intake.ready_for_execution",
+    evidence: {
+      intakeComplete: readiness.readyForAudit
+    },
+    metadata: {
+      source: "runAuditExecution"
+    }
+  });
+  await recordAuditLifecycleTransition({
+    db,
+    organizationId,
+    assessmentId: assessment.id,
+    toStatus: "routing_complete",
+    actorType: "SYSTEM",
+    actorLabel: "ai-execution",
+    reasonCode: "routing.snapshot.ready",
+    linkages: {
+      routingSnapshotId: snapshot.id,
+      workflowDispatchId: workflowDispatch.id
+    },
+    evidence: {
+      routingSnapshotId: snapshot.id
+    },
+    metadata: {
+      workflowCode,
+      source: "runAuditExecution"
+    }
+  });
+  await recordAuditLifecycleTransition({
+    db,
+    organizationId,
+    assessmentId: assessment.id,
+    toStatus: "analysis_pending",
+    actorType: "SYSTEM",
+    actorLabel: "ai-execution",
+    reasonCode: "analysis.job.queued",
+    linkages: {
+      routingSnapshotId: snapshot.id,
+      workflowDispatchId: workflowDispatch.id
+    },
+    evidence: {
+      analysisJobId: job.id
+    },
+    metadata: {
+      analysisJobId: job.id,
+      workflowCode
+    }
+  });
+
+  const result = await runAnalysisJobFn(job, {
+    db,
+    payload
+  });
+
+  if (result.status === "completed") {
+    const normalizedOutput = normalizeAuditExecutionOutput(result.result);
+    await db.routingSnapshot.update({
+      where: { id: snapshot.id },
+      data: { status: RoutingSnapshotStatus.REPORT_READY }
+    });
+    await db.deliveryStateRecord.updateMany({
+      where: { routingSnapshotId: snapshot.id },
+      data: {
+        status: DeliveryStateStatus.REPORT_GENERATED,
+        reportGeneratedAt: now,
+        latestExecutionResultJson: toGenericJsonValue({
+          status: "analysis_complete",
+          normalizedOutput,
+          analysisCompletedAt: now.toISOString()
+        })
+      }
+    });
+  } else if (result.status === "failed") {
+    await db.deliveryStateRecord.updateMany({
+      where: { routingSnapshotId: snapshot.id },
+      data: {
+        status: DeliveryStateStatus.AWAITING_REVIEW,
+        awaitingReviewAt: now,
+        lastError: result.safeError,
+        latestExecutionResultJson: toGenericJsonValue({
+          status: "failed_review_required",
+          failureReason: result.safeError,
+          analysisFailedAt: now.toISOString()
+        })
+      }
+    });
+    await recordAuditLifecycleTransition({
+      db,
+      organizationId,
+      assessmentId: assessment.id,
+      toStatus: "failed_review_required",
+      actorType: "SYSTEM",
+      actorLabel: "ai-execution",
+      reasonCode: "analysis.failed_review_required",
+      linkages: {
+        routingSnapshotId: snapshot.id,
+        workflowDispatchId: workflowDispatch.id
+      },
+      evidence: {
+        failureReason: result.safeError
+      },
+      metadata: {
+        analysisJobId: job.id
+      }
+    });
+  }
+
+  return {
+    ...result,
+    routingSnapshotId: snapshot.id,
+    workflowCode,
+    workflowDispatchId: workflowDispatch.id,
+    analysisJobId: job.id
+  };
 }
 
 export async function dispatchQueuedOpenAiAnalysisJobs(options?: { limit?: number }) {

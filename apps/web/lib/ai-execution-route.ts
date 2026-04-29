@@ -11,6 +11,7 @@ import {
 import {
   getWorkflowTraceByDispatchId,
 } from "../src/server/ai/observability/workflow-tracker";
+import { getOrganizationAuditReadiness } from "./audit-intake";
 
 export const aiExecutionDispatchPayloadSchema = executeAuditWorkflowInputSchema.strict();
 
@@ -20,6 +21,7 @@ export type AiExecutionDispatchPayload = z.infer<
 
 type AiExecutionDispatchDependencies = {
   db?: Pick<typeof prisma, "assessment" | "analysisJob" | "workflowDispatch">;
+  auditReadinessOverride?: boolean;
 };
 
 function toJsonValue(value: AiExecutionDispatchPayload): Prisma.InputJsonValue {
@@ -123,19 +125,56 @@ export async function handleAiExecutionDispatch(
     throw new Error("Assessment organization does not match the requested orgId.");
   }
 
+  const readiness =
+    dependencies?.auditReadinessOverride === undefined
+      ? await getOrganizationAuditReadiness({
+          organizationId: assessment.organizationId
+        })
+      : {
+          organizationId: assessment.organizationId,
+          readyForAudit: dependencies.auditReadinessOverride
+        };
+
+  if (!readiness.readyForAudit) {
+    return {
+      accepted: false,
+      provider: getAiExecutionProvider(),
+      workflowDispatchId: validated.workflowDispatchId,
+      dispatchId: validated.dispatchId,
+      status: "blocked",
+      code: "intake_incomplete",
+      message: "Required onboarding intake must be completed before AI execution.",
+      nextCallbackExpected: false
+    } as const;
+  }
+
   const provider = getAiExecutionProvider();
   const dispatchRouting = await db.workflowDispatch.findUnique({
     where: { id: validated.workflowDispatchId },
     select: {
       routingSnapshot: {
         select: {
+          id: true,
+          organizationId: true,
+          workflowCode: true,
+          status: true,
           normalizedHintsJson: true
         }
       }
     }
   });
+  if (!dispatchRouting?.routingSnapshot) {
+    throw new Error("AI execution dispatch requires a backend routing snapshot.");
+  }
+
+  if (dispatchRouting.routingSnapshot.organizationId !== assessment.organizationId) {
+    throw new Error("Workflow dispatch routing snapshot does not match the assessment organization.");
+  }
+
   const queuedPayload = executeAuditWorkflowInputSchema.parse({
     ...validated,
+    routingSnapshotId:
+      validated.routingSnapshotId ?? dispatchRouting.routingSnapshot.id,
     commercialRouting:
       validated.commercialRouting ??
       extractCommercialRoutingFromHints(

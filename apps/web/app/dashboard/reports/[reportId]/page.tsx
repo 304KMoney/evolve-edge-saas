@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 import { AuditActorType, Prisma, ReportStatus, prisma } from "@evolve-edge/db";
 import {
@@ -35,6 +36,7 @@ import {
   buildExecutiveReportViewModel,
   getLatestAssessmentWorkflowSnapshot
 } from "../../../../lib/report-view-model";
+import { ensureExecutiveBriefingForReport } from "../../../../lib/executive-briefing";
 import { getReportDeliveryOperationsSnapshot } from "../../../../lib/report-delivery-operations";
 import { getCanonicalReportFinalizationState } from "../../../../lib/report-artifacts";
 import {
@@ -284,6 +286,14 @@ export default async function ReportDetailPage({
     : false;
   const canShowRetryControl =
     reportFinalization.state === "failed" && canApproveQa;
+  const executiveBriefing = reportFinalization.canDownload
+    ? await ensureExecutiveBriefingForReport({
+        reportId: report.id,
+        organizationId: session.organization!.id,
+        assessmentId: report.assessmentId,
+        report: executiveReport
+      })
+    : null;
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
@@ -338,6 +348,14 @@ export default async function ReportDetailPage({
                 Review needed
               </span>
             )}
+            {executiveBriefing ? (
+              <Link
+                href={`/briefings/${executiveBriefing.id}` as Route}
+                className="rounded-full bg-[linear-gradient(135deg,#102a43,#315f72)] px-4 py-2 text-sm font-semibold text-white"
+              >
+                View Executive Briefing
+              </Link>
+            ) : null}
             <Link
               href="/dashboard/roadmap"
               className="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink"

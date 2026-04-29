@@ -10,6 +10,11 @@ import { logServerEvent } from "../../../lib/monitoring";
 import { createPaymentCustomerBinding } from "../../../lib/payment-customer-binding";
 import { trackProductAnalyticsEvent } from "../../../lib/product-analytics";
 import { getPlanTransitionDirection } from "../../../lib/revenue-catalog";
+import {
+  resolveBillingReturnDestination,
+  resumeFirstCustomerJourneyAfterReadiness
+} from "../../../lib/first-customer-journey";
+import { getOrganizationAuditReadiness } from "../../../lib/audit-intake";
 
 export const dynamic = "force-dynamic";
 
@@ -19,27 +24,64 @@ export default async function BillingReturnPage({
   searchParams: Promise<{
     status?: string;
     session_id?: string;
+    planCode?: string;
+    billingCadence?: string;
   }>;
 }) {
   const session = await requireCurrentSession({ requireOrganization: true });
   const params = await searchParams;
   const status = String(params.status ?? "");
   const checkoutSessionId = String(params.session_id ?? "");
+  const planCode = String(params.planCode ?? "");
+  const billingCadence = String(params.billingCadence ?? "");
+  const retryParams = new URLSearchParams({ billing: "cancelled" });
+
+  if (planCode) {
+    retryParams.set("planCode", planCode);
+  }
+
+  if (billingCadence) {
+    retryParams.set("billingCadence", billingCadence);
+  }
 
   if (status === "cancelled") {
-    redirect("/dashboard/settings?billing=cancelled");
+    redirect(
+      resolveBillingReturnDestination({
+        status: "cancelled",
+        intakeComplete: true,
+        queryString: retryParams.toString()
+      }) as never
+    );
   }
 
   if (status === "portal") {
-    redirect("/dashboard/settings?billing=portal-returned");
+    redirect(
+      resolveBillingReturnDestination({
+        status: "portal",
+        intakeComplete: true
+      }) as never
+    );
   }
 
   if (status !== "success") {
-    redirect("/dashboard/settings?billing=error");
+    redirect(
+      resolveBillingReturnDestination({
+        status: "error",
+        intakeComplete: true
+      }) as never
+    );
   }
 
   if (!checkoutSessionId || !hasStripeBillingConfig()) {
-    redirect("/dashboard/settings?billing=processing");
+    const readiness = await getOrganizationAuditReadiness({
+      organizationId: session.organization!.id
+    });
+    redirect(
+      resolveBillingReturnDestination({
+        status: "processing",
+        intakeComplete: readiness.readyForAudit
+      }) as never
+    );
   }
 
   try {
@@ -109,9 +151,46 @@ export default async function BillingReturnPage({
       metadata: paymentBinding
     });
 
-    redirect("/dashboard/settings?billing=success");
+    const readiness = await getOrganizationAuditReadiness({
+      organizationId: session.organization!.id
+    });
+
+    if (readiness.readyForAudit) {
+      try {
+        await resumeFirstCustomerJourneyAfterReadiness({
+          organizationId: session.organization!.id,
+          userId: session.user.id,
+          source: "billing_return"
+        });
+      } catch (error) {
+        logServerEvent("warn", "billing.return.first_customer_resume_failed", {
+          org_id: session.organization!.id,
+          user_id: session.user.id,
+          status: "deferred",
+          source: "billing-return",
+          metadata: {
+            message: error instanceof Error ? error.message : "Unknown resume error"
+          }
+        });
+      }
+    }
+
+    redirect(
+      resolveBillingReturnDestination({
+        status: "success",
+        intakeComplete: readiness.readyForAudit
+      }) as never
+    );
   } catch (error) {
     console.error("Failed to reconcile Stripe checkout return", error);
-    redirect("/dashboard/settings?billing=processing");
+    const readiness = await getOrganizationAuditReadiness({
+      organizationId: session.organization!.id
+    });
+    redirect(
+      resolveBillingReturnDestination({
+        status: "processing",
+        intakeComplete: readiness.readyForAudit
+      }) as never
+    );
   }
 }

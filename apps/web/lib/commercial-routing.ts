@@ -29,6 +29,7 @@ import {
 import { getOrganizationEntitlements } from "./entitlements";
 import { getIntegrationEnvironmentLabel, readStripeContextMetadata } from "./integration-contracts";
 import { logServerEvent } from "./monitoring";
+import { requirePlanCapability } from "./plan-enforcement";
 import { buildCorrelationId } from "./reliability";
 import {
   getCanonicalPlanKeyFromPlanCode
@@ -546,7 +547,7 @@ export function buildCommercialCapabilityProfile(input: {
         report_depth: "enhanced",
         max_findings: 10,
         roadmap_detail: "detailed",
-        executive_briefing_eligible: true,
+        executive_briefing_eligible: false,
         monitoring_add_on_eligible: input.entitlements.featureAccess["monitoring.manage"],
         add_on_eligible: true
       };
@@ -733,7 +734,12 @@ export async function computeAndPersistRoutingSnapshot(input: {
     return existing;
   }
 
-  const entitlements = await getOrganizationEntitlements(input.organizationId, db);
+  const { entitlements } = await requirePlanCapability({
+    organizationId: input.organizationId,
+    capability: "routing",
+    requestedPlan: input.planCode,
+    db
+  });
   const decision = deriveCommercialWorkflowDecision({
     planCode: input.planCode,
     entitlements

@@ -65,6 +65,7 @@ import {
   type NormalizedStripePaymentEvent
 } from "../../../../lib/stripe-webhook-normalization";
 import { queueAuditRequestedDispatch } from "../../../../lib/workflow-dispatch";
+import { getOrganizationAuditReadiness } from "../../../../lib/audit-intake";
 
 export const runtime = "nodejs";
 
@@ -408,26 +409,61 @@ async function handleCheckoutCompleted(
     idempotencyKey: `routing-snapshot:stripe-checkout:${event.id}`
   });
 
-  await transitionDeliveryState({
-    deliveryStateId: paidDeliveryState.id,
-    organizationId: commercialContext.organization.id,
-    actorUserId: commercialContext.user.id,
-    actorType: AuditActorType.WEBHOOK,
-    actorLabel: "stripe",
-    toStatus: DeliveryStateStatus.ROUTED,
-    reasonCode: "delivery.routed",
-    linkages: {
-      routingSnapshotId: routingSnapshot.id,
-      entitlementsJson: routingSnapshot.entitlementsJson as Prisma.InputJsonValue,
-      routingHintsJson: routingSnapshot.normalizedHintsJson as Prisma.InputJsonValue,
-      statusReasonJson: routingSnapshot.routingReasonJson as Prisma.InputJsonValue
-    }
+  const readiness = await getOrganizationAuditReadiness({
+    organizationId: commercialContext.organization.id
   });
 
-  await queueAuditRequestedDispatch({
-    routingSnapshotId: routingSnapshot.id,
-    deliveryStateRecordId: paidDeliveryState.id
-  });
+  if (!readiness.readyForAudit) {
+    await appendOperatorWorkflowEventRecord({
+      eventKey: `operator.audit_dispatch_blocked_intake:${event.id}`,
+      organizationId: commercialContext.organization.id,
+      reportId: null,
+      paymentReconciliationId: persistedReconciliation.id,
+      eventCode: "intake_received",
+      severity: "warning",
+      message:
+        "Stripe checkout was reconciled, but audit workflow dispatch stayed blocked because required app-owned intake is incomplete.",
+      metadata: {
+        stripeEventId: event.id,
+        routingSnapshotId: routingSnapshot.id,
+        deliveryStateRecordId: paidDeliveryState.id,
+        reason: "audit_intake_incomplete"
+      }
+    });
+    logServerEvent("warn", "stripe.webhook.audit_dispatch_blocked_intake", {
+      event_id: event.id,
+      org_id: commercialContext.organization.id,
+      user_id: commercialContext.user.id,
+      status: "blocked",
+      source: "stripe",
+      requestContext,
+      metadata: {
+        routingSnapshotId: routingSnapshot.id,
+        deliveryStateRecordId: paidDeliveryState.id
+      }
+    });
+  } else {
+    await transitionDeliveryState({
+      deliveryStateId: paidDeliveryState.id,
+      organizationId: commercialContext.organization.id,
+      actorUserId: commercialContext.user.id,
+      actorType: AuditActorType.WEBHOOK,
+      actorLabel: "stripe",
+      toStatus: DeliveryStateStatus.ROUTED,
+      reasonCode: "delivery.routed",
+      linkages: {
+        routingSnapshotId: routingSnapshot.id,
+        entitlementsJson: routingSnapshot.entitlementsJson as Prisma.InputJsonValue,
+        routingHintsJson: routingSnapshot.normalizedHintsJson as Prisma.InputJsonValue,
+        statusReasonJson: routingSnapshot.routingReasonJson as Prisma.InputJsonValue
+      }
+    });
+
+    await queueAuditRequestedDispatch({
+      routingSnapshotId: routingSnapshot.id,
+      deliveryStateRecordId: paidDeliveryState.id
+    });
+  }
 
   logServerEvent("info", "stripe.webhook.payment_reconciled", {
     event_id: event.id,

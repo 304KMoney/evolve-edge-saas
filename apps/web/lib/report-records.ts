@@ -16,8 +16,10 @@ import {
   isPrismaRuntimeCompatibilityError,
   logPrismaRuntimeCompatibilityError,
 } from "./prisma-runtime";
+import { buildAuditReport, type NormalizedAuditReportInput } from "./report-builder";
 import { getReportArtifactAvailability } from "./report-artifacts";
 import { evaluateCustomerReportAccess } from "./report-access-control";
+import { requirePlanCapability } from "./plan-enforcement";
 
 type ReportRecordsDbClient = Prisma.TransactionClient | typeof prisma;
 type DashboardReportListRecord = Awaited<
@@ -817,62 +819,13 @@ export async function updateReportReviewStatus(input: {
   });
 }
 
-function buildWorkflowReportJson(input: {
-  result: AuditWorkflowOutput;
-  existingReportJson: Prisma.JsonValue;
-}) {
-  const existing = readJsonObject(input.existingReportJson) ?? {};
-  const nextReportJson: Record<string, Prisma.InputJsonValue | null> = {
-    ...Object.fromEntries(
-      Object.entries(existing).map(([key, value]) => [
-        key,
-        value as Prisma.InputJsonValue | null
-      ])
-    ),
-    assessmentName: input.result.finalReport.reportTitle,
-    postureScore: input.result.postureScore,
-    riskLevel: input.result.riskLevel,
-    riskSummary: input.result.riskAnalysis.summary,
-    executiveSummary: input.result.executiveSummary,
-    finalReportText: input.result.finalReportText,
-    findingCount: input.result.findings.length,
-    recommendationCount: input.result.recommendations.length,
-    findings: input.result.findings.map((finding) => ({
-      title: finding.title,
-      severity: finding.severity,
-      summary: finding.summary,
-      riskDomain: finding.riskDomain,
-      impactedFrameworks: finding.impactedFrameworks
-    })),
-    roadmap: input.result.roadmap.map((item) => ({
-      title: item.title,
-      priority: item.priority,
-      description: item.description,
-      ownerRole: item.ownerRole,
-      timeline: item.targetTimeline,
-      effort: item.effort
-    })),
-    topConcerns: input.result.topConcerns,
-    gaps: input.result.riskAnalysis.systemicThemes,
-    frameworkMapping: {
-      prioritizedFrameworks: input.result.frameworkMapping.prioritizedFrameworks,
-      coverageSummary: input.result.frameworkMapping.coverageSummary
-    },
-    workflowMetadata: {
-      provider: input.result.provider,
-      workflowDispatchId: input.result.workflowDispatchId,
-      status: input.result.status,
-      contractVersion: input.result.metadata.contractVersion
-    }
-  };
-
-  return nextReportJson;
-}
-
 export async function persistValidatedWorkflowReport(input: {
   db?: ReportRecordsDbClient;
   reportId: string;
   result: AuditWorkflowOutput;
+  normalizedOutput: NormalizedAuditReportInput;
+  routingSnapshotId?: string | null;
+  workflowCode?: string | null;
   organizationNameSnapshot?: string | null;
   customerEmailSnapshot?: string | null;
   selectedPlan?: "starter" | "scale" | "enterprise" | null;
@@ -882,7 +835,22 @@ export async function persistValidatedWorkflowReport(input: {
   const existing = await db.report.findUnique({
     where: { id: input.reportId },
     select: {
-      reportJson: true
+      id: true,
+      organizationId: true,
+      assessmentId: true,
+      title: true,
+      reportJson: true,
+      assessment: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      organization: {
+        select: {
+          name: true
+        }
+      }
     }
   });
 
@@ -890,7 +858,26 @@ export async function persistValidatedWorkflowReport(input: {
     throw new Error("Report not found for validated workflow persistence.");
   }
 
+  await requirePlanCapability({
+    organizationId: existing.organizationId,
+    capability: "report_generation",
+    workflowCode: input.workflowCode ?? null,
+    requestedPlan: input.selectedPlan ?? null,
+    db
+  });
+
   const compatibleGeneratedStatus = await getCompatibleGeneratedReportStatus(db);
+  const generatedAt = new Date();
+  const builtReport = buildAuditReport(input.normalizedOutput, {
+    snapshotId: input.routingSnapshotId ?? null,
+    workflowCode: input.workflowCode ?? null,
+    organizationId: existing.organizationId,
+    organizationName: input.organizationNameSnapshot ?? existing.organization.name,
+    assessmentId: existing.assessmentId,
+    assessmentName: existing.assessment.name,
+    generatedAt,
+    selectedPlan: input.selectedPlan ?? null
+  });
 
   const baseData = {
     organizationNameSnapshot:
@@ -907,24 +894,22 @@ export async function persistValidatedWorkflowReport(input: {
         : toCommercialPlanCode(input.selectedPlan),
     customerAccountId:
       input.customerAccountId === undefined ? undefined : input.customerAccountId,
-    title: input.result.finalReport.reportTitle,
-    executiveSummary: input.result.finalReport.executiveSummary,
+    title: builtReport.title,
+    executiveSummary: builtReport.executiveSummary,
     overallRiskPostureJson: {
-      score: input.result.postureScore,
-      level: input.result.riskLevel,
-      summary: input.result.riskAnalysis.summary
+      score: builtReport.complianceScore,
+      level: builtReport.riskLevel,
+      summary: `Overall risk posture is ${builtReport.riskLevel} with a compliance score of ${builtReport.complianceScore}/100.`
     },
-    reportJson: buildWorkflowReportJson({
-      result: input.result,
-      existingReportJson: existing.reportJson
-    }),
+    reportJson: builtReport.reportJson,
     artifactMetadataJson: {
+      ...(builtReport.artifactMetadataJson as Prisma.JsonObject),
       downloadStatus: "ready",
-      source: "validated_workflow_report",
-      availableAt: new Date().toISOString(),
+      source: "structured_audit_report",
+      availableAt: generatedAt.toISOString(),
       downloadRoute: `/api/reports/${input.reportId}/export`
     },
-    publishedAt: new Date(),
+    publishedAt: generatedAt,
     deliveredAt: null,
     deliveredByUserId: null
   };
