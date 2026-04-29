@@ -660,10 +660,7 @@ async function resolveCurrentSession(options?: {
   const onboardingRequired =
     !membership ||
     !membership.organization.onboardingCompletedAt ||
-    !dbSession.user.onboardingCompletedAt ||
-    !isAuditIntakeCompleteFromRegulatoryProfile(
-      membership.organization.regulatoryProfile
-    );
+    !dbSession.user.onboardingCompletedAt;
 
   return {
     user: {
@@ -813,10 +810,7 @@ export async function resolveScopedOrganizationSession(input: {
       isBillingAdmin: membership.isBillingAdmin
     },
     onboardingRequired:
-      !membership.organization.onboardingCompletedAt ||
-      !isAuditIntakeCompleteFromRegulatoryProfile(
-        membership.organization.regulatoryProfile
-      )
+      !membership.organization.onboardingCompletedAt
   };
 
   return hasPermission(getSessionAuthorizationContext(scopedSession), input.permission)
