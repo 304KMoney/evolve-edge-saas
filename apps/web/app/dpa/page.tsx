@@ -17,8 +17,8 @@ export default function DpaPage() {
           <p className="mt-2 text-sm text-steel">Last updated: April 29, 2026</p>
           <p className="mt-2 text-sm text-steel">
             To request an executed DPA for your organization, email{" "}
-            <a href="mailto:kiel@evolveedge.ai?subject=DPA%20Request%20%E2%80%94%20Evolve%20Edge" className="text-accent">
-              kiel@evolveedge.ai
+            <a href="mailto:sales@evolveedgeai.com?subject=DPA%20Request%20%E2%80%94%20Evolve%20Edge" className="text-accent">
+              sales@evolveedgeai.com
             </a>{" "}
             with subject line &ldquo;DPA Request — Evolve Edge&rdquo;. UK and Canadian customers may also request Standard Contractual Clauses or IDTA addendums.
           </p>
@@ -210,8 +210,8 @@ export default function DpaPage() {
             Evolve Edge relies on the Standard Contractual Clauses (EU SCCs 2021) adopted by the
             European Commission as the lawful transfer mechanism. Customers requiring executed SCCs
             may contact us at{" "}
-            <a href="mailto:kiel@evolveedge.ai" className="text-accent">
-              kiel@evolveedge.ai
+            <a href="mailto:sales@evolveedgeai.com" className="text-accent">
+              sales@evolveedgeai.com
             </a>
             .
           </p>
@@ -242,8 +242,8 @@ export default function DpaPage() {
           <p className="mt-3 text-sm leading-7 text-steel">
             For questions about this DPA or to request executed Standard Contractual Clauses,
             please contact us at:{" "}
-            <a href="mailto:kiel@evolveedge.ai" className="text-accent">
-              kiel@evolveedge.ai
+            <a href="mailto:sales@evolveedgeai.com" className="text-accent">
+              sales@evolveedgeai.com
             </a>
             .
           </p>

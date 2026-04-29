@@ -183,7 +183,7 @@ export function getFoundingRiskAuditCallUrl() {
 export function getHostingerReferenceUrl() {
   return (
     readEnv(CANONICAL_ENV_KEYS.hostingerReferenceUrl) ||
-    "https://evolveedge.ai/pricing"
+    "https://evolveedgeai.com/pricing"
   );
 }
 

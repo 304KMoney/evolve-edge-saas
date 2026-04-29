@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { MarketingShell } from "../../components/marketing-shell";
 
@@ -40,8 +40,8 @@ export default function TermsPage() {
             information. You are responsible for maintaining the confidentiality of your login
             credentials and for all activity that occurs under your account. You must notify us
             immediately at{" "}
-            <a href="mailto:kiel@evolveedge.ai" className="text-accent">
-              kiel@evolveedge.ai
+            <a href="mailto:sales@evolveedgeai.com" className="text-accent">
+              sales@evolveedgeai.com
             </a>{" "}
             of any unauthorized use of your account. We reserve the right to disable accounts that
             violate these Terms.
@@ -171,8 +171,8 @@ export default function TermsPage() {
           <h2 className="mt-10 text-xl font-semibold text-ink">13. Contact</h2>
           <p className="mt-3 text-sm leading-7 text-steel">
             If you have questions about these Terms, please contact us at{" "}
-            <a href="mailto:kiel@evolveedge.ai" className="text-accent">
-              kiel@evolveedge.ai
+            <a href="mailto:sales@evolveedgeai.com" className="text-accent">
+              sales@evolveedgeai.com
             </a>
             .
           </p>
