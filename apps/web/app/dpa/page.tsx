@@ -1,9 +1,9 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import { MarketingShell } from "../../components/marketing-shell";
 
 export const metadata: Metadata = {
   title: "Data Processing Agreement | Evolve Edge",
-  description: "Data Processing Agreement (DPA) for Evolve Edge AI."
+  description: "Data Processing Agreement (DPA) for Evolve Edge."
 };
 
 export default function DpaPage() {
@@ -25,7 +25,7 @@ export default function DpaPage() {
 
           <p className="mt-6 text-sm leading-7 text-steel">
             This Data Processing Agreement (&ldquo;DPA&rdquo;) forms part of the agreement between
-            the Customer and Evolve Edge AI (&ldquo;Evolve Edge&rdquo;) governing the Customer&rsquo;s
+            the Customer and Evolve Edge (&ldquo;Evolve Edge&rdquo;) governing the Customer&rsquo;s
             use of the Evolve Edge platform and services (the &ldquo;Services&rdquo;). This DPA is
             incorporated by reference into the Evolve Edge{" "}
             <a href="/terms" className="text-accent">

@@ -9,18 +9,47 @@ import {
   shouldEnforceCriticalEnvironmentParity
 } from "../lib/env-validation";
 
+const appUrl =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://evolveedge.ai");
+
 export const metadata: Metadata = {
-  title: "Evolve Edge",
-  description: "AI governance and compliance SaaS platform",
+  metadataBase: new URL(appUrl),
+  title: {
+    default: "Evolve Edge — AI Risk & Compliance Readiness",
+    template: "%s | Evolve Edge"
+  },
+  description:
+    "Evolve Edge helps AI-using companies identify security, compliance, and governance gaps — and delivers audit-ready reports before customers, investors, or auditors force the conversation.",
   icons: {
     icon: "/brand/evolve-edge-logo.png",
     shortcut: "/brand/evolve-edge-logo.png",
     apple: "/brand/evolve-edge-logo.png"
   },
   openGraph: {
-    title: "Evolve Edge",
-    description: "AI governance and compliance SaaS platform",
-    images: ["/brand/evolve-edge-logo.png"]
+    title: "Evolve Edge — AI Risk & Compliance Readiness",
+    description:
+      "Evolve Edge helps AI-using companies identify security, compliance, and governance gaps — and delivers audit-ready reports before customers, investors, or auditors force the conversation.",
+    url: appUrl,
+    siteName: "Evolve Edge",
+    images: [
+      {
+        url: "/brand/evolve-edge-logo.png",
+        width: 800,
+        alt: "Evolve Edge — AI Risk & Compliance Readiness"
+      }
+    ],
+    type: "website"
+  },
+  twitter: {
+    card: "summary",
+    title: "Evolve Edge — AI Risk & Compliance Readiness",
+    description:
+      "AI risk assessment → audit-ready reports → customer & investor trust. Built for 20–200 person SaaS, AI, fintech, healthtech, and legaltech companies."
+  },
+  robots: {
+    index: true,
+    follow: true
   }
 };
 

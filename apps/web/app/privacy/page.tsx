@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import { MarketingShell } from "../../components/marketing-shell";
 
 export const metadata: Metadata = {
@@ -19,7 +19,7 @@ export default function PrivacyPage() {
           </p>
 
           <p className="mt-6 text-sm leading-7 text-steel">
-            Evolve Edge AI (&ldquo;Evolve Edge,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or
+            Evolve Edge (&ldquo;Evolve Edge,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or
             &ldquo;our&rdquo;) is committed to protecting your privacy. This Privacy Policy
             describes how we collect, use, and share information when you use our platform and
             services.

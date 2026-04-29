@@ -4,7 +4,7 @@ import { MarketingShell } from "../../components/marketing-shell";
 
 export const metadata: Metadata = {
   title: "Terms of Service | Evolve Edge",
-  description: "Terms of Service for Evolve Edge AI."
+  description: "Terms of Service for Evolve Edge."
 };
 
 export default function TermsPage() {
@@ -17,7 +17,7 @@ export default function TermsPage() {
 
           <p className="mt-6 text-sm leading-7 text-steel">
             These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of the
-            Evolve Edge AI platform (the &ldquo;Service&rdquo;) provided by Evolve Edge AI
+            Evolve Edge platform (the &ldquo;Service&rdquo;) provided by Evolve Edge
             (&ldquo;Evolve Edge,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or
             &ldquo;our&rdquo;). By accessing or using the Service, you agree to be bound by these
             Terms.
@@ -26,7 +26,7 @@ export default function TermsPage() {
           {/* 1. Service Description */}
           <h2 className="mt-10 text-xl font-semibold text-ink">1. Service Description</h2>
           <p className="mt-3 text-sm leading-7 text-steel">
-            Evolve Edge AI provides an AI governance and compliance SaaS platform, including SOC 2
+            Evolve Edge provides an AI governance and compliance SaaS platform, including SOC 2
             readiness tooling, compliance audit delivery, AI risk scoring, evidence management,
             and executive reporting workflows. The Service is designed for organizations seeking to
             align to regulatory and industry frameworks including SOC 2, NIST AI RMF, and ISO

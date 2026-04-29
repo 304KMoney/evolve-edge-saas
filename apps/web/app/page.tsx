@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { MarketingShell } from "../components/marketing-shell";
@@ -6,6 +7,18 @@ import {
   getFoundingRiskAuditOfferUrl
 } from "../lib/runtime-config";
 import { EXECUTIVE_PROOF_POINTS } from "../lib/marketing-services";
+
+export const metadata: Metadata = {
+  title: "Evolve Edge — AI Risk & Compliance Readiness",
+  description:
+    "Evolve Edge helps AI-using companies map security, compliance, and governance gaps — and delivers audit-ready reports before customers, investors, or auditors force the conversation.",
+  openGraph: {
+    title: "Evolve Edge — AI Risk & Compliance Readiness",
+    description:
+      "AI risk assessment → audit-ready reports → customer & investor trust. Built for 20–200 person SaaS, AI, fintech, healthtech, and legaltech companies.",
+    url: "/"
+  }
+};
 
 const actionLinks = [
   { href: "/pricing", label: "View Pricing" },
@@ -103,7 +116,7 @@ export default function HomePage() {
           <div className="mt-7 grid gap-4 md:grid-cols-3">
             {actionLinks.map((link) => (
               <Link
-                key={link.href}
+                key={link.href + link.label}
                 href={link.href as never}
                 className="content-surface-muted inline-flex min-h-[72px] items-center justify-between gap-3 px-5 py-5 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:border-[#c9dced] hover:bg-white"
               >
