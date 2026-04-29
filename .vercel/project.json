@@ -1,16 +1,1 @@
-{
-  "projectId": "prj_SOQjPIbwqmssjEyAMpslKm5DcAbn",
-  "orgId": "team_DwTWnpvEZIZT5rDIAD3lwFP1",
-  "projectName": "evolve-edge-saas",
-  "settings": {
-    "createdAt": 1775772325892,
-    "framework": "nextjs",
-    "devCommand": null,
-    "installCommand": null,
-    "buildCommand": null,
-    "outputDirectory": null,
-    "rootDirectory": "apps/web",
-    "directoryListing": false,
-    "nodeVersion": "20.x"
-  }
-}
+{"projectId":"prj_SOQjPIbwqmssjEyAMpslKm5DcAbn","orgId":"team_I520bvuUSIJQwlGm4UN6pN9l","projectName":"evolve-edge-saas"}
