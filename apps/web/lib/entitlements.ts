@@ -349,8 +349,8 @@ function getStrictCommercialPlanControls(
     case "scale":
       return {
         features: {
-          "executive.reviews": false,
-          "executive.delivery": false,
+          "executive.reviews": true,
+          "executive.delivery": true,
           "priority.support": false,
           "custom.frameworks": true,
           "api.access": false
