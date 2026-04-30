@@ -37,6 +37,8 @@ type QueueEmailInput = {
 
 const MAX_EMAIL_ATTEMPTS = 5;
 const RETRY_DELAYS_MINUTES = [1, 5, 15, 60];
+// Resend caps free/pro accounts at 5 requests/second. 350ms spacing keeps us under ~3 req/s with margin.
+const RESEND_REQUEST_SPACING_MS = 350;
 
 function getRetryDelayMinutes(attemptCount: number) {
   return RETRY_DELAYS_MINUTES[Math.min(attemptCount - 1, RETRY_DELAYS_MINUTES.length - 1)];
@@ -537,7 +539,9 @@ export async function dispatchPendingEmailNotifications(options?: { limit?: numb
   let sent = 0;
   let failed = 0;
 
-  for (const notification of dueNotifications) {
+  for (let i = 0; i < dueNotifications.length; i++) {
+    const notification = dueNotifications[i];
+
     const claim = await prisma.emailNotification.updateMany({
       where: {
         id: notification.id,
@@ -615,6 +619,10 @@ export async function dispatchPendingEmailNotifications(options?: { limit?: numb
         message
       });
       failed += 1;
+    }
+
+    if (i < dueNotifications.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, RESEND_REQUEST_SPACING_MS));
     }
   }
 
