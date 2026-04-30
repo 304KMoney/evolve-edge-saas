@@ -2,29 +2,28 @@
 
 import Link from "next/link";
 import type { Route } from "next";
+import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import {
   ArrowRight,
   Bell,
+  BookOpenCheck,
   Building2,
-  ChartColumn,
   CheckCircle2,
   ChevronRight,
+  Clock3,
   CreditCard,
-  FolderOpen,
   FileText,
+  FolderOpen,
   LayoutDashboard,
   ListTodo,
   LogOut,
   ShieldCheck,
+  Sparkles,
   TriangleAlert
 } from "lucide-react";
-import { ActivationGuide } from "./activation-guide";
 import { Brand } from "./brand";
-import { ProductSurfacePanel } from "./product-surface-panel";
 import type { ActivationSnapshot } from "../lib/activation";
-import { RetentionOverview } from "./retention-overview";
-import { UpsellOfferStack } from "./upsell-offer-stack";
 import type { ResolvedUpsellOffer } from "../lib/expansion-engine";
 import type { ProductSurfaceModel } from "../lib/product-surface";
 import type { RetentionSnapshot } from "../lib/retention";
@@ -52,9 +51,11 @@ export type DashboardRoadmapItem = {
 };
 
 export type DashboardReport = {
+  id: string;
   title: string;
   type: string;
   date: string;
+  href: string;
 };
 
 export type DashboardNotification = {
@@ -62,6 +63,14 @@ export type DashboardNotification = {
   body: string;
   date: string;
   actionUrl: string | null;
+};
+
+export type DashboardFrameworkResource = {
+  code: string;
+  title: string;
+  body: string;
+  href: string;
+  assetCount: number;
 };
 
 export type DashboardData = {
@@ -82,6 +91,7 @@ export type DashboardData = {
   roadmap: DashboardRoadmapItem[];
   reports: DashboardReport[];
   notifications: DashboardNotification[];
+  frameworkResources: DashboardFrameworkResource[];
   inventories: {
     vendorCount: number;
     modelCount: number;
@@ -97,6 +107,14 @@ export type DashboardData = {
     primaryLabel: string;
     secondaryHref: string;
     secondaryLabel: string;
+  };
+  executiveBriefing: {
+    available: boolean;
+    title: string;
+    summary: string;
+    href: string | null;
+    statusLabel: string;
+    ctaLabel: string;
   };
   usageMetrics: UsageMetricSnapshot[];
   productSurface: ProductSurfaceModel;
@@ -115,6 +133,23 @@ export type DashboardData = {
     nextReviewLabel: string;
     trendDelta: number;
   };
+  auditIntake: {
+    complete: boolean;
+    statusLabel: string;
+    summary: string;
+  };
+  auditLifecycle: {
+    currentStatus: string;
+    stages: Array<{
+      status: string;
+      label: string;
+      description: string;
+      completed: boolean;
+      active: boolean;
+      failed: boolean;
+      timestampLabel: string | null;
+    }>;
+  };
 };
 
 const navigation: Array<{
@@ -122,14 +157,12 @@ const navigation: Array<{
   label: string;
   icon: typeof LayoutDashboard;
 }> = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/dashboard/assessments", label: "Assessments", icon: ShieldCheck },
-  { href: "/dashboard/frameworks" as Route, label: "Frameworks", icon: CheckCircle2 },
-  { href: "/dashboard/monitoring" as Route, label: "Monitoring", icon: ChartColumn },
-  { href: "/dashboard/evidence" as Route, label: "Evidence", icon: FolderOpen },
-  { href: "/dashboard/programs" as Route, label: "Programs", icon: Building2 },
+  { href: "/dashboard", label: "Portal", icon: LayoutDashboard },
+  { href: "/dashboard/assessments", label: "Audits", icon: ShieldCheck },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
   { href: "/dashboard/roadmap", label: "Roadmap", icon: ListTodo },
+  { href: "/dashboard/evidence" as Route, label: "Evidence", icon: FolderOpen },
+  { href: "/dashboard/frameworks" as Route, label: "Frameworks", icon: CheckCircle2 },
   { href: "/dashboard/billing" as Route, label: "Billing", icon: CreditCard }
 ];
 
@@ -137,8 +170,126 @@ function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
-export function DashboardShell({ data }: { data: DashboardData }) {
+function isActiveDashboardRoute(pathname: string, href: Route) {
+  if (pathname === href) return true;
+  if (href === "/dashboard") return pathname === "/dashboard";
+  return pathname.startsWith(`${href}/`);
+}
+
+function titleCaseStatus(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getStatusMessage(data: DashboardData) {
+  const status = data.auditLifecycle.currentStatus;
+
+  if (status === "failed_review_required") {
+    return {
+      label: "Review required",
+      headline: "We are reviewing your audit before delivery.",
+      body: "A quality gate needs attention before customer-visible results are released.",
+      tone: "alert" as const
+    };
+  }
+
+  if (["analysis_pending", "analysis_running", "routing_complete"].includes(status)) {
+    return {
+      label: "Analysis in progress",
+      headline: "Your audit analysis is in progress.",
+      body: "We are processing your intake through controlled routing and backend analysis. Reports appear here after validation.",
+      tone: "progress" as const
+    };
+  }
+
+  if (["report_ready", "briefing_ready", "delivered"].includes(status)) {
+    return {
+      label: data.executiveBriefing.available
+        ? "Executive briefing available"
+        : "Report ready",
+      headline: data.executiveBriefing.available
+        ? "Your report and executive briefing are ready."
+        : "Your latest audit report is ready.",
+      body: "Open the latest deliverable for executive summary, risk posture, priority actions, and roadmap guidance.",
+      tone: "ready" as const
+    };
+  }
+
+  if (data.auditIntake.complete) {
+    return {
+      label: "Intake complete",
+      headline: "Your intake is complete and ready for audit routing.",
+      body: "The next step is controlled backend routing, followed by analysis and report validation.",
+      tone: "progress" as const
+    };
+  }
+
+  return {
+    label: "No audits yet",
+    headline: "Start your first AI governance audit.",
+    body: "Complete onboarding intake to begin a controlled audit and unlock reports, roadmap, and executive briefing deliverables.",
+    tone: "empty" as const
+  };
+}
+
+function StatusIcon({ tone }: { tone: ReturnType<typeof getStatusMessage>["tone"] }) {
+  if (tone === "alert") return <TriangleAlert className="h-5 w-5" />;
+  if (tone === "ready") return <CheckCircle2 className="h-5 w-5" />;
+  if (tone === "progress") return <Clock3 className="h-5 w-5" />;
+  return <Sparkles className="h-5 w-5" />;
+}
+
+function PortalCard({
+  eyebrow,
+  title,
+  children,
+  action
+}: {
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="rounded-[28px] border border-line bg-white/90 p-5 shadow-[0_18px_70px_rgba(15,23,42,0.08)] md:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+            {eyebrow}
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
+            {title}
+          </h2>
+        </div>
+        {action}
+      </div>
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+export function DashboardShell({
+  data,
+  flashMessage
+}: {
+  data: DashboardData;
+  flashMessage?: {
+    title: string;
+    body: string;
+  } | null;
+}) {
   const pathname = usePathname();
+  const latestReport = data.reports[0] ?? null;
+  const portalStatus = getStatusMessage(data);
+  const hasAuditActivity = data.auditIntake.complete || data.reports.length > 0;
+  const activeStages = data.auditLifecycle.stages.filter(
+    (stage) => stage.completed || stage.active || stage.failed
+  );
+  const visibleStages = activeStages.length > 0
+    ? activeStages
+    : data.auditLifecycle.stages.slice(0, 4);
   const resolvedNavigation = data.isDemoMode
     ? [
         ...navigation,
@@ -159,7 +310,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
               <Brand
                 lockupClassName="border-white/10 bg-white/95 p-1.5"
                 imageClassName="w-[126px]"
-                subtitle="Signal-led compliance"
+                subtitle="Client audit portal"
                 labelClassName="text-white/50"
               />
               <p className="mt-2 text-lg font-semibold">{data.organizationName}</p>
@@ -180,7 +331,7 @@ export function DashboardShell({ data }: { data: DashboardData }) {
           <nav className="mt-8 space-y-2">
             {resolvedNavigation.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href;
+              const active = isActiveDashboardRoute(pathname, item.href);
 
               return (
                 <Link
@@ -204,31 +355,29 @@ export function DashboardShell({ data }: { data: DashboardData }) {
           </nav>
 
           <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-sm font-semibold">Trust Center</p>
+            <p className="text-sm font-semibold">Deliverables</p>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Review data handling, audit logs, access controls, and methodology
-              notes for your current assessments.
+              Reports and briefings appear only after intake, routing, analysis, and validation are complete.
             </p>
             <Link
-              href="/dashboard/settings"
+              href="/dashboard/reports"
               className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#8debf4]"
             >
-              Open trust center
+              View report center
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </aside>
 
-        <main className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(243,249,255,0.9))] p-5 shadow-panel backdrop-blur md:p-6">
+        <main className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(141,235,244,0.22),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.97),rgba(243,249,255,0.93))] p-5 shadow-panel backdrop-blur md:p-6">
           <header className="flex flex-col gap-4 border-b border-line pb-6 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-sm font-medium text-accent">{data.workspaceLabel}</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">
-                Dashboard Overview
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink md:text-4xl">
+                Client Portal
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-steel">
-                Monitor assessment progress, review findings, and keep leaders
-                aligned on AI risk posture across your organization.
+                Track your current audit, open validated deliverables, and prepare leadership conversations from one clean workspace.
               </p>
             </div>
 
@@ -245,30 +394,79 @@ export function DashboardShell({ data }: { data: DashboardData }) {
                 className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink"
               >
                 <Bell className="h-4 w-4" />
-                Notifications
-              </Link>
-              <Link
-                href="/dashboard/assessments"
-                className="rounded-full bg-[linear-gradient(135deg,#1cc7d8,#6fe8f1)] px-4 py-2 text-sm font-semibold text-[#05111d]"
-              >
-                Start Reassessment
+                Updates
               </Link>
             </div>
           </header>
 
-          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {data.metrics.map((metric) => (
-              <article
-                key={metric.label}
-                className="rounded-[24px] border border-line bg-mist p-5"
-              >
+          {flashMessage ? (
+            <section className="mt-6 rounded-[24px] border border-emerald-200 bg-emerald-50 p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
+                {flashMessage.title}
+              </p>
+              <p className="mt-2 text-sm leading-7 text-ink">{flashMessage.body}</p>
+            </section>
+          ) : null}
+
+          <section
+            className={cn(
+              "mt-6 rounded-[32px] border p-6 text-white shadow-[0_24px_80px_rgba(15,23,42,0.22)] md:p-8",
+              portalStatus.tone === "alert"
+                ? "border-rose-300/40 bg-[linear-gradient(135deg,#7f1d1d,#0f172a)]"
+                : portalStatus.tone === "ready"
+                  ? "border-emerald-300/40 bg-[linear-gradient(135deg,#064e3b,#0f172a)]"
+                  : "border-cyan-300/30 bg-[linear-gradient(135deg,#0f766e,#0f172a)]"
+            )}
+          >
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white">
+                  <StatusIcon tone={portalStatus.tone} />
+                  {portalStatus.label}
+                </span>
+                <h2 className="mt-5 max-w-3xl text-3xl font-semibold tracking-tight md:text-5xl">
+                  {portalStatus.headline}
+                </h2>
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-200">
+                  {portalStatus.body}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {latestReport ? (
+                  <Link
+                    href={latestReport.href as Route}
+                    className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink"
+                  >
+                    Open latest report
+                  </Link>
+                ) : (
+                  <Link
+                    href="/onboarding"
+                    className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink"
+                  >
+                    Start intake
+                  </Link>
+                )}
+                <Link
+                  href="/dashboard/reports"
+                  className="rounded-full border border-white/25 px-5 py-3 text-sm font-semibold text-white"
+                >
+                  View all audits
+                </Link>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-6 grid gap-4 md:grid-cols-3">
+            {data.metrics.slice(0, 3).map((metric) => (
+              <article key={metric.label} className="rounded-[24px] border border-line bg-white/85 p-5">
                 <p className="text-sm font-medium text-steel">{metric.label}</p>
                 <p className="mt-3 text-3xl font-semibold tracking-tight text-ink">
                   {metric.value}
                 </p>
                 <p
                   className={cn(
-                    "mt-3 text-sm",
+                    "mt-3 text-sm leading-6",
                     metric.tone === "positive" && "text-accent",
                     metric.tone === "alert" && "text-danger",
                     metric.tone === "neutral" && "text-steel"
@@ -280,465 +478,259 @@ export function DashboardShell({ data }: { data: DashboardData }) {
             ))}
           </section>
 
-          <div className="mt-6">
-            <ActivationGuide
-              activation={data.activation}
-              organizationId={data.organizationId}
-            />
-          </div>
-
-          <div className="mt-6">
-            <RetentionOverview
-              retention={data.retention}
-              title="Renewal and account health"
-            />
-          </div>
-
-          <div className="mt-6">
-            <ProductSurfacePanel model={data.productSurface} />
-          </div>
-
-          <section className="mt-6 rounded-[24px] border border-line p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-steel">Continuous Monitoring</p>
-                <h2 className="mt-2 text-2xl font-semibold text-ink">
-                  Recurring risk visibility
-                </h2>
-              </div>
-              <Link
-                href={"/dashboard/monitoring" as Route}
-                className="text-sm font-semibold text-accent"
-              >
-                Open monitoring
-              </Link>
-            </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <article className="rounded-2xl border border-line bg-mist p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-steel">Status</p>
-                <p className="mt-3 text-2xl font-semibold text-ink">{data.monitoring.status}</p>
-                <p className="mt-2 text-sm text-steel">{data.monitoring.nextReviewLabel}</p>
-              </article>
-              <article className="rounded-2xl border border-line bg-mist p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-steel">Posture</p>
-                <p className="mt-3 text-2xl font-semibold text-ink">
-                  {data.monitoring.postureScore ?? "--"}
-                  {data.monitoring.postureScore !== null ? "/100" : ""}
-                </p>
-                <p className="mt-2 text-sm text-steel">
-                  {data.monitoring.riskLevel} risk · Trend {data.monitoring.trendDelta >= 0 ? "+" : ""}
-                  {data.monitoring.trendDelta}
-                </p>
-              </article>
-              <article className="rounded-2xl border border-line bg-mist p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-steel">Open Findings</p>
-                <p className="mt-3 text-2xl font-semibold text-ink">
-                  {data.monitoring.openFindingsCount}
-                </p>
-                <p className="mt-2 text-sm text-steel">
-                  {data.monitoring.inRemediationCount} in remediation
-                </p>
-              </article>
-              <article className="rounded-2xl border border-line bg-mist p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-steel">Archive</p>
-                <p className="mt-3 text-2xl font-semibold text-ink">
-                  {data.monitoring.reportArchiveCount}
-                </p>
-                <p className="mt-2 text-sm text-steel">
-                  Historic reports available to leadership and operators
-                </p>
-              </article>
-            </div>
-          </section>
-
-          {data.usageMetrics.length > 0 ? (
-            <section className="mt-6 rounded-[24px] border border-line p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-steel">Usage and Capacity</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-ink">
-                    Plan utilization
-                  </h2>
-                </div>
-                <Link
-                  href="/dashboard/settings"
-                  className="text-sm font-semibold text-accent"
-                >
-                  Open billing
-                </Link>
-              </div>
-
-              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {data.usageMetrics.map((metric) => (
-                  <article
-                    key={metric.key}
-                    className="rounded-2xl border border-line bg-mist p-4"
-                  >
-                    <p className="text-xs uppercase tracking-[0.18em] text-steel">
-                      {metric.shortLabel}
-                    </p>
-                    <p className="mt-3 text-2xl font-semibold text-ink">
-                      {metric.usageLabel}
-                    </p>
-                    <p className="mt-2 text-sm text-steel">{metric.helperText}</p>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {data.upsellOffers.length > 0 ? (
-            <div className="mt-6">
-              <UpsellOfferStack
-                offers={data.upsellOffers}
-                title="Expansion opportunities"
-                description="Show high-intent upgrade and add-on paths only when the workspace signals real commercial readiness."
-              />
-            </div>
-          ) : null}
-
-          <section className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-            <article className="rounded-[24px] border border-line p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-steel">
-                    Active Assessment
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-ink">
-                    {data.activeAssessment.name}
-                  </h2>
-                </div>
-                <span className="rounded-full bg-accentSoft px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+          <section className="mt-6 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+            <PortalCard
+              eyebrow="Current Audit Status"
+              title={data.activeAssessment.name}
+              action={
+                <span className="rounded-full bg-accentSoft px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
                   {data.activeAssessment.status}
                 </span>
-              </div>
-
-              <div className="mt-6">
-                <div className="flex items-center justify-between text-sm text-steel">
-                  <span>Completion</span>
-                  <span>{data.activeAssessment.progress}%</span>
-                </div>
-                <div className="mt-2 h-3 rounded-full bg-slate-200">
-                  <div
-                    className="h-3 rounded-full bg-accent"
-                    style={{ width: `${data.activeAssessment.progress}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl bg-mist p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-steel">
-                    Next Step
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-ink">
-                    {data.activeAssessment.nextStep}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-mist p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-steel">
-                    Estimated Completion
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-ink">
-                    {data.activeAssessment.eta}
-                  </p>
-                </div>
-              </div>
-            </article>
-
-            <article className="rounded-[24px] border border-line p-5">
-              <div className="flex items-center justify-between">
+              }
+            >
+              <div className="space-y-5">
                 <div>
-                  <p className="text-sm font-medium text-steel">
-                    Readiness Breakdown
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-ink">
-                    Domain Scores
-                  </h2>
-                </div>
-                <ChartColumn className="h-5 w-5 text-accent" />
-              </div>
-
-              <div className="mt-6 space-y-4">
-                {data.domainScores.length > 0 ? (
-                  data.domainScores.map((item) => (
-                    <div key={item.label}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-steel">{item.label}</span>
-                        <span className="font-semibold text-ink">{item.score}%</span>
-                      </div>
-                      <div className="mt-2 h-2.5 rounded-full bg-slate-200">
-                        <div
-                          className="h-2.5 rounded-full bg-[#0f766e]"
-                          style={{ width: `${item.score}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
-                    Domain scores appear once live findings are attached to an
-                    assessment.
+                  <div className="flex items-center justify-between text-sm text-steel">
+                    <span>Progress</span>
+                    <span>{data.activeAssessment.progress}%</span>
                   </div>
-                )}
+                  <div className="mt-2 h-3 rounded-full bg-slate-200">
+                    <div
+                      className="h-3 rounded-full bg-[linear-gradient(90deg,#0f766e,#67e8f9)]"
+                      style={{ width: `${data.activeAssessment.progress}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl bg-mist p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-steel">
+                      Message
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-ink">
+                      {portalStatus.label === "Report ready" || portalStatus.label === "Executive briefing available"
+                        ? "Report ready"
+                        : portalStatus.label === "Analysis in progress"
+                          ? "Analysis in progress"
+                          : data.auditIntake.complete
+                            ? "Analysis in progress"
+                            : "No audits yet"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-mist p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-steel">
+                      Next Step
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-ink">
+                      {data.activeAssessment.nextStep}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {visibleStages.map((stage) => (
+                    <div
+                      key={stage.status}
+                      className={cn(
+                        "rounded-2xl border p-4",
+                        stage.failed
+                          ? "border-rose-200 bg-rose-50"
+                          : stage.active
+                            ? "border-cyan-200 bg-cyan-50"
+                            : stage.completed
+                              ? "border-emerald-200 bg-emerald-50"
+                              : "border-line bg-mist"
+                      )}
+                    >
+                      <p className="text-sm font-semibold text-ink">{stage.label}</p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.16em] text-steel">
+                        {stage.timestampLabel ?? titleCaseStatus(stage.status)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </article>
+            </PortalCard>
+
+            <PortalCard
+              eyebrow="Latest Report"
+              title={latestReport ? latestReport.title : "No report yet"}
+              action={
+                latestReport ? (
+                  <Link href={latestReport.href as Route} className="text-sm font-semibold text-accent">
+                    View report
+                  </Link>
+                ) : null
+              }
+            >
+              {latestReport ? (
+                <div className="rounded-2xl border border-line bg-mist p-5">
+                  <p className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-steel">
+                    Report ready
+                  </p>
+                  <p className="mt-4 text-sm leading-7 text-steel">
+                    {latestReport.type} generated {latestReport.date}. Open it for executive summary, risk posture, top risks, and priority actions.
+                  </p>
+                  <Link
+                    href={latestReport.href as Route}
+                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Open report
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-line bg-mist p-5">
+                  <p className="text-sm leading-7 text-steel">
+                    No report is available yet. Complete intake and let analysis finish before validated reports appear here.
+                  </p>
+                  <Link
+                    href="/onboarding"
+                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Complete intake
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              )}
+            </PortalCard>
           </section>
 
-          <section className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <article className="rounded-[24px] border border-line p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-steel">
-                    Priority Findings
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-ink">
-                    Top Issues This Cycle
-                  </h2>
-                </div>
-                <TriangleAlert className="h-5 w-5 text-warning" />
-              </div>
-
-              <div className="mt-6 space-y-3">
-                {data.findings.length > 0 ? (
-                  data.findings.map((finding) => (
-                    <div
-                      key={finding.title}
-                      className="rounded-2xl border border-line bg-mist p-4"
-                    >
-                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <p className="text-sm font-semibold text-ink">
-                          {finding.title}
-                        </p>
-                        <span
-                          className={cn(
-                            "w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]",
-                            finding.severity === "CRITICAL" &&
-                              "bg-red-100 text-danger",
-                            finding.severity === "HIGH" &&
-                              "bg-amber-100 text-warning",
-                            finding.severity === "MEDIUM" &&
-                              "bg-slate-200 text-steel",
-                            finding.severity === "LOW" &&
-                              "bg-emerald-100 text-accent"
-                          )}
-                        >
-                          {finding.severity}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-3 text-sm text-steel">
-                        <span>{finding.framework}</span>
-                        <span>Owner: {finding.owner}</span>
-                      </div>
-                    </div>
-                  ))
+          <section className="mt-6 grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
+            <PortalCard
+              eyebrow="Executive Briefing"
+              title={data.executiveBriefing.title}
+              action={<BookOpenCheck className="h-5 w-5 text-accent" />}
+            >
+              <div className="rounded-2xl border border-line bg-mist p-5">
+                <span
+                  className={cn(
+                    "inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]",
+                    data.executiveBriefing.available
+                      ? "bg-emerald-100 text-accent"
+                      : "bg-white text-steel"
+                  )}
+                >
+                  {data.executiveBriefing.statusLabel}
+                </span>
+                <p className="mt-4 text-sm leading-7 text-steel">
+                  {data.executiveBriefing.summary}
+                </p>
+                {data.executiveBriefing.href ? (
+                  <Link
+                    href={data.executiveBriefing.href as Route}
+                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    {data.executiveBriefing.ctaLabel}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
-                    No live findings have been generated yet for this workspace.
-                  </div>
+                  <Link
+                    href={(latestReport?.href ?? "/dashboard/reports") as Route}
+                    className="mt-5 inline-flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink"
+                  >
+                    {data.executiveBriefing.ctaLabel}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
                 )}
               </div>
-            </article>
+            </PortalCard>
 
-            <article className="rounded-[24px] border border-line p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-steel">
-                    Remediation Roadmap
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-ink">
-                    Next Actions
-                  </h2>
-                </div>
-                <CheckCircle2 className="h-5 w-5 text-accent" />
-              </div>
-
-              <div className="mt-6 space-y-3">
-                {data.roadmap.length > 0 ? (
-                  data.roadmap.map((item) => (
-                    <div
-                      key={item.title}
-                      className="rounded-2xl border border-line bg-mist p-4"
-                    >
-                      <p className="text-sm font-semibold text-ink">{item.title}</p>
-                      <div className="mt-3 flex flex-wrap gap-3 text-sm text-steel">
-                        <span>Priority: {item.priority}</span>
-                        <span>Effort: {item.effort}</span>
-                        <span>Due: {item.due}</span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
-                    No live remediation tasks exist yet. Publish a report or add
-                    recommendations to populate the roadmap.
-                  </div>
-                )}
-              </div>
-            </article>
-          </section>
-
-          <section className="mt-6 grid gap-4 lg:grid-cols-2">
-            <article className="rounded-[24px] border border-line p-5">
-              <p className="text-sm font-medium text-steel">Recent Reports</p>
-              <div className="mt-5 space-y-3">
-                {data.reports.length > 0 ? (
-                  data.reports.map((report) => (
+            <PortalCard
+              eyebrow="Past Audits"
+              title="Audit history"
+              action={
+                <Link href="/dashboard/reports" className="text-sm font-semibold text-accent">
+                  View all
+                </Link>
+              }
+            >
+              {data.reports.length > 0 ? (
+                <div className="space-y-3">
+                  {data.reports.map((report, index) => (
                     <Link
-                      key={report.title}
-                      href="/dashboard/reports"
-                      className="flex items-center justify-between rounded-2xl border border-line bg-mist p-4 transition hover:border-accent"
+                      key={report.id}
+                      href={report.href as Route}
+                      className="flex items-center justify-between rounded-2xl border border-line bg-mist p-4 transition hover:border-accent hover:bg-white"
                     >
                       <div>
-                        <p className="text-sm font-semibold text-ink">
-                          {report.title}
-                        </p>
-                        <p className="mt-2 text-sm text-steel">
-                          {report.type} · {report.date}
+                        <p className="text-sm font-semibold text-ink">{report.title}</p>
+                        <p className="mt-1 text-sm text-steel">
+                          {index === 0 ? "Latest audit" : "Past audit"} - {report.type} - {report.date}
                         </p>
                       </div>
                       <ChevronRight className="h-4 w-4 text-steel" />
                     </Link>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
-                    No published reports yet. Generate one from a live assessment
-                    to start the report archive.
-                  </div>
-                )}
-              </div>
-            </article>
-
-            <article className="rounded-[24px] border border-line p-5">
-              <p className="text-sm font-medium text-steel">Recommended Focus</p>
-              <div className="mt-5 rounded-[24px] bg-[#0f172a] p-5 text-white">
-                <p className="text-xs uppercase tracking-[0.24em] text-teal-200">
-                  {data.recommendedFocus.label}
-                </p>
-                <h2 className="mt-3 text-2xl font-semibold">
-                  {data.recommendedFocus.title}
-                </h2>
-                <p className="mt-3 text-sm leading-7 text-slate-300">
-                  {data.recommendedFocus.body}
-                </p>
-                <div className="mt-5 flex flex-wrap gap-3">
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-line bg-mist p-6 text-center">
+                  <Sparkles className="mx-auto h-8 w-8 text-accent" />
+                  <h3 className="mt-4 text-lg font-semibold text-ink">No audits yet</h3>
+                  <p className="mt-2 text-sm leading-7 text-steel">
+                    Start with onboarding intake. Once analysis is validated, reports and briefing deliverables will build your audit history here.
+                  </p>
                   <Link
-                    href={data.recommendedFocus.primaryHref as Route}
-                    className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink"
+                    href={(hasAuditActivity ? "/dashboard/assessments" : "/onboarding") as Route}
+                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white"
                   >
-                    {data.recommendedFocus.primaryLabel}
-                  </Link>
-                  <Link
-                    href={data.recommendedFocus.secondaryHref as Route}
-                    className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    {data.recommendedFocus.secondaryLabel}
+                    {hasAuditActivity ? "Open audits" : "Start first audit"}
+                    <ArrowRight className="h-4 w-4" />
                   </Link>
                 </div>
-              </div>
-            </article>
+              )}
+            </PortalCard>
           </section>
 
-          <section
-            id="activity"
-            className="mt-6 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]"
-          >
-            <article className="rounded-[24px] border border-line p-5">
-              <p className="text-sm font-medium text-steel">Operational Inventory</p>
-              <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                <div className="rounded-2xl bg-mist p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-steel">
-                    Vendors
-                  </p>
-                  <p className="mt-3 text-2xl font-semibold text-ink">
-                    {data.inventories.vendorCount}
-                  </p>
-                  <p className="mt-2 text-sm text-steel">
-                    {data.inventories.latestVendors.length > 0
-                      ? data.inventories.latestVendors.join(", ")
-                      : "No vendor records yet"}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-mist p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-steel">
-                    AI Models
-                  </p>
-                  <p className="mt-3 text-2xl font-semibold text-ink">
-                    {data.inventories.modelCount}
-                  </p>
-                  <p className="mt-2 text-sm text-steel">
-                    {data.inventories.latestModels.length > 0
-                      ? data.inventories.latestModels.join(", ")
-                      : "No model records yet"}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-mist p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-steel">
-                    Team Members
-                  </p>
-                  <p className="mt-3 text-2xl font-semibold text-ink">
-                    {data.inventories.memberCount}
-                  </p>
-                  <p className="mt-2 text-sm text-steel">
-                    Live organization memberships tracked in the database.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-5">
+          <section id="activity" className="mt-6 grid gap-5 xl:grid-cols-[1fr_1fr]">
+            <PortalCard eyebrow="Action Plan" title={data.recommendedFocus.title}>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
+                {data.recommendedFocus.label}
+              </p>
+              <p className="mt-3 text-sm leading-7 text-steel">
+                {data.recommendedFocus.body}
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
                 <Link
-                  href="/dashboard/settings"
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-accent"
+                  href={data.recommendedFocus.primaryHref as Route}
+                  className="rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white"
                 >
-                  Manage registry records
-                  <ArrowRight className="h-4 w-4" />
+                  {data.recommendedFocus.primaryLabel}
+                </Link>
+                <Link
+                  href={data.recommendedFocus.secondaryHref as Route}
+                  className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink"
+                >
+                  {data.recommendedFocus.secondaryLabel}
                 </Link>
               </div>
-            </article>
+            </PortalCard>
 
-            <article className="rounded-[24px] border border-line p-5">
-              <p className="text-sm font-medium text-steel">Recent Activity</p>
-              <div className="mt-5 space-y-3">
-                {data.notifications.length > 0 ? (
-                  data.notifications.map((notification) => (
+            <PortalCard eyebrow="Recent Updates" title="What changed recently">
+              {data.notifications.length > 0 ? (
+                <div className="space-y-3">
+                  {data.notifications.slice(0, 3).map((notification) => (
                     <div
                       key={`${notification.title}-${notification.date}`}
                       className="rounded-2xl border border-line bg-mist p-4"
                     >
-                      <p className="text-sm font-semibold text-ink">
-                        {notification.title}
+                      <p className="text-sm font-semibold text-ink">{notification.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-steel">{notification.body}</p>
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-steel">
+                        {notification.date}
                       </p>
-                      <p className="mt-2 text-sm leading-6 text-steel">
-                        {notification.body}
-                      </p>
-                      <div className="mt-3 flex items-center justify-between gap-3">
-                        <p className="text-xs uppercase tracking-[0.18em] text-steel">
-                          {notification.date}
-                        </p>
-                        {notification.actionUrl ? (
-                          <Link
-                            href={notification.actionUrl as Route}
-                            className="text-sm font-semibold text-accent"
-                          >
-                            Open
-                          </Link>
-                        ) : null}
-                      </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-line bg-white p-5 text-sm text-steel">
-                    No activity notifications have been recorded yet for this
-                    workspace.
-                  </div>
-                )}
-              </div>
-            </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-line bg-mist p-5 text-sm leading-7 text-steel">
+                  No recent updates yet. Status changes, report availability, and delivery notes will appear here.
+                </div>
+              )}
+            </PortalCard>
           </section>
         </main>
       </div>
     </div>
   );
 }
-
-export const DashboardLayoutShell = DashboardShell;

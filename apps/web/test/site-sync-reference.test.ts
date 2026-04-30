@@ -13,7 +13,10 @@ function runSiteSyncReferenceTests() {
     reference.publicPlans.map((plan) => plan.code),
     ["starter", "scale", "enterprise"]
   );
-  assert.equal(reference.publicPlans[0]?.entryHref, "https://app.evolveedge.ai/pricing?plan=starter");
+  assert.equal(
+    reference.publicPlans[0]?.entryHref,
+    "https://app.evolveedge.ai/pricing?plan=starter&billingCadence=monthly"
+  );
   assert.equal(
     reference.publicPlans[2]?.entryHref,
     "https://www.evolveedge.ai/contact-sales"

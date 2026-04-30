@@ -9,9 +9,19 @@ import {
   prisma
 } from "@evolve-edge/db";
 import {
+  AI_WORKFLOW_FEEDBACK_TYPES,
+  extractWorkflowDispatchIdFromReportJson,
+  recordAiWorkflowFeedback,
+} from "../src/server/ai/feedback";
+import {
   markDeliveryStateAwaitingReviewForReport,
   markDeliveryStateDeliveredForReport
 } from "./delivery-state";
+import {
+  buildExecutiveBriefingOutput,
+  isExecutiveBriefingEligiblePlan
+} from "./executive-briefing";
+import { markCustomerRunWorkflowProgressByReport } from "./customer-runs";
 import { publishDomainEvent } from "./domain-events";
 import { logServerEvent } from "./monitoring";
 import { recordOperationalFinding } from "./operations-queues";
@@ -24,6 +34,8 @@ export const ReportPackageDeliveryStatus = {
   BRIEFING_BOOKED: "BRIEFING_BOOKED",
   BRIEFING_COMPLETED: "BRIEFING_COMPLETED"
 } as const;
+
+const REPORT_PENDING_REVIEW_COMPATIBLE_STATUS = ReportStatus.PENDING;
 
 export type ReportPackageDeliveryStatus =
   (typeof ReportPackageDeliveryStatus)[keyof typeof ReportPackageDeliveryStatus];
@@ -62,6 +74,10 @@ type ReportJsonRecord = Record<string, unknown>;
 
 type ExecutiveDeliveryAction = "qa_approve" | "qa_request_changes" | "founder_review" | "send" | "book_briefing" | "complete_briefing";
 
+type TransactionalExecutiveDeliveryDbClient = ExecutiveDeliveryDbClient & {
+  $transaction?: <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>) => Promise<T>;
+};
+
 function readRecord(value: unknown): ReportJsonRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -77,6 +93,100 @@ function toSentence(value: string | null | undefined, fallback: string) {
 
 function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function isPendingReviewCompatibleReportStatus(status: ReportStatus | null | undefined) {
+  return (
+    status === ReportStatus.PENDING ||
+    status === ReportStatus.PENDING_REVIEW ||
+    status === ReportStatus.GENERATED
+  );
+}
+
+const reportPackageVersionSummarySelection = {
+  id: true,
+  reportId: true,
+  versionNumber: true,
+  createdAt: true,
+  report: {
+    select: {
+      id: true,
+      title: true,
+      versionLabel: true,
+      status: true,
+      createdAt: true
+    }
+  }
+} as const;
+
+async function createReportPackageVersionWithCompatibility(input: {
+  db: ExecutiveDeliveryDbClient;
+  reportPackageId: string;
+  reportId: string;
+  versionNumber: number;
+  createdByUserId: string | null;
+  executiveSummary: Prisma.JsonObject;
+  roadmapSummary: Prisma.JsonObject;
+  frameworkSummary: Prisma.JsonObject;
+  executiveBriefing: Prisma.JsonObject | null;
+  packet: Prisma.JsonObject;
+}) {
+  const packetJson = input.executiveBriefing
+    ? ({
+        ...input.packet,
+        executiveBriefing: input.executiveBriefing
+      } satisfies Prisma.JsonObject)
+    : input.packet;
+
+  const createData = {
+    id: `rpv_${crypto.randomUUID()}`,
+    reportPackageId: input.reportPackageId,
+    reportId: input.reportId,
+    versionNumber: input.versionNumber,
+    createdByUserId: input.createdByUserId,
+    executiveSummaryJson: input.executiveSummary,
+    roadmapSummaryJson: input.roadmapSummary,
+    frameworkSummaryJson: input.frameworkSummary,
+    packetJson
+  };
+
+  const rawExecutor = (input.db as { $executeRaw?: typeof prisma.$executeRaw }).$executeRaw;
+
+  if (typeof rawExecutor === "function") {
+    await rawExecutor.call(
+      input.db,
+      Prisma.sql`
+        INSERT INTO "ReportPackageVersion" (
+          "id",
+          "reportPackageId",
+          "reportId",
+          "versionNumber",
+          "createdByUserId",
+          "executiveSummaryJson",
+          "roadmapSummaryJson",
+          "frameworkSummaryJson",
+          "packetJson"
+        )
+        VALUES (
+          ${createData.id},
+          ${createData.reportPackageId},
+          ${createData.reportId},
+          ${createData.versionNumber},
+          ${createData.createdByUserId},
+          ${JSON.stringify(createData.executiveSummaryJson)}::jsonb,
+          ${JSON.stringify(createData.roadmapSummaryJson)}::jsonb,
+          ${JSON.stringify(createData.frameworkSummaryJson)}::jsonb,
+          ${JSON.stringify(createData.packetJson)}::jsonb
+        )
+      `
+    );
+
+    return { id: createData.id };
+  }
+
+  return input.db.reportPackageVersion.create({
+    data: createData
+  });
 }
 
 export function buildExecutiveSummarySnapshot(input: {
@@ -193,6 +303,7 @@ export function buildBriefingPacketSnapshot(input: {
   executiveSummary: Prisma.JsonObject;
   roadmapSummary: Prisma.JsonObject;
   frameworkSummary: Prisma.JsonObject;
+  executiveBriefingAvailable: boolean;
   reportJson: unknown;
 }) {
   const reportJson = readRecord(input.reportJson);
@@ -204,6 +315,7 @@ export function buildBriefingPacketSnapshot(input: {
     executiveSummary: input.executiveSummary,
     roadmapSummary: input.roadmapSummary,
     frameworkSummary: input.frameworkSummary,
+    executiveBriefingAvailable: input.executiveBriefingAvailable,
     sectionSummaries: Array.isArray(reportJson.sectionSummaries)
       ? reportJson.sectionSummaries
       : [],
@@ -291,6 +403,33 @@ export function canTransitionReportPackage(input: {
     default:
       return false;
   }
+}
+
+export function canRecoverReportPackageQaApproval(input: {
+  deliveryStatus: ReportPackageDeliveryStatus;
+  qaStatus: ReportPackageQaStatus;
+  reportStatus: ReportStatus | null | undefined;
+}) {
+  return (
+    input.deliveryStatus === ReportPackageDeliveryStatus.REVIEWED &&
+    input.qaStatus === ReportPackageQaStatus.APPROVED &&
+    isPendingReviewCompatibleReportStatus(input.reportStatus)
+  );
+}
+
+async function runExecutiveDeliveryTransaction<T>(
+  db: ExecutiveDeliveryDbClient,
+  operation: (tx: ExecutiveDeliveryDbClient) => Promise<T>
+) {
+  const transactionCapableDb = db as TransactionalExecutiveDeliveryDbClient;
+
+  if (typeof transactionCapableDb.$transaction === "function") {
+    return transactionCapableDb.$transaction((tx) =>
+      operation(tx as ExecutiveDeliveryDbClient)
+    );
+  }
+
+  return operation(db);
 }
 
 export function buildReportPackageSendBlockedFinding(input: {
@@ -456,6 +595,14 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
       category: selection.framework.category
     }))
   });
+  const executiveBriefing = buildExecutiveBriefingOutput({
+    reportId: report.id,
+    reportTitle: report.title,
+    assessmentName: report.assessment.name,
+    versionLabel: report.versionLabel,
+    planCode: report.selectedPlan,
+    reportJson: report.reportJson
+  });
   const packet = buildBriefingPacketSnapshot({
     reportId: report.id,
     reportTitle: report.title,
@@ -463,6 +610,7 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
     executiveSummary,
     roadmapSummary,
     frameworkSummary,
+    executiveBriefingAvailable: executiveBriefing !== null,
     reportJson: report.reportJson
   });
   const founderReview = evaluateFounderReviewRequirement({
@@ -476,10 +624,14 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
         assessmentId: report.assessmentId
       }
     },
-    include: {
+    select: {
+      id: true,
       versions: {
         orderBy: { versionNumber: "desc" },
-        take: 1
+        take: 1,
+        select: {
+          versionNumber: true
+        }
       }
     }
   });
@@ -526,17 +678,17 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
         }
       });
 
-  await db.reportPackageVersion.create({
-    data: {
-      reportPackageId: deliveryPackage.id,
-      reportId: report.id,
-      versionNumber: nextVersionNumber,
-      createdByUserId: input.actorUserId ?? report.createdByUserId ?? null,
-      executiveSummaryJson: executiveSummary,
-      roadmapSummaryJson: roadmapSummary,
-      frameworkSummaryJson: frameworkSummary,
-      packetJson: packet
-    }
+  await createReportPackageVersionWithCompatibility({
+    db,
+    reportPackageId: deliveryPackage.id,
+    reportId: report.id,
+    versionNumber: nextVersionNumber,
+    createdByUserId: input.actorUserId ?? report.createdByUserId ?? null,
+    executiveSummary,
+    roadmapSummary,
+    frameworkSummary,
+    executiveBriefing,
+    packet
   });
 
   await publishReportPackageEvent(db, {
@@ -549,7 +701,18 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
     payload: {
       versionNumber: nextVersionNumber,
       requiresFounderReview: founderReview.requiresFounderReview,
-      founderReviewReason: founderReview.reason
+      founderReviewReason: founderReview.reason,
+      executiveBriefingEligible: isExecutiveBriefingEligiblePlan(report.selectedPlan),
+      executiveBriefingGenerated: executiveBriefing !== null
+    }
+  });
+
+  await db.report.update({
+    where: { id: report.id },
+    data: {
+      status: REPORT_PENDING_REVIEW_COMPATIBLE_STATUS,
+      deliveredAt: null,
+      deliveredByUserId: null
     }
   });
 
@@ -559,6 +722,12 @@ export async function upsertExecutiveDeliveryPackageForReport(input: {
     reportId: report.id,
     reportPackageId: deliveryPackage.id,
     actorUserId: input.actorUserId ?? report.createdByUserId ?? null
+  });
+
+  await markCustomerRunWorkflowProgressByReport({
+    reportId: report.id,
+    status: "pending_review",
+    db
   });
 
   return deliveryPackage;
@@ -579,17 +748,7 @@ export async function getReportExecutiveDeliveryPackage(
     include: {
       versions: {
         orderBy: { versionNumber: "desc" },
-        include: {
-          report: {
-            select: {
-              id: true,
-              title: true,
-              versionLabel: true,
-              status: true,
-              createdAt: true
-            }
-          }
-        }
+        select: reportPackageVersionSummarySelection
       },
       reviewedBy: {
         select: {
@@ -661,16 +820,7 @@ export async function getOrganizationReportPackages(
       versions: {
         orderBy: { versionNumber: "desc" },
         take: 3,
-        include: {
-          report: {
-            select: {
-              id: true,
-              versionLabel: true,
-              title: true,
-              createdAt: true
-            }
-          }
-        }
+        select: reportPackageVersionSummarySelection
       }
     },
     orderBy: { updatedAt: "desc" },
@@ -724,6 +874,11 @@ export async function approveReportPackageQa(input: {
   const db = (input.db ?? prisma) as ExecutiveDeliveryDbClient;
   const deliveryPackage = await getPackageById(input.packageId, input.organizationId, db);
   const latestReportId = getLatestReportId(deliveryPackage);
+  const qaApprovalRecoveryState = canRecoverReportPackageQaApproval({
+    deliveryStatus: deliveryPackage.deliveryStatus,
+    qaStatus: deliveryPackage.qaStatus,
+    reportStatus: deliveryPackage.latestReport?.status
+  });
 
   if (
     !canTransitionReportPackage({
@@ -732,38 +887,75 @@ export async function approveReportPackageQa(input: {
       requiresFounderReview: deliveryPackage.requiresFounderReview,
       founderReviewedAt: deliveryPackage.founderReviewedAt,
       action: "qa_approve"
-    })
+    }) &&
+    !qaApprovalRecoveryState
   ) {
     throw new Error("QA approval is only available on newly generated packages.");
   }
 
-  const reviewedAt = new Date();
-  const updated = await db.reportPackage.update({
-    where: { id: deliveryPackage.id },
-    data: {
-      qaStatus: ReportPackageQaStatus.APPROVED,
-      deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
-      qaNotes: input.notes?.trim() || null,
-      reviewedAt,
-      reviewedByUserId: input.actorUserId
-    }
-  });
+  const reviewedAt = deliveryPackage.reviewedAt ?? new Date();
+  const trimmedNotes = input.notes?.trim() || null;
 
-  await publishReportPackageEvent(db, {
-    type: "report_package.reviewed",
-    reportPackageId: updated.id,
-    organizationId: updated.organizationId,
-    userId: input.actorUserId,
-    reportId: latestReportId,
-    assessmentId: updated.assessmentId,
-    payload: {
-      qaStatus: updated.qaStatus,
-      reviewedAt: reviewedAt.toISOString(),
-      requiresFounderReview: updated.requiresFounderReview
-    }
-  });
+  return runExecutiveDeliveryTransaction(db, async (tx) => {
+    const packageNeedsStatusRepair =
+      deliveryPackage.deliveryStatus !== ReportPackageDeliveryStatus.REVIEWED ||
+      deliveryPackage.qaStatus !== ReportPackageQaStatus.APPROVED ||
+      deliveryPackage.reviewedAt === null ||
+      deliveryPackage.reviewedByUserId === null;
+    const packageNeedsNoteRefresh =
+      trimmedNotes !== null && trimmedNotes !== (deliveryPackage.qaNotes ?? null);
+    const shouldUpdatePackage = packageNeedsStatusRepair || packageNeedsNoteRefresh;
 
-  return updated;
+    const updated = shouldUpdatePackage
+      ? await tx.reportPackage.update({
+          where: { id: deliveryPackage.id },
+          data: {
+            qaStatus: ReportPackageQaStatus.APPROVED,
+            deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
+            qaNotes: trimmedNotes ?? deliveryPackage.qaNotes ?? null,
+            reviewedAt,
+            reviewedByUserId: input.actorUserId
+          }
+        })
+      : deliveryPackage;
+
+    const currentReportStatus = deliveryPackage.latestReport?.status;
+    if (
+      currentReportStatus !== ReportStatus.APPROVED &&
+      currentReportStatus !== ReportStatus.DELIVERED &&
+      currentReportStatus !== ReportStatus.SUPERSEDED &&
+      currentReportStatus !== ReportStatus.READY
+    ) {
+      await tx.report.update({
+        where: { id: latestReportId },
+        data: {
+          status: ReportStatus.APPROVED
+        }
+      });
+    }
+
+    await markCustomerRunWorkflowProgressByReport({
+      reportId: latestReportId,
+      status: "completed",
+      db: tx
+    });
+
+    await publishReportPackageEvent(tx, {
+      type: "report_package.reviewed",
+      reportPackageId: updated.id,
+      organizationId: updated.organizationId,
+      userId: input.actorUserId,
+      reportId: latestReportId,
+      assessmentId: updated.assessmentId,
+      payload: {
+        qaStatus: updated.qaStatus,
+        reviewedAt: reviewedAt.toISOString(),
+        requiresFounderReview: updated.requiresFounderReview
+      }
+    });
+
+    return updated;
+  });
 }
 
 export async function requestReportPackageChanges(input: {
@@ -800,6 +992,19 @@ export async function requestReportPackageChanges(input: {
     }
   });
 
+  await db.report.update({
+    where: { id: latestReportId },
+    data: {
+      status: ReportStatus.REJECTED
+    }
+  });
+
+  await markCustomerRunWorkflowProgressByReport({
+    reportId: latestReportId,
+    status: "failed",
+    db
+  });
+
   await publishReportPackageEvent(db, {
     type: "report_package.changes_requested",
     reportPackageId: updated.id,
@@ -811,6 +1016,56 @@ export async function requestReportPackageChanges(input: {
       qaNotes: updated.qaNotes
     }
   });
+
+  return updated;
+}
+
+export async function saveReportPackageReviewNotes(input: {
+  packageId: string;
+  organizationId: string;
+  actorUserId: string;
+  notes: string;
+  db?: ExecutiveDeliveryDbClient;
+}) {
+  const db = (input.db ?? prisma) as ExecutiveDeliveryDbClient;
+  const deliveryPackage = await getPackageById(input.packageId, input.organizationId, db);
+  const latestReportId = getLatestReportId(deliveryPackage);
+
+  const updated = await db.reportPackage.update({
+    where: { id: deliveryPackage.id },
+    data: {
+      qaNotes: input.notes.trim() || null
+    }
+  });
+
+  await publishReportPackageEvent(db, {
+    type: "report_package.review_notes_saved",
+    reportPackageId: updated.id,
+    organizationId: updated.organizationId,
+    userId: input.actorUserId,
+    reportId: latestReportId,
+    assessmentId: updated.assessmentId,
+    payload: {
+      qaNotes: updated.qaNotes
+    }
+  });
+
+  const workflowDispatchId = extractWorkflowDispatchIdFromReportJson(
+    deliveryPackage.latestReport!.reportJson
+  );
+  if (workflowDispatchId) {
+    await recordAiWorkflowFeedback({
+      db,
+      workflowDispatchId,
+      organizationId: updated.organizationId,
+      reportId: latestReportId,
+      feedbackType: AI_WORKFLOW_FEEDBACK_TYPES.APPROVED,
+      notes: input.notes ?? null,
+      metadata: {
+        source: "report_package.qa_approved",
+      },
+    });
+  }
 
   return updated;
 }
@@ -937,6 +1192,29 @@ export async function markReportPackageSent(input: {
     actorUserId: input.actorUserId
   });
 
+  await markCustomerRunWorkflowProgressByReport({
+    reportId: latestReportId,
+    status: "completed",
+    db
+  });
+
+  const workflowDispatchId = extractWorkflowDispatchIdFromReportJson(
+    deliveryPackage.latestReport!.reportJson
+  );
+  if (workflowDispatchId) {
+    await recordAiWorkflowFeedback({
+      db,
+      workflowDispatchId,
+      organizationId: updated.organizationId,
+      reportId: latestReportId,
+      feedbackType: AI_WORKFLOW_FEEDBACK_TYPES.REJECTED,
+      notes: updated.qaNotes,
+      metadata: {
+        source: "report_package.changes_requested",
+      },
+    });
+  }
+
   return updated;
 }
 
@@ -986,6 +1264,23 @@ export async function markReportPackageBriefingBooked(input: {
       briefingNotes: updated.briefingNotes
     }
   });
+
+  const workflowDispatchId = extractWorkflowDispatchIdFromReportJson(
+    deliveryPackage.latestReport!.reportJson
+  );
+  if (workflowDispatchId) {
+    await recordAiWorkflowFeedback({
+      db,
+      workflowDispatchId,
+      organizationId: updated.organizationId,
+      reportId: latestReportId,
+      feedbackType: AI_WORKFLOW_FEEDBACK_TYPES.EDITED,
+      notes: updated.qaNotes,
+      metadata: {
+        source: "report_package.review_notes_saved",
+      },
+    });
+  }
 
   return updated;
 }

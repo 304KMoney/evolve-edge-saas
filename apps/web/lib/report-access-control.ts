@@ -17,6 +17,7 @@ export type ReportAccessDecision =
       reason:
         | "missing_report_id"
         | "missing_report_binding"
+        | "missing_access_grant"
         | "expired_access_grant"
         | "revoked_access_grant"
         | "unauthenticated"
@@ -42,6 +43,7 @@ export function evaluateCustomerReportAccess(input: {
   requiredScope: CustomerAccessScope;
   accessGrant?: CustomerAccessGrant | null;
   boundOrganizationId?: string | null;
+  requireActiveGrant?: boolean;
 }): ReportAccessDecision {
   const reportId = input.reportId?.trim();
 
@@ -160,9 +162,15 @@ export function evaluateCustomerReportAccess(input: {
     };
   }
 
-  // TODO: Replace this organization-level binding rule with a durable
-  // customer access-grant lookup once reconciled payment events issue
-  // app-owned report access grants.
+  if (input.requireActiveGrant) {
+    return {
+      allowed: false,
+      reason: "missing_access_grant",
+      customerMessage:
+        "This report is not included in the active customer access grants for the current session."
+    };
+  }
+
   return {
     allowed: true,
     reason: "allowed"
@@ -177,6 +185,8 @@ export function mapReportAccessDecisionToStateReason(
       return "not-bound";
     case "expired_access_grant":
       return "expired";
+    case "missing_access_grant":
+      return "no-grant";
     case "missing_report_binding":
       return "unavailable";
     case "revoked_access_grant":

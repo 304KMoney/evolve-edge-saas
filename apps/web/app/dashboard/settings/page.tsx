@@ -40,6 +40,7 @@ import {
   hasStripeBillingConfig,
   listBillablePlans
 } from "../../../lib/billing";
+import { getCanonicalPublicPriceLabelForCadence } from "../../../lib/canonical-domain";
 import {
   getCanonicalCommercialPlanDefinition,
   resolveCanonicalPlanCodeFromRevenuePlanCode
@@ -50,6 +51,7 @@ import { queueEmailNotification } from "../../../lib/email";
 import { getOrganizationEntitlements, requireEntitlement } from "../../../lib/entitlements";
 import { getExpansionOffers } from "../../../lib/expansion-engine";
 import { getOrganizationActivationSnapshot } from "../../../lib/activation";
+import { shouldBlockDemoExternalSideEffects } from "../../../lib/demo-mode";
 import { logServerEvent } from "../../../lib/monitoring";
 import { trackProductAnalyticsEvent } from "../../../lib/product-analytics";
 import {
@@ -81,7 +83,6 @@ function formatDate(date: Date) {
     year: "numeric"
   }).format(date);
 }
-
 function formatDateTime(date: Date | null | undefined) {
   if (!date) {
     return "Not set";
@@ -303,7 +304,11 @@ async function addMemberAction(formData: FormData) {
       entityId: `${session.organization!.id}:${user.id}`,
       metadata: {
         memberEmail: user.email,
-        role
+        previousRole: existingMembership?.role ?? null,
+        nextRole: role,
+        previousIsBillingAdmin: existingMembership?.isBillingAdmin ?? null,
+        nextIsBillingAdmin: isBillingAdmin,
+        isNewMember: !existingMembership
       },
       requestContext
     });
@@ -442,8 +447,10 @@ async function updateMemberRoleAction(formData: FormData) {
       entityType: "organizationMember",
       entityId: memberId,
       metadata: {
-        role,
-        affectedUserId: membership.userId
+        affectedUserId: membership.userId,
+        previousRole: membership.role,
+        nextRole: role,
+        isBillingAdmin: membership.isBillingAdmin
       },
       requestContext
     });
@@ -820,6 +827,8 @@ export default async function SettingsPage({
     inviteEmail?: string;
     inviteToken?: string;
     billing?: string;
+    planCode?: string;
+    billingCadence?: string;
     vendor?: string;
     model?: string;
     deliveries?: string;
@@ -948,6 +957,7 @@ export default async function SettingsPage({
   const canViewUsageControls = canViewUsage(authz);
   const canManageInventoryControls = canManageInventoryWithContext(authz);
   const isWorkspaceOwner = session.organization!.role === "OWNER";
+  const billingActionsBlockedInDemo = shouldBlockDemoExternalSideEffects();
   const currentPlanCode = subscription?.plan.code ?? entitlements.planCode;
   const upsellOffers = getExpansionOffers({
     placement: "settings",
@@ -1042,7 +1052,19 @@ export default async function SettingsPage({
 
         {params.billing === "cancelled" ? (
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
-            Billing checkout was cancelled before Stripe finalized the subscription update.
+            Billing checkout was cancelled before Stripe finalized the subscription update. You can retry from the plan section below.
+          </div>
+        ) : null}
+
+        {params.billing === "checkout-config" ? (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-warning">
+            Your workspace was created, but Stripe checkout is not fully configured yet. Add Stripe environment variables, then retry checkout from the plan section below.
+          </div>
+        ) : null}
+
+        {params.billing === "checkout-error" ? (
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-danger">
+            Your workspace was created, but checkout could not be started. Check Stripe plan mapping and retry from the plan section below.
           </div>
         ) : null}
 
@@ -1074,7 +1096,7 @@ export default async function SettingsPage({
         ) : null}
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-line bg-mist p-5">
+          <div id="billing-controls" className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Plan</p>
             <p className="mt-2 text-xl font-semibold text-ink">
               {entitlements.planName}
@@ -1118,21 +1140,52 @@ export default async function SettingsPage({
             {canManageBillingControls ? (
               <div className="mt-4 space-y-3">
                 {subscription?.stripeCustomerId ? (
-                  <form action="/api/billing/portal" method="post">
-                    <input type="hidden" name="source" value="settings-primary-billing" />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
+                  billingActionsBlockedInDemo ? (
+                    <Link
+                      href="/dashboard/settings?billing=demo-mode#billing-controls"
+                      className="inline-flex rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
                     >
-                      Open billing portal
-                    </button>
-                  </form>
+                      Billing disabled in demo
+                    </Link>
+                  ) : (
+                    <form action="/api/billing/portal" method="post">
+                      <input type="hidden" name="source" value="settings-primary-billing" />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-ink"
+                      >
+                        Open billing portal
+                      </button>
+                    </form>
+                  )
                 ) : null}
                 <div className="grid gap-3">
                   {plans.map((plan) => (
                     (() => {
                       const canonicalPlanCode = resolveCanonicalPlanCodeFromRevenuePlanCode(plan.code);
                       const canonicalPlan = getCanonicalCommercialPlanDefinition(canonicalPlanCode);
+                      const billingCadence =
+                        plan.billingInterval === "monthly" ? "monthly" : "annual";
+                      const isContactSalesPlan =
+                        canonicalPlan?.billingMotion === "contact_sales";
+                      const isCurrentPlan =
+                        subscription?.planId === plan.id ||
+                        (isContactSalesPlan &&
+                          canonicalPlanCode !== null &&
+                          resolveCanonicalPlanCodeFromRevenuePlanCode(
+                            subscription?.plan.code ?? null
+                          ) === canonicalPlanCode);
+                      const priceLabel =
+                        canonicalPlan && canonicalPlanCode
+                          ? getCanonicalPublicPriceLabelForCadence(
+                              canonicalPlanCode,
+                              billingCadence
+                            )
+                          : formatPriceCents(plan.priceCents, plan.billingInterval);
+                      const transitionDirection = getPlanTransitionDirection(
+                        currentPlanCode,
+                        plan.code
+                      );
 
                       return (
                     <div
@@ -1145,8 +1198,14 @@ export default async function SettingsPage({
                             {canonicalPlan?.displayName ?? plan.name}
                           </p>
                           <p className="mt-1 text-sm text-steel">
-                            {canonicalPlan?.publicPriceLabel ??
-                              formatPriceCents(plan.priceCents, plan.billingInterval)}
+                            {priceLabel}
+                          </p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.16em] text-steel">
+                            {isContactSalesPlan
+                              ? "Sales-led commercial packaging"
+                              : billingCadence === "monthly"
+                                ? "Billed monthly"
+                                : "Billed annually"}
                           </p>
                           <p className="mt-1 text-sm text-steel">
                             {canonicalPlan
@@ -1154,7 +1213,7 @@ export default async function SettingsPage({
                               : getPlanDisplaySummary(plan)}
                           </p>
                         </div>
-                        {subscription?.planId === plan.id ? (
+                        {isCurrentPlan ? (
                           <button
                             type="button"
                             disabled
@@ -1162,6 +1221,13 @@ export default async function SettingsPage({
                           >
                             Current plan
                           </button>
+                        ) : isContactSalesPlan ? (
+                          <Link
+                            href="/contact-sales?intent=enterprise-plan&source=settings-billing"
+                            className="inline-flex items-center justify-center rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
+                          >
+                            Talk to sales
+                          </Link>
                         ) : subscription?.stripeCustomerId &&
                           subscription?.stripeSubscriptionId ? (
                           <form action="/api/billing/portal" method="post">
@@ -1177,9 +1243,21 @@ export default async function SettingsPage({
                               Manage in Stripe
                             </button>
                           </form>
+                        ) : billingActionsBlockedInDemo ? (
+                          <Link
+                            href="/dashboard/settings?billing=demo-mode#billing-controls"
+                            className="inline-flex items-center justify-center rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
+                          >
+                            Billing disabled in demo
+                          </Link>
                         ) : (
                           <form action="/api/billing/checkout" method="post">
                             <input type="hidden" name="planCode" value={plan.code} />
+                            <input
+                              type="hidden"
+                              name="billingCadence"
+                              value={billingCadence}
+                            />
                             <input
                               type="hidden"
                               name="source"
@@ -1189,11 +1267,11 @@ export default async function SettingsPage({
                               type="submit"
                               className="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-white"
                             >
-                              {getPlanTransitionDirection(currentPlanCode, plan.code) === "upgrade"
-                                ? "Upgrade in Stripe"
-                                : getPlanTransitionDirection(currentPlanCode, plan.code) === "downgrade"
-                                  ? "Downgrade in Stripe"
-                                  : "Choose plan"}
+                              {transitionDirection === "upgrade"
+                                ? `Upgrade to ${billingCadence} billing`
+                                : transitionDirection === "downgrade"
+                                  ? `Move to ${billingCadence} billing`
+                                  : `Choose ${billingCadence} plan`}
                             </button>
                           </form>
                         )}
@@ -1215,7 +1293,7 @@ export default async function SettingsPage({
             )}
           </div>
 
-          <div className="rounded-2xl border border-line bg-mist p-5">
+          <div id="billing-ownership" className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-sm font-medium text-steel">Billing ownership</p>
             <p className="mt-2 text-xl font-semibold text-ink">
               {billingAdminSnapshot.organization.billingOwnerName ?? "Not assigned"}
@@ -1315,7 +1393,7 @@ export default async function SettingsPage({
 
         {canViewUsageControls ? (
           <>
-            <div className="mt-6">
+            <div id="usage-and-limits" className="mt-6">
               <UsageMeterGrid
                 title="Usage and limits"
                 description="Current plan utilization across the main recurring SaaS resources in this workspace."
@@ -1363,8 +1441,8 @@ export default async function SettingsPage({
         ) : null}
 
         {canViewBillingControls ? (
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-line p-5">
+          <div id="trust-center" className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div id="entitlement-breakdown" className="rounded-2xl border border-line p-5">
               <p className="text-lg font-semibold text-ink">Entitlement breakdown</p>
               <p className="mt-2 text-sm text-steel">
                 Plan-derived feature access and limits, with active override sources shown inline.
@@ -1526,7 +1604,7 @@ export default async function SettingsPage({
         ) : null}
 
         {canManageMembers ? (
-          <div className="mt-8 grid gap-4 lg:grid-cols-2">
+          <div id="workspace-members" className="mt-8 grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-line bg-mist p-5">
               <p className="text-lg font-semibold text-ink">Add internal member</p>
               <form action={addMemberAction} className="mt-4 grid gap-3">
@@ -1729,7 +1807,7 @@ export default async function SettingsPage({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+        <div id="inventory-registry" className="mt-8 grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-line bg-mist p-5">
             <p className="text-lg font-semibold text-ink">Vendor registry</p>
             <p className="mt-2 text-sm text-steel">
@@ -1853,7 +1931,7 @@ export default async function SettingsPage({
           </div>
         </div>
 
-        <div className="mt-8 rounded-2xl border border-line bg-mist p-5">
+        <div id="outbound-webhooks" className="mt-8 rounded-2xl border border-line bg-mist p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-lg font-semibold text-ink">Outbound webhook deliveries</p>
@@ -1899,3 +1977,4 @@ export default async function SettingsPage({
     </main>
   );
 }
+

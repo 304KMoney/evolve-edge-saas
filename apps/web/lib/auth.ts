@@ -1,10 +1,12 @@
 import {
   createOpaqueToken,
   hashOpaqueToken,
+  Prisma,
   prisma,
   verifyPassword
 } from "@evolve-edge/db";
 import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { timingSafeEqual } from "node:crypto";
 import {
@@ -19,7 +21,15 @@ import {
   type OrganizationRole,
   type PlatformUserRole
 } from "./roles";
-import { getAuthMode, getOptionalEnv, getRuntimeEnvironment } from "./runtime-config";
+import { consumeRateLimit } from "./security-rate-limit";
+import { requireActiveOrganization } from "./org-scope";
+import {
+  getAuthMode,
+  getOptionalEnv,
+  getRuntimeEnvironment,
+  isPreviewGuestAccessEnabled
+} from "./runtime-config";
+import { isAuditIntakeCompleteFromRegulatoryProfile } from "./audit-intake";
 
 export type AppSession = {
   user: {
@@ -42,12 +52,20 @@ export type AppSession = {
 
 export const AUTH_SESSION_COOKIE = "evolve_edge_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
+const SESSION_INACTIVITY_TIMEOUT_SECONDS = 60 * 60 * 2;
 const MAX_ACTIVE_SESSIONS = 5;
 const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 const LOGIN_LOCKOUT_MINUTES = 15;
+const AUTH_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_RATE_LIMIT_MAX_REQUESTS = 10;
+const AUTH_RATE_LIMIT_ACTIONS = ["auth.sign_in_failed", "auth.sign_in_rate_limited"] as const;
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+export function normalizeAuthEmail(email: string) {
+  return normalizeEmail(email);
 }
 
 function getSeedOwnerEmail() {
@@ -105,13 +123,67 @@ export function buildCookieSettings() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: getRuntimeEnvironment() === "production",
+    secure: getRuntimeEnvironment() !== "development",
     path: "/",
     maxAge: SESSION_TTL_SECONDS
   };
 }
 
-export async function createUserSession(userId: string) {
+type CreateUserSessionContext = {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+};
+
+type ScopedOrganizationMembershipRecord = {
+  organization: {
+    id: string;
+    slug: string;
+    name: string;
+    onboardingCompletedAt: Date | null;
+    regulatoryProfile: Prisma.JsonValue | null;
+  };
+  role: string;
+  isBillingAdmin: boolean;
+};
+
+type ScopedOrganizationSessionDbClient = {
+  organizationMember: {
+    findUnique(args: {
+      where: {
+        organizationId_userId: {
+          organizationId: string;
+          userId: string;
+        };
+      };
+      select: {
+        role: true;
+        isBillingAdmin: true;
+        organization: {
+          select: {
+            id: true;
+            slug: true;
+            name: true;
+            onboardingCompletedAt: true,
+            regulatoryProfile: true
+          };
+        };
+      };
+    }): Promise<ScopedOrganizationMembershipRecord | null>;
+  };
+};
+
+export function getSessionInactivityTimeoutSeconds() {
+  const configured = Number(getOptionalEnv("SESSION_INACTIVITY_TIMEOUT_SECONDS") ?? "");
+  if (Number.isFinite(configured) && configured > 0) {
+    return Math.min(configured, SESSION_TTL_SECONDS);
+  }
+
+  return SESSION_INACTIVITY_TIMEOUT_SECONDS;
+}
+
+export async function createUserSession(userId: string, context?: CreateUserSessionContext) {
+  void context;
+
   await prisma.session.deleteMany({
     where: {
       userId,
@@ -130,7 +202,9 @@ export async function createUserSession(userId: string) {
   });
 
   const activeSessions = await prisma.session.findMany({
-    where: { userId },
+    where: {
+      userId
+    },
     orderBy: { createdAt: "desc" },
     select: { id: true }
   });
@@ -148,6 +222,19 @@ export async function createUserSession(userId: string) {
   }
 
   return token;
+}
+
+export async function revokeAllUserSessions(
+  userId: string,
+  reason = "logout_everywhere"
+) {
+  void reason;
+
+  await prisma.session.deleteMany({
+    where: {
+      userId
+    }
+  });
 }
 
 export async function revokeSession(token: string | null | undefined) {
@@ -172,13 +259,43 @@ export function getSignInErrorMessage(error?: string) {
       return "Your session expired. Please sign in again.";
     case "locked":
       return `This account is temporarily locked after repeated failed sign-in attempts. Try again in ${LOGIN_LOCKOUT_MINUTES} minutes.`;
+    case "rate_limited":
+      return "Sign-in is temporarily rate limited. Please wait a few minutes and try again.";
     default:
       return null;
   }
 }
 
-function redirectToSignIn(error?: string): never {
-  redirect(error ? `/sign-in?error=${error}` : "/sign-in");
+export function getPostAuthRedirectPath(input: {
+  redirectTo?: string | null;
+  membershipCount: number;
+}) {
+  return (
+    sanitizeInternalRedirect(input.redirectTo, "") ||
+    (input.membershipCount > 0 ? "/dashboard" : "/onboarding")
+  );
+}
+
+async function redirectToSignIn(error?: string): Promise<never> {
+  const headerStore = await headers();
+  const requestPath = sanitizeInternalRedirect(
+    headerStore.get("x-request-path"),
+    ""
+  );
+  const redirectTo =
+    requestPath && requestPath !== "/sign-in" ? requestPath : "";
+  const params = new URLSearchParams();
+
+  if (error) {
+    params.set("error", error);
+  }
+
+  if (redirectTo) {
+    params.set("redirectTo", redirectTo);
+  }
+
+  const destination = params.size > 0 ? `/sign-in?${params.toString()}` : "/sign-in";
+  redirect(destination as never);
 }
 
 export function sanitizeInternalRedirect(
@@ -195,7 +312,94 @@ export function sanitizeInternalRedirect(
     return fallback;
   }
 
-  return trimmed;
+  try {
+    const url = new URL(trimmed, "https://evolve-edge.local");
+    const sensitiveSearchParams = [
+      "token",
+      "code",
+      "secret",
+      "signature",
+      "session",
+      "password",
+      "key",
+      "auth"
+    ];
+
+    for (const parameter of sensitiveSearchParams) {
+      url.searchParams.delete(parameter);
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return fallback;
+  }
+}
+
+export function shouldUsePreviewGuestSession(input: {
+  requestPath: string | null | undefined;
+  previewGuestAccessEnabled: boolean;
+}) {
+  if (!input.previewGuestAccessEnabled) {
+    return false;
+  }
+
+  const requestPath = sanitizeInternalRedirect(input.requestPath, "");
+  return requestPath.startsWith("/dashboard") || requestPath.startsWith("/onboarding");
+}
+
+export function shouldLimitAuthenticationAttempt(input: {
+  recentPersistentFailures: number;
+  maxRequests: number;
+  localRateLimitLimited: boolean;
+}) {
+  return input.localRateLimitLimited || input.recentPersistentFailures >= input.maxRequests;
+}
+
+export async function consumeAuthenticationRateLimit(email: string) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    return { limited: false } as const;
+  }
+
+  const localRateLimit = await consumeRateLimit({
+    storeKey: `auth:sign-in:${normalizedEmail}`,
+    maxRequests: AUTH_RATE_LIMIT_MAX_REQUESTS,
+    windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+    metadata: {
+      routeKey: "sign-in",
+      category: "auth",
+      email: normalizedEmail
+    }
+  });
+
+  const recentPersistentFailures = await prisma.auditLog.count({
+    where: {
+      action: {
+        in: [...AUTH_RATE_LIMIT_ACTIONS]
+      },
+      entityType: "user",
+      entityId: normalizedEmail,
+      createdAt: {
+        gte: new Date(Date.now() - AUTH_RATE_LIMIT_WINDOW_MS)
+      }
+    }
+  });
+
+  if (
+    shouldLimitAuthenticationAttempt({
+      recentPersistentFailures,
+      maxRequests: AUTH_RATE_LIMIT_MAX_REQUESTS,
+      localRateLimitLimited: localRateLimit.limited
+    })
+  ) {
+    return {
+      limited: true,
+      retryAfterSeconds: localRateLimit.limited ? localRateLimit.retryAfterSeconds : 60,
+      maxRequests: AUTH_RATE_LIMIT_MAX_REQUESTS
+    } as const;
+  }
+
+  return { limited: false } as const;
 }
 
 export async function authenticateUser(email: string, password: string) {
@@ -302,21 +506,75 @@ export async function authenticateUser(email: string, password: string) {
   return { user: bootstrapUser, error: null };
 }
 
-async function resolveCurrentSession(options?: {
-  redirectOnMissing?: boolean;
-}): Promise<AppSession | null> {
-  if (!isPasswordAuthEnabled()) {
-    if (options?.redirectOnMissing ?? true) {
-      redirectToSignIn("config");
-    }
-
+async function resolvePreviewGuestSession(requestPath: string | null | undefined) {
+  if (
+    !shouldUsePreviewGuestSession({
+      requestPath,
+      previewGuestAccessEnabled: isPreviewGuestAccessEnabled()
+    })
+  ) {
     return null;
   }
 
-  const config = getPasswordAuthConfig();
-  if (!config.isComplete) {
+  const organization = await prisma.organization.findFirst({
+    where: {
+      members: {
+        some: {}
+      }
+    },
+    include: {
+      members: {
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        include: {
+          user: true
+        }
+      }
+    },
+    orderBy: {
+      onboardingCompletedAt: "desc"
+    }
+  });
+
+  const membership = organization?.members[0];
+  if (!organization || !membership) {
+    return null;
+  }
+
+  return {
+    user: {
+      id: membership.user.id,
+      email: membership.user.email,
+      firstName: membership.user.firstName ?? "Demo",
+      lastName: membership.user.lastName ?? "Operator",
+      platformRole: membership.user.platformRole
+    },
+    organization: {
+      id: organization.id,
+      slug: organization.slug,
+      name: organization.name,
+      role: membership.role,
+      isBillingAdmin: membership.isBillingAdmin
+    },
+    onboardingRequired: false,
+    authMode: "demo" as const
+  } satisfies AppSession;
+}
+
+async function resolveCurrentSession(options?: {
+  redirectOnMissing?: boolean;
+}): Promise<AppSession | null> {
+  const headerStore = await headers();
+  const requestPath = headerStore.get("x-request-path");
+
+  if (!isPasswordAuthEnabled()) {
+    const previewGuestSession = await resolvePreviewGuestSession(requestPath);
+    if (previewGuestSession) {
+      return previewGuestSession;
+    }
+
     if (options?.redirectOnMissing ?? true) {
-      redirectToSignIn("config");
+      await redirectToSignIn("config");
     }
 
     return null;
@@ -325,8 +583,14 @@ async function resolveCurrentSession(options?: {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_SESSION_COOKIE)?.value;
   if (!token) {
+    const config = getPasswordAuthConfig();
+    const previewGuestSession = await resolvePreviewGuestSession(requestPath);
+    if (previewGuestSession) {
+      return previewGuestSession;
+    }
+
     if (options?.redirectOnMissing ?? true) {
-      redirectToSignIn();
+      await redirectToSignIn(config.isComplete ? undefined : "config");
     }
 
     return null;
@@ -351,8 +615,13 @@ async function resolveCurrentSession(options?: {
   });
 
   if (!dbSession) {
+    const previewGuestSession = await resolvePreviewGuestSession(requestPath);
+    if (previewGuestSession) {
+      return previewGuestSession;
+    }
+
     if (options?.redirectOnMissing ?? true) {
-      redirectToSignIn("expired");
+      await redirectToSignIn("expired");
     }
 
     return null;
@@ -363,9 +632,17 @@ async function resolveCurrentSession(options?: {
     dbSession.createdAt < dbSession.user.passwordCredential.passwordUpdatedAt
   ) {
     await prisma.session.delete({
-      where: { id: dbSession.id }
+      where: { id: dbSession.id },
     });
-    redirectToSignIn("expired");
+    await redirectToSignIn("expired");
+  }
+
+  const sessionLastSeenAt = dbSession.lastSeenAt ?? dbSession.createdAt;
+  if (Date.now() - sessionLastSeenAt.getTime() > getSessionInactivityTimeoutSeconds() * 1000) {
+    await prisma.session.delete({
+      where: { id: dbSession.id },
+    });
+    await redirectToSignIn("expired");
   }
 
   await prisma.session.update({
@@ -377,6 +654,9 @@ async function resolveCurrentSession(options?: {
   });
 
   const membership = dbSession.user.memberships[0] ?? null;
+  if (membership) {
+    await requireActiveOrganization(membership.organization.id);
+  }
   const onboardingRequired =
     !membership ||
     !membership.organization.onboardingCompletedAt ||
@@ -408,10 +688,10 @@ export async function getCurrentSession(): Promise<AppSession> {
   const session = await resolveCurrentSession({ redirectOnMissing: true });
 
   if (!session) {
-    redirectToSignIn();
+    await redirectToSignIn();
   }
 
-  return session;
+  return session as AppSession;
 }
 
 export async function getOptionalCurrentSession() {
@@ -472,6 +752,88 @@ export async function requireOrganizationPermission(
   }
 
   return session;
+}
+
+export async function resolveScopedOrganizationSession(input: {
+  session: AppSession;
+  organizationId: string;
+  permission: OrganizationPermission;
+  db?: ScopedOrganizationSessionDbClient;
+}) {
+  const organizationId = input.organizationId.trim();
+  if (!organizationId) {
+    return null;
+  }
+
+  if (input.session.organization?.id === organizationId) {
+    return hasPermission(getSessionAuthorizationContext(input.session), input.permission)
+      ? input.session
+      : null;
+  }
+
+  const membershipLookup = {
+    where: {
+      organizationId_userId: {
+        organizationId,
+        userId: input.session.user.id
+      }
+    },
+    select: {
+      role: true,
+      isBillingAdmin: true,
+      organization: {
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          onboardingCompletedAt: true,
+          regulatoryProfile: true
+        }
+      }
+    }
+  } as const;
+  const membership: ScopedOrganizationMembershipRecord | null = input.db
+    ? await input.db.organizationMember.findUnique(membershipLookup)
+    : await prisma.organizationMember.findUnique(membershipLookup);
+
+  if (!membership) {
+    return null;
+  }
+
+  const scopedSession: AppSession = {
+    ...input.session,
+    organization: {
+      id: membership.organization.id,
+      slug: membership.organization.slug,
+      name: membership.organization.name,
+      role: membership.role,
+      isBillingAdmin: membership.isBillingAdmin
+    },
+    onboardingRequired:
+      !membership.organization.onboardingCompletedAt
+  };
+
+  return hasPermission(getSessionAuthorizationContext(scopedSession), input.permission)
+    ? scopedSession
+    : null;
+}
+
+export async function requireOrganizationPermissionForOrganization(
+  permission: OrganizationPermission,
+  organizationId: string
+) {
+  const session = await requireCurrentSession();
+  const scopedSession = await resolveScopedOrganizationSession({
+    session,
+    organizationId,
+    permission
+  });
+
+  if (!scopedSession) {
+    redirect("/dashboard");
+  }
+
+  return scopedSession;
 }
 
 export async function requirePlatformPermission(permission: PlatformPermission) {

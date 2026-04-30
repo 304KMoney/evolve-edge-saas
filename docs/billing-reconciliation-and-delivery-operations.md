@@ -156,6 +156,15 @@ Important fields:
 - `responseStatus`
 - `lastError`
 
+Callback durability notes:
+
+- status callbacks are state-aware and no-op when the same terminal outcome is already persisted
+- report-ready callbacks are state-aware and no-op when the same terminal payload is already persisted
+- report-writeback uses a separate receipt-backed milestone dedupe layer through `WorkflowWritebackReceipt`
+- report-writeback must now prove the resolved `Report` is still bound to the incoming `WorkflowDispatch` through app-owned linkage before mutating durable report state; matching bearer auth alone is not sufficient
+- stale `DISPATCHING` rows are now recovered by the scheduler back into retryable `PENDING` or terminal `FAILED`
+- report-writeback now also reconciles linked `CustomerRun` report-generation progression and delivered completion from the canonical `Report` record when the workflow callback is the first durable milestone update
+
 ### `DeliveryStateRecord`
 
 Primary role:
@@ -291,6 +300,11 @@ Mechanism:
 
 - `recordWorkflowStatusCallback()`
 
+Duplicate-callback rule:
+
+- repeated `acknowledged` or `running` callbacks may still update the in-flight view if execution metadata changes
+- identical callbacks that do not materially change stored state should no-op safely
+
 #### `report_generated`
 
 Set in:
@@ -300,6 +314,12 @@ Set in:
 Mechanism:
 
 - `recordWorkflowReportReady()`
+- workflow report writeback reconciliation can also advance the linked `CustomerRun` into report-generation completion when writeback resolves the canonical report first
+- workflow report writeback reconciliation can also complete the linked `CustomerRun` when workflow delivery reaches a customer-facing delivered milestone first
+
+Duplicate-callback rule:
+
+- repeated report-ready callbacks with the same stored terminal payload do not republish readiness side effects
 
 #### `awaiting_review`
 
@@ -338,12 +358,17 @@ Set in:
 Mechanism:
 
 - `recordWorkflowStatusCallback()`
+- workflow report writeback can also move the linked `CustomerRun` into report-generation failure when the callback indicates report generation failed before customer-facing delivery
 
 The failure state stores:
 
 - `lastError`
 - latest execution metadata when available
 - append-safe transition history
+
+Duplicate-callback rule:
+
+- repeated identical terminal failure callbacks no longer create another operator failure event or another delivery-state failure transition
 
 ### Current status progression rule
 
@@ -502,6 +527,9 @@ Also check:
 1. whether `WorkflowDispatch` was ever created
 2. whether it is still `PENDING`, `DISPATCHING`, or `FAILED`
 3. whether the n8n callback secret and callback routes are configured correctly
+4. whether the callback was actually a duplicate terminal delivery that the backend intentionally ignored as a safe no-op
+5. whether a stale `DISPATCHING` row was auto-recovered and now carries a recovery `lastError` instead of being actively in flight
+6. whether the linked `CustomerRun` was reconciled from workflow writeback when report generation progressed, failed, or reached delivered state outside the dashboard-side report action path
 
 ### Question: what was delivered?
 
@@ -534,6 +562,10 @@ Recommended inspection order:
 7. `ReportPackage`
 
 That order reflects the current operator-facing lifecycle best.
+
+If `WorkflowDispatch.status` is `DISPATCHING` longer than expected, treat it as a stale-dispatch candidate rather than assuming n8n is still actively working. The scheduler now owns recovery of that state boundary.
+
+If operators need the fastest high-level triage surface before opening raw rows, use the `/admin` fulfillment drift and recovery panel or `/api/fulfillment/health`. Those views now summarize whether `DeliveryStateRecord`, `WorkflowDispatch`, `CustomerRun`, and outbound `WebhookDelivery` records agree, whether a record was already recovered, and which canonical source should be trusted first.
 
 ## Setup and migration notes
 
@@ -571,7 +603,7 @@ Current limitations:
 - no automatic queue-item creation from mismatch findings yet
 - no customer-facing delivery tracker
 - no mismatch detection for ambiguous report-to-request linkage
-- no dedicated operator dashboard UI for reconciliation findings yet
+- no dedicated one-click repair action inside the fulfillment drift panel yet
 
 Important deferred items:
 

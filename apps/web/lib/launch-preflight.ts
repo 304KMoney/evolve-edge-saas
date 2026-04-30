@@ -14,7 +14,10 @@ import {
   getRuntimeEnvironment,
   isSignedReportAuthEnforced
 } from "./runtime-config";
-import { isLegacyN8nWebhookFallbackActive } from "./n8n";
+import {
+  getN8nWorkflowDestinationByName,
+  isLegacyN8nWebhookFallbackActive
+} from "./n8n";
 import { getStripeModeLaunchExpectation } from "./stripe-runtime";
 
 export type LaunchPreflightSeverity = "error" | "warning";
@@ -102,8 +105,19 @@ function getRequiredEnvironmentEntries() {
     CANONICAL_ENV_KEYS.stripeWebhookSecret,
     CANONICAL_ENV_KEYS.outboundDispatchSecret,
     CANONICAL_ENV_KEYS.n8nCallbackSecret,
+    CANONICAL_ENV_KEYS.aiExecutionProvider,
+    "AI_EXECUTION_DISPATCH_SECRET",
+    CANONICAL_ENV_KEYS.openAiApiKey,
+    CANONICAL_ENV_KEYS.openAiModel,
     "N8N_WORKFLOW_DESTINATIONS",
     "REPORT_DOWNLOAD_SIGNING_SECRET",
+    "EMAIL_FROM_ADDRESS",
+    "RESEND_API_KEY",
+    "RESEND_WEBHOOK_SIGNING_SECRET",
+    "NOTIFICATION_DISPATCH_SECRET",
+    "CRON_SECRET",
+    "OPS_READINESS_SECRET",
+    "PUBLIC_INTAKE_SHARED_SECRET",
     ...CANONICAL_PLAN_CODES.flatMap((planCode) => [
       getCanonicalStripePriceEnvVar(planCode),
       getCanonicalStripeProductEnvVar(planCode)
@@ -161,36 +175,86 @@ function getRequiredEnvironmentEntries() {
       },
       {
         name: "orchestration",
-        entries: [
-          {
-            key: "N8N_WORKFLOW_DESTINATIONS",
-            required: true,
-            notes: "Preferred per-workflow n8n destination config."
-          },
-          {
-            key: "REPORT_DOWNLOAD_SIGNING_SECRET",
-            required: true,
-            notes: "Required for signed report export links."
-          },
-          ...CANONICAL_ENV_GROUPS.orchestration.map((key) => ({
-            key,
-            required:
-              key === CANONICAL_ENV_KEYS.outboundDispatchSecret ||
-              key === CANONICAL_ENV_KEYS.n8nCallbackSecret,
-            notes:
-              key === CANONICAL_ENV_KEYS.hubspotAccessToken
-                ? "Optional if CRM projection is deferred for launch."
-                : key === CANONICAL_ENV_KEYS.n8nCallbackSecret
-                  ? "Primary callback secret. N8N_CALLBACK_SHARED_SECRET is also accepted as a compatible alias."
-                : key === CANONICAL_ENV_KEYS.n8nWritebackSecret
-                  ? "Optional dedicated secret for inbound n8n writeback routes; falls back to the shared callback secret."
-                : key === CANONICAL_ENV_KEYS.difyApiBaseUrl ||
-                    key === CANONICAL_ENV_KEYS.difyApiKey ||
-                    key === CANONICAL_ENV_KEYS.difyWorkflowId
-                  ? "Recommended if live AI execution is in scope for launch."
-                  : undefined
-          }))
-        ] satisfies LaunchEnvironmentEntrySeed[]
+        entries: (() => {
+          const baseEntries: LaunchEnvironmentEntrySeed[] = [
+            {
+              key: "N8N_WORKFLOW_DESTINATIONS",
+              required: true,
+              notes: "Preferred per-workflow n8n destination config."
+            },
+            {
+              key: "REPORT_DOWNLOAD_SIGNING_SECRET",
+              required: true,
+              notes: "Required for signed report export links."
+            },
+            ...CANONICAL_ENV_GROUPS.orchestration.map((key) => ({
+              key,
+              required:
+                key === CANONICAL_ENV_KEYS.outboundDispatchSecret ||
+                key === CANONICAL_ENV_KEYS.n8nCallbackSecret,
+              notes:
+                key === CANONICAL_ENV_KEYS.hubspotAccessToken
+                  ? "Optional if CRM projection is deferred for launch."
+                  : key === CANONICAL_ENV_KEYS.n8nCallbackSecret
+                    ? "Primary callback secret. N8N_CALLBACK_SHARED_SECRET is also accepted as a compatible alias."
+                  : key === CANONICAL_ENV_KEYS.n8nWritebackSecret
+                    ? "Optional dedicated secret for inbound n8n writeback routes; falls back to the shared callback secret."
+                  : key === CANONICAL_ENV_KEYS.aiExecutionProvider
+                    ? "Required for the production OpenAI/LangGraph execution path."
+                  : key === CANONICAL_ENV_KEYS.openAiApiKey ||
+                      key === CANONICAL_ENV_KEYS.openAiModel
+                    ? "Required when AI execution is live."
+                  : key === CANONICAL_ENV_KEYS.difyApiBaseUrl ||
+                      key === CANONICAL_ENV_KEYS.difyApiKey ||
+                      key === CANONICAL_ENV_KEYS.difyWorkflowId
+                    ? "Deprecated rollback path only."
+                    : undefined
+            }))
+          ];
+
+          return baseEntries.concat([
+            {
+              key: "AI_EXECUTION_DISPATCH_SECRET",
+              required: true,
+              notes: "Required for internal AI execution route auth."
+            },
+            {
+              key: "CRON_SECRET",
+              required: true,
+              notes: "Required for scheduled jobs, including queued email dispatch."
+            },
+            {
+              key: "NOTIFICATION_DISPATCH_SECRET",
+              required: true,
+              notes: "Required for the internal notification dispatch route."
+            },
+            {
+              key: "OPS_READINESS_SECRET",
+              required: true,
+              notes: "Required to protect fulfillment and ops readiness endpoints from public access."
+            },
+            {
+              key: "PUBLIC_INTAKE_SHARED_SECRET",
+              required: true,
+              notes: "Required to authorize the production public intake routes."
+            },
+            {
+              key: "EMAIL_FROM_ADDRESS",
+              required: true,
+              notes: "Required for customer delivery and follow-up emails."
+            },
+            {
+              key: "RESEND_API_KEY",
+              required: true,
+              notes: "Required when Resend is the email provider."
+            },
+            {
+              key: "RESEND_WEBHOOK_SIGNING_SECRET",
+              required: true,
+              notes: "Required to verify inbound Resend delivery and failure webhooks."
+            }
+          ]);
+        })()
       }
     ]
   };
@@ -246,14 +310,78 @@ export function runFirstCustomerLaunchPreflight(): LaunchPreflightResult {
     });
   }
   addMissingEnvFinding(findings, {
+    name: CANONICAL_ENV_KEYS.aiExecutionProvider,
+    code: "ai.provider_missing",
+    message: "Missing AI_EXECUTION_PROVIDER for the OpenAI/LangGraph execution path."
+  });
+  addMissingEnvFinding(findings, {
+    name: "AI_EXECUTION_DISPATCH_SECRET",
+    code: "ai.dispatch_secret_missing",
+    message: "Missing AI_EXECUTION_DISPATCH_SECRET."
+  });
+  addMissingEnvFinding(findings, {
+    name: CANONICAL_ENV_KEYS.openAiApiKey,
+    code: "ai.openai_api_key_missing",
+    message: "Missing OPENAI_API_KEY."
+  });
+  addMissingEnvFinding(findings, {
+    name: CANONICAL_ENV_KEYS.openAiModel,
+    code: "ai.openai_model_missing",
+    message: "Missing OPENAI_MODEL."
+  });
+  addMissingEnvFinding(findings, {
     name: "N8N_WORKFLOW_DESTINATIONS",
     code: "n8n.destinations_missing",
     message: "Missing N8N_WORKFLOW_DESTINATIONS."
   });
+  if (!getN8nWorkflowDestinationByName("auditRequested")) {
+    findings.push({
+      code: "n8n.audit_requested_destination_missing",
+      severity: "error",
+      message:
+        "N8N_WORKFLOW_DESTINATIONS must include a valid auditRequested destination for the paid customer flow."
+    });
+  }
   addMissingEnvFinding(findings, {
     name: "REPORT_DOWNLOAD_SIGNING_SECRET",
     code: "reports.signing_secret_missing",
     message: "Missing REPORT_DOWNLOAD_SIGNING_SECRET."
+  });
+  addMissingEnvFinding(findings, {
+    name: "EMAIL_FROM_ADDRESS",
+    code: "email.from_address_missing",
+    message: "Missing EMAIL_FROM_ADDRESS for customer delivery emails."
+  });
+  addMissingEnvFinding(findings, {
+    name: "RESEND_API_KEY",
+    code: "email.resend_api_key_missing",
+    message: "Missing RESEND_API_KEY for queued delivery emails."
+  });
+  addMissingEnvFinding(findings, {
+    name: "RESEND_WEBHOOK_SIGNING_SECRET",
+    code: "email.resend_webhook_signing_secret_missing",
+    message:
+      "Missing RESEND_WEBHOOK_SIGNING_SECRET for verified inbound email delivery/failure webhooks."
+  });
+  addMissingEnvFinding(findings, {
+    name: "NOTIFICATION_DISPATCH_SECRET",
+    code: "email.notification_dispatch_secret_missing",
+    message: "Missing NOTIFICATION_DISPATCH_SECRET for the internal notifications dispatch route."
+  });
+  addMissingEnvFinding(findings, {
+    name: "CRON_SECRET",
+    code: "jobs.cron_secret_missing",
+    message: "Missing CRON_SECRET for scheduled jobs and queued email dispatch."
+  });
+  addMissingEnvFinding(findings, {
+    name: "OPS_READINESS_SECRET",
+    code: "ops.readiness_secret_missing",
+    message: "Missing OPS_READINESS_SECRET for protected fulfillment and ops readiness endpoints."
+  });
+  addMissingEnvFinding(findings, {
+    name: "PUBLIC_INTAKE_SHARED_SECRET",
+    code: "intake.public_shared_secret_missing",
+    message: "Missing PUBLIC_INTAKE_SHARED_SECRET for the production public intake routes."
   });
 
   for (const planCode of CANONICAL_PLAN_CODES) {
@@ -287,12 +415,33 @@ export function runFirstCustomerLaunchPreflight(): LaunchPreflightResult {
     });
   }
 
-  if (!hasEnv(CANONICAL_ENV_KEYS.difyApiBaseUrl) || !hasEnv(CANONICAL_ENV_KEYS.difyApiKey)) {
+  if (!hasEnv(CANONICAL_ENV_KEYS.foundingRiskAuditUrl)) {
     findings.push({
-      code: "dify.config_incomplete",
+      code: "delivery.booking_link_fallback_in_use",
       severity: "warning",
       message:
-        "Dify configuration is incomplete. AI execution may be unavailable."
+        "NEXT_PUBLIC_FOUNDING_RISK_AUDIT_URL is missing. Delivery emails will fall back to the default booking link."
+    });
+  }
+
+  if (
+    hasEnv("HUBSPOT_REPORT_DELIVERED_DEAL_STAGE_ID") &&
+    !hasEnv(CANONICAL_ENV_KEYS.hubspotAccessToken)
+  ) {
+    findings.push({
+      code: "hubspot.deal_stage_configured_without_sync",
+      severity: "warning",
+      message:
+        "HUBSPOT_REPORT_DELIVERED_DEAL_STAGE_ID is set but HUBSPOT_ACCESS_TOKEN is missing, so deal-stage projection cannot run."
+    });
+  }
+
+  if (hasEnv(CANONICAL_ENV_KEYS.aiExecutionProvider) && getOptionalEnv(CANONICAL_ENV_KEYS.aiExecutionProvider) !== "openai_langgraph") {
+    findings.push({
+      code: "ai.non_langgraph_provider_configured",
+      severity: "warning",
+      message:
+        "AI_EXECUTION_PROVIDER is not set to openai_langgraph. The production delivery path assumes the OpenAI/LangGraph backend is active."
     });
   }
 

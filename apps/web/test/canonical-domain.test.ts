@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  CANONICAL_BILLING_CADENCES,
   CANONICAL_ENV_KEYS,
   CANONICAL_ENV_GROUPS,
   CANONICAL_DIFY_FIELD_KEYS,
@@ -9,6 +10,7 @@ import {
   CANONICAL_STRIPE_PRICE_ENV_MAP,
   CANONICAL_WORKFLOW_CODES,
   getCanonicalEnvKeysForGroup,
+  getCanonicalPublicPriceLabelForCadence,
   getCanonicalPlanDisplayName,
   getCanonicalPublicPriceLabel,
   isCanonicalPlanCode
@@ -23,8 +25,10 @@ function runCanonicalDomainTests() {
     "briefing_only",
     "intake_review"
   ]);
+  assert.deepEqual(CANONICAL_BILLING_CADENCES, ["monthly", "annual"]);
   assert.equal(getCanonicalPlanDisplayName("starter"), "Starter");
-  assert.equal(getCanonicalPublicPriceLabel("scale"), "$7,500 one-time");
+  assert.equal(getCanonicalPublicPriceLabel("scale"), "Starting at $18,500 / month");
+  assert.equal(getCanonicalPublicPriceLabelForCadence("starter", "annual"), "$48,000 / year");
   assert.equal(CANONICAL_PUBLIC_PRICING.enterprise.usd, null);
   assert.equal(CANONICAL_STRIPE_PRICE_ENV_MAP.starter, "STRIPE_PRICE_STARTER_ANNUAL");
   assert.equal(CANONICAL_HOSTINGER_RULES.enterprise.salesLedOnly, true);

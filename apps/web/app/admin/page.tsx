@@ -30,9 +30,22 @@ import { getOperatorConsoleSnapshot } from "../../lib/operator-console";
 import { getOpsReadinessSnapshot } from "../../lib/ops-readiness";
 import { getAdminSafePlanMappings } from "../../lib/revenue-catalog";
 import { getOrganizationUsageSnapshot } from "../../lib/usage";
+import type { FulfillmentVisibilityEntry } from "../../lib/fulfillment-visibility";
 import { updatePlatformRoleAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+type AdminScaleSnapshot = Awaited<ReturnType<typeof getAdminConsoleScaleSnapshot>>;
+type GlobalMismatchFinding =
+  AdminScaleSnapshot["globalOpsDashboard"]["recentMismatchFindings"][number];
+type GlobalDeliveryOpsFinding =
+  AdminScaleSnapshot["globalOpsDashboard"]["recentDeliveryOpsFindings"][number];
+type SupportSafeAccountSummary =
+  AdminScaleSnapshot["supportSafeAccountSummaries"][number];
+type RecentBillingEvent =
+  AdminScaleSnapshot["recentBillingEvents"][number];
+type RecentLeadSubmission =
+  AdminScaleSnapshot["recentLeadSubmissions"][number];
 
 function formatDate(date: Date | null | undefined) {
   if (!date) {
@@ -414,6 +427,12 @@ export default async function AdminPage({
               className="rounded-full border border-line px-4 py-2 font-medium text-ink transition hover:border-accent hover:text-accent"
             >
               View proactive queues
+            </Link>
+            <Link
+              href={"/admin/system-state" as Route}
+              className="rounded-full border border-line px-4 py-2 font-medium text-ink transition hover:border-accent hover:text-accent"
+            >
+              Debug system state
             </Link>
             <span>Signed in as {session.user.email}</span>
           </div>
@@ -816,7 +835,7 @@ export default async function AdminPage({
           <p className="mt-2 text-sm text-steel">
             Cross-org visibility into reconciliation mismatches and report or delivery risks that already have backend-owned findings.
           </p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-line p-4">
               <p className="text-sm text-steel">Recent reconciliation mismatches</p>
               <p className="mt-2 text-2xl font-semibold text-ink">
@@ -829,15 +848,26 @@ export default async function AdminPage({
                 {scaleSnapshot.globalOpsDashboard.counts.recentDeliveryOpsFindings}
               </p>
             </div>
+            <div className="rounded-2xl border border-line p-4">
+              <p className="text-sm text-steel">Fulfillment drift or recovery</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {scaleSnapshot.globalOpsDashboard.counts.recentFulfillmentAttentionFindings}
+              </p>
+              <p className="mt-2 text-sm text-steel">
+                Recovered: {scaleSnapshot.globalOpsDashboard.counts.recentFulfillmentRecovered}
+              </p>
+            </div>
           </div>
-          <div className="mt-4 grid gap-6 lg:grid-cols-2">
+          <div className="mt-4 grid gap-6 lg:grid-cols-3">
             <div>
               <h3 className="text-base font-semibold text-ink">
                 Reconciliation mismatches
               </h3>
               <div className="mt-3 space-y-3">
                 {scaleSnapshot.globalOpsDashboard.recentMismatchFindings.length > 0 ? (
-                  scaleSnapshot.globalOpsDashboard.recentMismatchFindings.map((finding) => {
+                  scaleSnapshot.globalOpsDashboard.recentMismatchFindings.map((
+                    finding: GlobalMismatchFinding
+                  ) => {
                     const accountHref = `/admin/accounts/${finding.organization.id}` as Route;
 
                     return (
@@ -892,11 +922,128 @@ export default async function AdminPage({
 
             <div>
               <h3 className="text-base font-semibold text-ink">
+                Fulfillment drift and recovery
+              </h3>
+              <div className="mt-3 space-y-3">
+                {scaleSnapshot.globalOpsDashboard.recentFulfillmentAttentionFindings.length > 0 ? (
+                  scaleSnapshot.globalOpsDashboard.recentFulfillmentAttentionFindings.map((
+                    finding: FulfillmentVisibilityEntry
+                  ) => {
+                    const accountHref = `/admin/accounts/${finding.organization.id}` as Route;
+
+                    return (
+                      <div key={`${finding.linkage.deliveryStateId}-${finding.code}`} className="rounded-2xl border border-line p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <Link
+                              href={accountHref}
+                              className="font-medium text-ink transition hover:text-accent"
+                            >
+                              {finding.organization.name}
+                            </Link>
+                            <p className="mt-1 text-sm text-steel">
+                              {finding.organization.slug}
+                            </p>
+                          </div>
+                          <div className="text-right text-sm text-steel">
+                            <p>{formatStatus(finding.severity)}</p>
+                            <p className="mt-1">{formatStatus(finding.state.deliveryStatus)}</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 font-medium text-ink">{finding.title}</p>
+                        <p className="mt-2 text-sm text-steel">{finding.summary}</p>
+                        <div className="mt-3 space-y-1 text-sm text-steel">
+                          <p>
+                            Delivery: {finding.linkage.deliveryStateId} | Dispatch{" "}
+                            {finding.linkage.workflowDispatchId ?? "Not linked"}
+                          </p>
+                          <p>
+                            Run: {finding.linkage.customerRunId ?? "Not linked"} | Report{" "}
+                            {finding.linkage.reportId ?? "Not linked"}
+                          </p>
+                          <p>
+                            Customer run: {finding.state.customerRunStatus ?? "None"} | Step{" "}
+                            {finding.state.customerRunStep ?? "None"}
+                          </p>
+                          {finding.state.failedDestinations.length > 0 ? (
+                            <p>
+                              Failed outbound: {finding.state.failedDestinations.join(", ")}
+                            </p>
+                          ) : null}
+                          {finding.recommendedAction ? (
+                            <p>Recommended action: {finding.recommendedAction}</p>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-3 text-sm font-medium">
+                          <Link
+                            href={accountHref}
+                            className="text-accent transition hover:text-ink"
+                          >
+                            Open organization account
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : scaleSnapshot.globalOpsDashboard.recentFulfillmentRecovered.length > 0 ? (
+                  scaleSnapshot.globalOpsDashboard.recentFulfillmentRecovered.map((
+                    finding: FulfillmentVisibilityEntry
+                  ) => {
+                    const accountHref = `/admin/accounts/${finding.organization.id}` as Route;
+
+                    return (
+                      <div key={`${finding.linkage.deliveryStateId}-${finding.code}`} className="rounded-2xl border border-line p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <Link
+                              href={accountHref}
+                              className="font-medium text-ink transition hover:text-accent"
+                            >
+                              {finding.organization.name}
+                            </Link>
+                            <p className="mt-1 text-sm text-steel">
+                              {finding.organization.slug}
+                            </p>
+                          </div>
+                          <div className="text-right text-sm text-steel">
+                            <p>{formatStatus(finding.status)}</p>
+                            <p className="mt-1">{formatDateTime(new Date(finding.observedAt))}</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 font-medium text-ink">{finding.title}</p>
+                        <p className="mt-2 text-sm text-steel">{finding.summary}</p>
+                        <div className="mt-3 space-y-1 text-sm text-steel">
+                          <p>
+                            Delivery: {finding.state.deliveryStatus} | Dispatch{" "}
+                            {finding.state.workflowDispatchStatus ?? "Not linked"}
+                          </p>
+                          <p>
+                            Recovery at:{" "}
+                            {formatDateTime(
+                              finding.state.recoveryAt ? new Date(finding.state.recoveryAt) : null
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-line p-4 text-sm text-steel">
+                    No recent fulfillment drift or recovery records matched this view.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-base font-semibold text-ink">
                 Report and delivery findings
               </h3>
               <div className="mt-3 space-y-3">
                 {scaleSnapshot.globalOpsDashboard.recentDeliveryOpsFindings.length > 0 ? (
-                  scaleSnapshot.globalOpsDashboard.recentDeliveryOpsFindings.map((finding) => {
+                  scaleSnapshot.globalOpsDashboard.recentDeliveryOpsFindings.map((
+                    finding: GlobalDeliveryOpsFinding
+                  ) => {
                     const accountHref = `/admin/accounts/${finding.organizationId}` as Route;
                     const queueHref = `/admin/queues/${finding.id}` as Route;
 
@@ -964,7 +1111,9 @@ export default async function AdminPage({
             Fast operator summaries for account lookup, billing state checks, owner identification, usage posture, and latest product activity.
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {scaleSnapshot.supportSafeAccountSummaries.map((summary) => {
+            {scaleSnapshot.supportSafeAccountSummaries.map((
+              summary: SupportSafeAccountSummary
+            ) => {
               const accountHref = `/admin/accounts/${summary.organizationId}` as Route;
 
               return (
@@ -1026,7 +1175,7 @@ export default async function AdminPage({
           <div>
             <h2 className="text-lg font-semibold text-ink">Billing event inspection</h2>
             <div className="mt-4 space-y-3">
-              {scaleSnapshot.recentBillingEvents.map((event) => (
+              {scaleSnapshot.recentBillingEvents.map((event: RecentBillingEvent) => (
                 <div key={event.id} className="rounded-2xl border border-line p-4">
                   <p className="font-medium text-ink">{event.type}</p>
                   <p className="mt-1 text-sm text-steel">
@@ -1072,7 +1221,7 @@ export default async function AdminPage({
               </div>
             </div>
             <div className="mt-4 space-y-3">
-              {scaleSnapshot.recentLeadSubmissions.map((lead) => (
+              {scaleSnapshot.recentLeadSubmissions.map((lead: RecentLeadSubmission) => (
                 <div key={lead.id} className="rounded-2xl border border-line p-4">
                   <p className="font-medium text-ink">{lead.email}</p>
                   <p className="mt-1 text-sm text-steel">
@@ -1499,3 +1648,4 @@ export default async function AdminPage({
     </main>
   );
 }
+

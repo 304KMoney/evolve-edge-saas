@@ -5,16 +5,25 @@ import {
   prisma
 } from "@evolve-edge/db";
 import { publishDomainEvent } from "./domain-events";
-import { dispatchQueuedAssessmentAnalysisJobs } from "./dify";
-import { queueRenewalReminderNotifications } from "./email";
+import { cleanupExpiredComplianceData } from "./data-retention";
+import { dispatchQueuedAssessmentAnalysisJobs } from "./ai-execution";
+import {
+  dispatchPendingEmailNotifications,
+  queueRenewalReminderNotifications
+} from "./email";
 import { logServerEvent, sendOperationalAlert } from "./monitoring";
 import { getOptionalEnv, requireEnv } from "./runtime-config";
 import { getOrganizationUsageSnapshot } from "./usage";
 import { dispatchPendingWebhookDeliveries } from "./webhook-dispatcher";
+import { dispatchPendingWorkflowDispatches } from "./workflow-dispatch";
 
 type JobName =
+  | "dispatch-workflow-dispatches"
+  | "dispatch-email-notifications"
   | "retry-webhook-deliveries"
+  | "retry-ai-analysis"
   | "retry-dify-analysis"
+  | "data-retention-cleanup"
   | "renewal-reminders"
   | "stale-onboarding-check"
   | "low-activity-check";
@@ -27,8 +36,11 @@ type JobResult = {
 };
 
 const JOB_NAMES: JobName[] = [
+  "dispatch-workflow-dispatches",
+  "dispatch-email-notifications",
   "retry-webhook-deliveries",
-  "retry-dify-analysis",
+  "retry-ai-analysis",
+  "data-retention-cleanup",
   "renewal-reminders",
   "stale-onboarding-check",
   "low-activity-check"
@@ -69,6 +81,10 @@ function getLowActivityDays() {
 
 export function requireCronSecret() {
   return getCronSecret();
+}
+
+export function getScheduledJobNames() {
+  return [...JOB_NAMES];
 }
 
 async function recordJobRun(input: {
@@ -156,10 +172,26 @@ async function runWebhookRetryJob() {
   }) as Promise<Prisma.InputJsonValue>;
 }
 
-async function runDifyRetryJob() {
+async function runWorkflowDispatchJob() {
+  return dispatchPendingWorkflowDispatches({
+    limit: getWebhookJobLimit()
+  }) as Promise<Prisma.InputJsonValue>;
+}
+
+async function runEmailDispatchJob() {
+  return dispatchPendingEmailNotifications({
+    limit: getRenewalJobLimit()
+  }) as Promise<Prisma.InputJsonValue>;
+}
+
+async function runAiRetryJob() {
   return dispatchQueuedAssessmentAnalysisJobs({
     limit: getAnalysisJobLimit()
   }) as Promise<Prisma.InputJsonValue>;
+}
+
+async function runDataRetentionCleanupJob() {
+  return cleanupExpiredComplianceData() as Promise<Prisma.InputJsonValue>;
 }
 
 async function runRenewalReminderJob() {
@@ -273,10 +305,17 @@ async function runLowActivityCheck() {
 
 async function executeNamedJob(jobName: JobName) {
   switch (jobName) {
+    case "dispatch-workflow-dispatches":
+      return runWorkflowDispatchJob();
+    case "dispatch-email-notifications":
+      return runEmailDispatchJob();
     case "retry-webhook-deliveries":
       return runWebhookRetryJob();
+    case "retry-ai-analysis":
     case "retry-dify-analysis":
-      return runDifyRetryJob();
+      return runAiRetryJob();
+    case "data-retention-cleanup":
+      return runDataRetentionCleanupJob();
     case "renewal-reminders":
       return runRenewalReminderJob();
     case "stale-onboarding-check":

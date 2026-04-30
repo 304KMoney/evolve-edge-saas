@@ -19,7 +19,9 @@ import {
   type CanonicalPlanCode,
   getCanonicalCommercialPlanDefinition,
   getCanonicalCommercialPlanCatalog,
+  getStripeCheckoutModeForCanonicalPlan,
   mapCanonicalPlanKeyToCanonicalPlanCode,
+  resolveCanonicalBillingCadence,
   resolveCanonicalPlanCode,
   resolveCanonicalPlanCodeFromRevenuePlanCode,
   resolveRevenuePlanCodeForCanonicalPlan,
@@ -261,13 +263,12 @@ function determineAccessState(input: {
 }
 
 export function formatPriceCents(priceCents: number, interval: string) {
-  return (
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0
-    }).format(priceCents / 100) + ` / ${interval}`
-  );
+  const formatted = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0
+  }).format(priceCents / 100);
+  return `${formatted} / ${interval}`;
 }
 
 export function formatBillingAccessState(accessState: BillingAccessState | null | undefined) {
@@ -350,20 +351,35 @@ export async function ensureDefaultPlans() {
 
 export async function listBillablePlans() {
   await ensureDefaultPlans();
-  const publicRevenuePlanCodes = getCanonicalCommercialPlanCatalog()
-    .map((plan) => plan.publicRevenuePlanCode)
-    .filter((value): value is NonNullable<typeof value> => value !== null);
+  const publicRevenuePlanCodes = getCanonicalCommercialPlanCatalog().flatMap((plan) => {
+    if (plan.billingMotion === "stripe_checkout") {
+      return [
+        resolveRevenuePlanCodeForCanonicalPlan(plan.code, "monthly"),
+        resolveRevenuePlanCodeForCanonicalPlan(plan.code, "annual")
+      ].filter((value): value is NonNullable<typeof value> => value !== null);
+    }
 
-  return prisma.plan.findMany({
+    return plan.publicRevenuePlanCode ? [plan.publicRevenuePlanCode] : [];
+  });
+  const planOrder = new Map(
+    publicRevenuePlanCodes.map((planCode, index) => [planCode, index] as const)
+  );
+
+  const plans = await prisma.plan.findMany({
     where: {
       isActive: true,
       isPublic: true,
       code: {
         in: publicRevenuePlanCodes
       }
-    },
-    orderBy: [{ sortOrder: "asc" }, { priceCents: "asc" }]
+    }
   });
+
+  return plans.sort(
+    (left, right) =>
+      (planOrder.get(left.code) ?? Number.MAX_SAFE_INTEGER) -
+      (planOrder.get(right.code) ?? Number.MAX_SAFE_INTEGER)
+  );
 }
 
 async function findPlanByCode(db: BillingDbClient, planCode: string) {
@@ -822,6 +838,7 @@ export async function createStripeCheckoutSession(input: {
   organizationId: string;
   email: string;
   planCode: string;
+  billingCadence?: "monthly" | "annual" | null;
   successUrl: string;
   cancelUrl: string;
 }) {
@@ -829,8 +846,14 @@ export async function createStripeCheckoutSession(input: {
   const canonicalPlanCode =
     resolveCanonicalPlanCode(input.planCode) ??
     resolveCanonicalPlanCodeFromRevenuePlanCode(input.planCode);
+  const billingCadence = resolveCanonicalBillingCadence(
+    input.billingCadence ?? undefined,
+    "annual"
+  );
   const resolvedPlanCode =
-    canonicalPlanCode ? resolveRevenuePlanCodeForCanonicalPlan(canonicalPlanCode) : input.planCode;
+    canonicalPlanCode
+      ? resolveRevenuePlanCodeForCanonicalPlan(canonicalPlanCode, billingCadence)
+      : input.planCode;
 
   if (canonicalPlanCode && !supportsStripeCheckoutForCanonicalPlan(canonicalPlanCode)) {
     throw new Error(
@@ -850,6 +873,7 @@ export async function createStripeCheckoutSession(input: {
     canonicalPlanCode ??
     resolveCanonicalPlanCodeFromRevenuePlanCode(plan.code) ??
     mapCanonicalPlanKeyToCanonicalPlanCode(plan.canonicalKey);
+  const checkoutMode = getStripeCheckoutModeForCanonicalPlan(metadataPlanCode) ?? "subscription";
 
   const stripeMetadata = buildStripeContextMetadata({
     organizationId: input.organizationId,
@@ -870,7 +894,7 @@ export async function createStripeCheckoutSession(input: {
 
   const session = await callStripe<{ id: string; url: string }>("checkout/sessions", {
     formBody: new URLSearchParams({
-      mode: "subscription",
+      mode: checkoutMode,
       customer: stripeCustomerId,
       client_reference_id: input.organizationId,
       success_url: input.successUrl,
@@ -881,10 +905,12 @@ export async function createStripeCheckoutSession(input: {
       "line_items[0][price]": plan.stripePriceId,
       "line_items[0][quantity]": "1",
       ...Object.fromEntries(
-        Object.entries(stripeMetadata).flatMap(([key, value]) => [
-          [`metadata[${key}]`, value],
-          [`subscription_data[metadata][${key}]`, value]
-        ])
+        Object.entries(stripeMetadata).flatMap(([key, value]) =>
+          [
+            [`metadata[${key}]`, value],
+            [`subscription_data[metadata][${key}]`, value]
+          ]
+        )
       )
     }),
     idempotencyKey: `stripe-checkout:${input.organizationId}:${resolvedPlanCode ?? input.planCode}:${stripeCustomerId}`

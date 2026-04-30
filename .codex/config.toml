@@ -1,0 +1,8 @@
+# Project-scoped Codex MCP wiring for Apollo enrichment.
+# Codex supports project-scoped MCP config in trusted projects.
+
+[mcp_servers.apollo]
+command = "node"
+args = [".codex/apollo-mcp-server.mjs"]
+cwd = "."
+env_vars = ["APOLLO_API_KEY", "APOLLO_API_BASE_URL"]

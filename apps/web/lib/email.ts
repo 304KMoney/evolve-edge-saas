@@ -14,7 +14,12 @@ type EmailTemplateKey =
   | "welcome"
   | "invite"
   | "member-joined"
+  | "pricing-access-guide"
+  | "pricing-access-credentials"
   | "report-ready"
+  | "report-delivered"
+  | "report-follow-up-3-day"
+  | "report-follow-up-7-day"
   | "payment-failed"
   | "renewal-reminder";
 
@@ -26,6 +31,7 @@ type QueueEmailInput = {
   orgId?: string | null;
   userId?: string | null;
   eventId?: string | null;
+  sendAfterAt?: Date | null;
   payload: Prisma.InputJsonValue;
 };
 
@@ -185,6 +191,69 @@ function renderEmailTemplate(
         ].join("\n\n")
       };
     }
+    case "pricing-access-guide": {
+      const planName = String(payload.planName ?? "your selected plan");
+      const companyName = String(payload.companyName ?? "your team");
+      const signInUrl = String(payload.signInUrl ?? `${getAppUrl()}/sign-in`);
+      const credentialsIssued = Boolean(payload.credentialsIssued);
+      const nextStep = String(
+        payload.nextStep ??
+          "Sign in with the credentials from the follow-up email and continue the guided setup flow."
+      );
+      const subject = `How to log in to Evolve Edge for ${planName}`;
+      const body = credentialsIssued
+        ? [
+            `We started the ${planName} workflow for ${companyName}.`,
+            "You will receive a second email with your temporary workspace credentials.",
+            nextStep
+          ]
+        : [
+            `We started the ${planName} workflow for ${companyName}.`,
+            "Use your existing workspace password to sign in.",
+            nextStep
+          ];
+
+      return {
+        subject,
+        html: renderLayout({
+          preview: subject,
+          heading: "Your access path is ready",
+          body,
+          ctaLabel: "Open sign in",
+          ctaUrl: signInUrl
+        }),
+        text: [...body, `Open sign in: ${signInUrl}`].join("\n\n")
+      };
+    }
+    case "pricing-access-credentials": {
+      const signInUrl = String(payload.signInUrl ?? `${getAppUrl()}/sign-in`);
+      const loginEmail = String(payload.loginEmail ?? "");
+      const temporaryPassword = String(payload.temporaryPassword ?? "");
+      const subject = "Your Evolve Edge login credentials";
+
+      return {
+        subject,
+        html: renderLayout({
+          preview: subject,
+          heading: "Temporary workspace credentials",
+          body: [
+            "Use these temporary credentials to sign in and continue your onboarding flow.",
+            `Email: ${loginEmail || "Use the email address that received this message."}`,
+            `Temporary password: ${temporaryPassword || "Open the secure sign-in link to continue."}`,
+            "For security, change the password during onboarding or from workspace settings after you sign in."
+          ],
+          ctaLabel: "Sign in",
+          ctaUrl: signInUrl
+        }),
+        text: [
+          "Use these temporary credentials to sign in and continue your onboarding flow.",
+          `Email: ${loginEmail || "Use the email address that received this message."}`,
+          `Temporary password: ${temporaryPassword || "Open the secure sign-in link to continue."}`,
+          "For security, change the password during onboarding or from workspace settings after you sign in.",
+          `Sign in: ${signInUrl}`
+        ].join("\n\n")
+      };
+    }
     case "report-ready": {
       const reportTitle = String(payload.reportTitle ?? "Your executive report");
       const organizationName = String(payload.organizationName ?? "your workspace");
@@ -234,6 +303,89 @@ function renderEmailTemplate(
           `We could not process the latest payment for ${organizationName}.`,
           failureMessage,
           `Open billing: ${billingUrl}`
+        ].join("\n\n")
+      };
+    }
+    case "report-delivered": {
+      const reportTitle = String(payload.reportTitle ?? "Your executive report");
+      const organizationName = String(payload.organizationName ?? "your workspace");
+      const reportUrl = String(payload.reportUrl ?? `${getAppUrl()}/dashboard/reports`);
+      const briefingUrl = String(payload.briefingUrl ?? getAppUrl());
+      const executiveSummary = String(
+        payload.executiveSummary ??
+          "Your report is ready to review, with priority findings and a recommended remediation roadmap."
+      ).trim();
+      const subject = `Executive report delivered: ${reportTitle}`;
+
+      return {
+        subject,
+        html: renderLayout({
+          preview: subject,
+          heading: "Your executive audit report is ready",
+          body: [
+            `${reportTitle} has now been delivered for ${organizationName}.`,
+            executiveSummary,
+            "Use the report link below to review the findings, roadmap, and executive briefing materials. If you want a working session with leadership, use the briefing link to book it."
+          ],
+          ctaLabel: "Open report",
+          ctaUrl: reportUrl
+        }),
+        text: [
+          `${reportTitle} has now been delivered for ${organizationName}.`,
+          executiveSummary,
+          `Open report: ${reportUrl}`,
+          `Book executive briefing: ${briefingUrl}`
+        ].join("\n\n")
+      };
+    }
+    case "report-follow-up-3-day": {
+      const reportTitle = String(payload.reportTitle ?? "your executive report");
+      const organizationName = String(payload.organizationName ?? "your workspace");
+      const reportUrl = String(payload.reportUrl ?? `${getAppUrl()}/dashboard/reports`);
+      const briefingUrl = String(payload.briefingUrl ?? getAppUrl());
+      const subject = `3-day follow-up: ${reportTitle}`;
+
+      return {
+        subject,
+        html: renderLayout({
+          preview: subject,
+          heading: "Checking in on your report",
+          body: [
+            `It has been a few days since ${reportTitle} was delivered for ${organizationName}.`,
+            "If you have not reviewed the priority findings yet, this is a good moment to align on the top risks and near-term remediation actions.",
+            "If it would help, you can book an executive briefing to walk through the report live."
+          ],
+          ctaLabel: "Book briefing",
+          ctaUrl: briefingUrl
+        }),
+        text: [
+          `It has been a few days since ${reportTitle} was delivered for ${organizationName}.`,
+          `Open report: ${reportUrl}`,
+          `Book briefing: ${briefingUrl}`
+        ].join("\n\n")
+      };
+    }
+    case "report-follow-up-7-day": {
+      const reportTitle = String(payload.reportTitle ?? "your executive report");
+      const organizationName = String(payload.organizationName ?? "your workspace");
+      const reportUrl = String(payload.reportUrl ?? `${getAppUrl()}/dashboard/reports`);
+      const subject = `7-day follow-up: ${reportTitle}`;
+
+      return {
+        subject,
+        html: renderLayout({
+          preview: subject,
+          heading: "Next steps after your audit",
+          body: [
+            `${organizationName} now has a delivered audit baseline for ${reportTitle}.`,
+            "The strongest next move is usually to convert the top findings into owned remediation work and decide whether you want ongoing monitoring, remediation support, or a deeper advisory follow-on."
+          ],
+          ctaLabel: "Review report",
+          ctaUrl: reportUrl
+        }),
+        text: [
+          `${organizationName} now has a delivered audit baseline for ${reportTitle}.`,
+          `Review report: ${reportUrl}`
         ].join("\n\n")
       };
     }
@@ -297,6 +449,7 @@ export async function queueEmailNotification(
       orgId: input.orgId ?? null,
       userId: input.userId ?? null,
       eventId: input.eventId ?? null,
+      nextRetryAt: input.sendAfterAt ?? null,
       provider
     },
     create: {
@@ -311,6 +464,7 @@ export async function queueEmailNotification(
       orgId: input.orgId ?? null,
       userId: input.userId ?? null,
       eventId: input.eventId ?? null,
+      nextRetryAt: input.sendAfterAt ?? null,
       payload: payloadObject
     }
   });

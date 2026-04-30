@@ -30,7 +30,9 @@ function runEntitlementTests() {
 
     assert.equal(growth.featureAccess["assessments.create"], true);
     assert.equal(growth.featureAccess["members.manage"], true);
-    assert.equal(growth.featureAccess["custom.frameworks"], false);
+    assert.equal(growth.featureAccess["custom.frameworks"], true);
+    assert.equal(growth.featureAccess["executive.delivery"], false);
+    assert.equal(growth.featureAccess["priority.support"], false);
     assert.equal(growth.limits.users, 8);
     assert.equal(growth.limits.reports_generated, 36);
   }

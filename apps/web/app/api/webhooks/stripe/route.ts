@@ -10,12 +10,14 @@ import {
 } from "../../../../lib/commercial-routing";
 import { resolveRevenuePlanCodeForCanonicalPlan } from "../../../../lib/commercial-catalog";
 import { createDeliveryStateFromPaidRequest } from "../../../../lib/delivery-state";
+import { maskEmail } from "../../../../lib/intake-observability";
 import { logServerEvent } from "../../../../lib/monitoring";
-import { requireEnv } from "../../../../lib/runtime-config";
+import { getRuntimeEnvironment, requireEnv } from "../../../../lib/runtime-config";
 import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
 import { expectObject, ValidationError } from "../../../../lib/security-validation";
 import { verifyStripeWebhookSignature } from "../../../../lib/security-webhooks";
 import { queueAuditRequestedDispatch } from "../../../../lib/workflow-dispatch";
+import { getOrganizationAuditReadiness } from "../../../../lib/audit-intake";
 
 export const runtime = "nodejs";
 
@@ -53,7 +55,17 @@ function parseStripeEvent(rawPayload: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const rateLimited = applyRouteRateLimit(request, {
+    if (getRuntimeEnvironment() === "production") {
+      return NextResponse.json(
+        {
+          error:
+            "This legacy Stripe webhook endpoint is disabled in production. Use /api/stripe/webhook."
+        },
+        { status: 410 }
+      );
+    }
+
+    const rateLimited = await applyRouteRateLimit(request, {
       key: "stripe-webhooks-v2",
       category: "webhook"
     });
@@ -138,10 +150,15 @@ export async function POST(request: Request) {
       idempotencyKey: `routing-snapshot:stripe-checkout-session:${checkoutSessionId}`
     });
 
-    const workflowDispatch = await queueAuditRequestedDispatch({
-      routingSnapshotId: routingSnapshot.id,
-      deliveryStateRecordId: deliveryState.id
+    const readiness = await getOrganizationAuditReadiness({
+      organizationId: commercialContext.organization.id
     });
+    const workflowDispatch = readiness.readyForAudit
+      ? await queueAuditRequestedDispatch({
+          routingSnapshotId: routingSnapshot.id,
+          deliveryStateRecordId: deliveryState.id
+        })
+      : null;
 
     logServerEvent("info", "stripe.webhook_v2.checkout_completed", {
       event_id: event.id,
@@ -152,11 +169,13 @@ export async function POST(request: Request) {
       metadata: {
         checkoutSessionId,
         tier: normalizedTier,
-        customerEmail: commercialContext.user.email,
-        customerName: [commercialContext.user.firstName, commercialContext.user.lastName].filter(Boolean).join(" ") || null,
+        customerEmailMasked: maskEmail(commercialContext.user.email),
         deliveryStateId: deliveryState.id,
         routingSnapshotId: routingSnapshot.id,
-        workflowDispatchId: workflowDispatch.id
+        workflowDispatchId: workflowDispatch?.id ?? null,
+        dispatchBlockedReason: readiness.readyForAudit
+          ? null
+          : "audit_intake_incomplete"
       }
     });
 
@@ -164,13 +183,12 @@ export async function POST(request: Request) {
       ok: true,
       eventId: event.id,
       sessionId: checkoutSessionId,
-      email: commercialContext.user.email,
-      name: [commercialContext.user.firstName, commercialContext.user.lastName].filter(Boolean).join(" ") || null,
       tier: normalizedTier,
       organizationId: commercialContext.organization.id,
       deliveryStateId: deliveryState.id,
       routingSnapshotId: routingSnapshot.id,
-      workflowDispatchId: workflowDispatch.id
+      workflowDispatchId: workflowDispatch?.id ?? null,
+      dispatchBlocked: !readiness.readyForAudit
     });
   } catch (error) {
     if (error instanceof ValidationError) {

@@ -9,6 +9,7 @@ import {
   isPrismaRuntimeCompatibilityError,
   logPrismaRuntimeCompatibilityError
 } from "../../../../lib/prisma-runtime";
+import { logServerEvent } from "../../../../lib/monitoring";
 import { applyRouteRateLimit } from "../../../../lib/security-rate-limit";
 import {
   expectObject,
@@ -18,6 +19,7 @@ import {
   readRequiredString,
   ValidationError
 } from "../../../../lib/security-validation";
+import { enforceTrustedOrigin } from "../../../../lib/route-security";
 import type {
   ProductAnalyticsEventMap,
   ProductAnalyticsEventName
@@ -34,7 +36,12 @@ type AnalyticsTrackRequest = {
 };
 
 export async function POST(request: Request) {
-  const rateLimited = applyRouteRateLimit(request, {
+  const invalidOrigin = enforceTrustedOrigin(request);
+  if (invalidOrigin) {
+    return invalidOrigin;
+  }
+
+  const rateLimited = await applyRouteRateLimit(request, {
     key: "analytics-track"
   });
   if (rateLimited) {
@@ -90,10 +97,14 @@ export async function POST(request: Request) {
         source
       });
     } else {
-      console.error("product-analytics.track_failed", {
-        name,
+      logServerEvent("warn", "product_analytics.track_failed", {
+        route: "api.analytics.track",
         source,
-        message: error instanceof Error ? error.message : "Unknown error"
+        status: "failed",
+        metadata: {
+          name,
+          message: error instanceof Error ? error.message : "Unknown error"
+        }
       });
     }
   }

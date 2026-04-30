@@ -2,5 +2,15 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @evolve-edge/web build"
+  "buildCommand": "pnpm --filter @evolve-edge/web build",
+  "crons": [
+    {
+      "path": "/api/internal/jobs/run?job=dispatch-workflow-dispatches",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/jobs/run?job=dispatch-email-notifications",
+      "schedule": "0 14 * * *"
+    }
+  ]
 }

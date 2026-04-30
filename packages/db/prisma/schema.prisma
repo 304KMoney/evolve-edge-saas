@@ -114,6 +114,19 @@ enum DeliveryStateStatus {
   FAILED
 }
 
+enum AuditLifecycleStatus {
+  INTAKE_PENDING
+  INTAKE_COMPLETE
+  ROUTING_COMPLETE
+  ANALYSIS_PENDING
+  ANALYSIS_RUNNING
+  ANALYSIS_COMPLETE
+  REPORT_READY
+  BRIEFING_READY
+  DELIVERED
+  FAILED_REVIEW_REQUIRED
+}
+
 enum EntitlementOverrideSource {
   ENTERPRISE
   PROMO
@@ -156,6 +169,22 @@ enum JobStatus {
   CANCELED
 }
 
+enum AuditWorkflowCheckpointStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  PAUSED_FOR_REVIEW
+}
+
+enum AiWorkflowFeedbackType {
+  APPROVED
+  REJECTED
+  EDITED
+  REGENERATED
+  FLAGGED
+  CUSTOMER_FEEDBACK
+}
+
 enum FindingSeverity {
   LOW
   MEDIUM
@@ -173,6 +202,10 @@ enum RecommendationPriority {
 enum ReportStatus {
   PENDING
   PROCESSING
+  GENERATED
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
   READY
   FAILED
   DELIVERED
@@ -212,6 +245,13 @@ enum WebhookDeliveryStatus {
   PROCESSING
   RETRYING
   DELIVERED
+  FAILED
+}
+
+enum InboundWebhookReceiptStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
   FAILED
 }
 
@@ -616,7 +656,9 @@ model User {
   routingSnapshots       RoutingSnapshot[]          @relation("RoutingSnapshotUser")
   deliveryStates         DeliveryStateRecord[]      @relation("DeliveryStateUser")
   deliveryStateTransitions DeliveryStateTransition[] @relation("DeliveryStateTransitionActor")
+  auditLifecycleTransitions AuditLifecycleTransition[] @relation("AuditLifecycleTransitionActor")
   customerAccessGrants   CustomerAccessGrantRecord[] @relation("CustomerAccessGrantUser")
+  passwordResetTokens    PasswordResetToken[]
 }
 
 model Organization {
@@ -648,6 +690,7 @@ model Organization {
   usageEvents         UsageEvent[]
   assessments         Assessment[]
   reports             Report[]
+  briefings           Briefing[]
   frameworkSelections OrganizationFramework[]
   vendors             Vendor[]
   models              AIModel[]
@@ -688,6 +731,9 @@ model Organization {
   routingSnapshots      RoutingSnapshot[]
   deliveryStates        DeliveryStateRecord[]
   deliveryStateTransitions DeliveryStateTransition[]
+  auditLifecycles       AuditLifecycle[]
+  auditLifecycleTransitions AuditLifecycleTransition[]
+  aiWorkflowFeedbackEntries AiWorkflowFeedback[]
 }
 
 model OrganizationMember {
@@ -1421,6 +1467,27 @@ model WebhookDelivery {
   @@index([destination, status])
 }
 
+/// Durable inbound webhook receipt for non-Stripe providers. Stripe events use
+/// BillingEvent because they own billing reconciliation state; this table gives
+/// operational webhooks the same replay-safe receipt boundary.
+model InboundWebhookReceipt {
+  id                  String                      @id @default(cuid())
+  provider            String
+  messageId           String
+  eventType           String?
+  status              InboundWebhookReceiptStatus @default(PENDING)
+  processingStartedAt DateTime?
+  processedAt         DateTime?
+  failedAt            DateTime?
+  lastError           String?
+  payload             Json?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+
+  @@unique([provider, messageId])
+  @@index([provider, status, createdAt])
+}
+
 model EventReplayAttempt {
   id                String                   @id @default(cuid())
   targetType        EventReplayTargetType
@@ -1736,6 +1803,7 @@ model Assessment {
   frameworkPostureSnapshots FrameworkPostureSnapshot[]
   engagementProgram EngagementProgram? @relation(fields: [engagementProgramId], references: [id], onDelete: SetNull)
   engagementDeliverables EngagementDeliverable[]
+  auditLifecycle        AuditLifecycle?
 
   @@index([engagementProgramId, createdAt])
 }
@@ -1881,10 +1949,49 @@ model AnalysisJob {
   completedAt  DateTime?
   createdAt    DateTime   @default(now())
   assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  checkpoints  AuditWorkflowCheckpoint[]
 
   @@index([status, createdAt])
   @@index([provider, status])
   @@index([providerRequestId])
+}
+
+model AuditWorkflowCheckpoint {
+  id                 String                        @id @default(cuid())
+  analysisJobId      String?
+  workflowDispatchId String
+  dispatchId         String
+  orgId              String
+  assessmentId       String
+  nodeName           String
+  nodeOrder          Int
+  status             AuditWorkflowCheckpointStatus
+  stateSnapshot      Json
+  errorMessage       String?
+  createdAt          DateTime                      @default(now())
+  analysisJob        AnalysisJob?                  @relation(fields: [analysisJobId], references: [id], onDelete: SetNull)
+
+  @@index([workflowDispatchId, createdAt])
+  @@index([workflowDispatchId, nodeOrder, createdAt])
+  @@index([analysisJobId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AiWorkflowFeedback {
+  id                 String                 @id @default(cuid())
+  workflowDispatchId String
+  organizationId     String
+  reportId           String?
+  feedbackType       AiWorkflowFeedbackType
+  notes              String?
+  metadataJson       Json?
+  createdAt          DateTime               @default(now())
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  report             Report?                @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([workflowDispatchId, createdAt])
+  @@index([organizationId, feedbackType, createdAt])
+  @@index([reportId, createdAt])
 }
 
 model Finding {
@@ -2103,11 +2210,86 @@ model Report {
   paymentReconciliations PaymentReconciliationRecord[]
   customerAccessGrants CustomerAccessGrantRecord[]
   operatorWorkflowEvents OperatorWorkflowEventRecord[]
+  aiWorkflowFeedbackEntries AiWorkflowFeedback[]
+  briefing          Briefing?
+  auditLifecycle    AuditLifecycle?
 
   @@index([organizationId, status, publishedAt])
   @@index([customerAccountId, createdAt])
   @@index([selectedPlan, createdAt])
   @@index([engagementProgramId, createdAt])
+}
+
+model Briefing {
+  id                 String       @id @default(cuid())
+  reportId           String       @unique
+  organizationId     String
+  summary            String
+  structuredSections Json
+  createdAt          DateTime     @default(now())
+  report             Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+model AuditLifecycle {
+  id                     String               @id @default(cuid())
+  organizationId         String
+  assessmentId           String               @unique
+  routingSnapshotId      String?
+  workflowDispatchId     String?
+  reportId               String?              @unique
+  briefingId             String?
+  status                 AuditLifecycleStatus @default(INTAKE_PENDING)
+  statusReason           String?
+  currentMetadata        Json?
+  intakePendingAt        DateTime?
+  intakeCompleteAt       DateTime?
+  routingCompleteAt      DateTime?
+  analysisPendingAt      DateTime?
+  analysisRunningAt      DateTime?
+  analysisCompleteAt     DateTime?
+  reportReadyAt          DateTime?
+  briefingReadyAt        DateTime?
+  deliveredAt            DateTime?
+  failedReviewRequiredAt DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assessment             Assessment           @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  report                 Report?              @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  transitions            AuditLifecycleTransition[]
+
+  @@index([organizationId, status, updatedAt])
+  @@index([routingSnapshotId])
+  @@index([workflowDispatchId])
+  @@index([briefingId])
+}
+
+model AuditLifecycleTransition {
+  id               String                @id @default(cuid())
+  auditLifecycleId String
+  organizationId   String
+  assessmentId     String
+  actorUserId      String?
+  actorType        AuditActorType        @default(SYSTEM)
+  actorLabel       String?
+  fromStatus       AuditLifecycleStatus?
+  toStatus         AuditLifecycleStatus
+  reasonCode       String?
+  note             String?
+  metadata         Json?
+  occurredAt       DateTime              @default(now())
+  createdAt        DateTime              @default(now())
+  auditLifecycle   AuditLifecycle        @relation(fields: [auditLifecycleId], references: [id], onDelete: Cascade)
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUser        User?                 @relation("AuditLifecycleTransitionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([auditLifecycleId, occurredAt])
+  @@index([organizationId, occurredAt])
+  @@index([assessmentId, occurredAt])
+  @@index([toStatus, occurredAt])
 }
 
 model ReportPackage {
@@ -2166,6 +2348,7 @@ model ReportPackageVersion {
   executiveSummaryJson Json
   roadmapSummaryJson   Json
   frameworkSummaryJson Json
+  executiveBriefingJson Json?
   packetJson           Json
   createdAt            DateTime @default(now())
   reportPackage        ReportPackage @relation(fields: [reportPackageId], references: [id], onDelete: Cascade)
@@ -2497,4 +2680,14 @@ model AuditLog {
   @@index([action, createdAt])
   @@index([entityType, entityId, createdAt])
   @@index([resourceType, resourceId, createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

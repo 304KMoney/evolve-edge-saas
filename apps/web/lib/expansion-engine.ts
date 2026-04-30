@@ -11,6 +11,7 @@ import {
   getRevenuePlanCatalog,
   getRevenuePlanDefinition
 } from "./revenue-catalog";
+import { shouldBlockDemoExternalSideEffects } from "./demo-mode";
 import { canManageBilling, canOperateWorkspace } from "./roles";
 
 export type UpsellPlacement =
@@ -220,6 +221,16 @@ function buildContactSalesCta(
   };
 }
 
+function buildDemoModeBillingCta(): UpsellOfferCta {
+  return {
+    kind: "link",
+    href: "/dashboard/settings?billing=demo-mode#billing-controls",
+    label: "Review billing status",
+    helperText:
+      "Billing changes stay disabled in demo mode so the workspace can be explored safely without opening live Stripe flows."
+  };
+}
+
 function getHighestUsageMetric(
   usageMetering: OrganizationUsageMeteringSnapshot,
   keys: UsageMetricKey[]
@@ -299,6 +310,10 @@ function selectUpgradePlan(input: {
 }
 
 function resolveUpgradeCta(input: ExpansionContext, targetPlanCode: RevenuePlanCode): UpsellOfferCta {
+  if (shouldBlockDemoExternalSideEffects()) {
+    return buildDemoModeBillingCta();
+  }
+
   if (!canManageBilling(input.session.organization?.role)) {
     return {
       kind: "link",

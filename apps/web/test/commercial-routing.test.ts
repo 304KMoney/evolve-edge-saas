@@ -144,6 +144,39 @@ function runCommercialRoutingTests() {
   });
   assert.equal(scaleDecision.workflowCode, CanonicalWorkflowCode.AUDIT_SCALE);
   assert.equal(scaleDecision.hints.processing_tier, "scale");
+  assert.equal(scaleDecision.hints.capability_profile.report_depth, "enhanced");
+  assert.equal(scaleDecision.hints.capability_profile.max_findings, 10);
+  assert.equal(scaleDecision.hints.capability_profile.executive_briefing_eligible, false);
+
+  const starterDecision = deriveCommercialWorkflowDecision({
+    planCode: CommercialPlanCode.STARTER,
+    entitlements: createEntitlements({
+      canonicalPlanKey: CanonicalPlanKey.STARTER,
+      planCode: "starter-annual",
+      featureAccess: {
+        ...createEntitlements().featureAccess,
+        "monitoring.manage": false,
+        "priority.support": false,
+        "custom.frameworks": false
+      }
+    })
+  });
+  assert.equal(starterDecision.workflowCode, CanonicalWorkflowCode.AUDIT_STARTER);
+  assert.equal(starterDecision.hints.capability_profile.report_depth, "concise");
+  assert.equal(starterDecision.hints.capability_profile.max_findings, 5);
+  assert.equal(starterDecision.hints.capability_profile.executive_briefing_eligible, false);
+
+  const enterpriseDecision = deriveCommercialWorkflowDecision({
+    planCode: CommercialPlanCode.ENTERPRISE,
+    entitlements: createEntitlements({
+      canonicalPlanKey: CanonicalPlanKey.ENTERPRISE,
+      planCode: "enterprise-annual"
+    })
+  });
+  assert.equal(enterpriseDecision.workflowCode, CanonicalWorkflowCode.AUDIT_ENTERPRISE);
+  assert.equal(enterpriseDecision.hints.capability_profile.report_depth, "custom");
+  assert.equal(enterpriseDecision.hints.capability_profile.max_findings, 15);
+  assert.equal(enterpriseDecision.hints.capability_profile.roadmap_detail, "full");
 
   const quotaDecision = deriveCommercialWorkflowDecision({
     planCode: CommercialPlanCode.STARTER,
@@ -163,6 +196,20 @@ function runCommercialRoutingTests() {
   });
   assert.equal(quotaDecision.workflowCode, CanonicalWorkflowCode.INTAKE_REVIEW);
   assert.equal(quotaDecision.reason.codes.includes("quota.audits.exceeded"), true);
+
+  const blockedDecision = deriveCommercialWorkflowDecision({
+    planCode: CommercialPlanCode.STARTER,
+    entitlements: createEntitlements({
+      canAccessWorkspace: false,
+      featureAccess: {
+        ...createEntitlements().featureAccess,
+        "workspace.access": false,
+        "assessments.create": false
+      }
+    })
+  });
+  assert.equal(blockedDecision.status, "FAILED");
+  assert.equal(blockedDecision.reason.codes.includes("workspace.access.missing"), true);
 
   console.log("commercial-routing tests passed");
 }

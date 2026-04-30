@@ -56,7 +56,7 @@ function parseSubscriptionStatus(value: string | null | undefined) {
 // - creates one durable ProvisioningRequest audit record before returning success
 export async function POST(request: Request) {
   try {
-    const rateLimited = applyRouteRateLimit(request, {
+    const rateLimited = await applyRouteRateLimit(request, {
       key: "internal-provision-org",
       category: "webhook"
     });

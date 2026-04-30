@@ -26,7 +26,7 @@ export type HostingerSiteSyncReference = {
     commercialModel: "backend";
     billing: "stripe";
     orchestration: "n8n";
-    aiProcessing: "dify";
+    aiProcessing: "dify" | "openai_langgraph";
     crm: "hubspot";
     presentation: "hostinger";
   };
@@ -46,7 +46,7 @@ function buildEntryHref(planCode: CanonicalPlanCode) {
     return getContactSalesUrl();
   }
 
-  return `${getAppUrl()}/pricing?plan=${encodeURIComponent(planCode)}`;
+  return `${getAppUrl()}/pricing?plan=${encodeURIComponent(planCode)}&billingCadence=monthly`;
 }
 
 export function getHostingerSiteSyncReference(): HostingerSiteSyncReference {
@@ -70,7 +70,7 @@ export function getHostingerSiteSyncReference(): HostingerSiteSyncReference {
       commercialModel: "backend",
       billing: "stripe",
       orchestration: "n8n",
-      aiProcessing: "dify",
+      aiProcessing: "openai_langgraph",
       crm: "hubspot",
       presentation: "hostinger"
     },
@@ -90,7 +90,8 @@ export function getHostingerSiteSyncReference(): HostingerSiteSyncReference {
       "Confirm Starter, Scale, and Enterprise names match the canonical catalog exactly.",
       "Confirm public pricing matches the backend-owned commercial model before publishing.",
       "Confirm Enterprise uses contact sales and not self-serve checkout.",
-      "Confirm Hostinger copy does not mention Growth, monthly billing, or annual billing toggles.",
+      "Confirm Hostinger copy does not mention Growth or any legacy one-time pricing.",
+      "If Hostinger exposes billing cadence, confirm monthly and annual labels match the app exactly. Otherwise link users into the app-owned pricing page.",
       "Confirm CTA destinations point to app-owned routes or the configured contact sales URL."
     ]
   };

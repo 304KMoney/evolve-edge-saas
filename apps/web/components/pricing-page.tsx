@@ -1,24 +1,129 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, CircleHelp, ShieldCheck, Workflow } from "lucide-react";
-import type { PricingPageData } from "../lib/pricing";
+import React from "react";
+import { useState } from "react";
+import { ArrowRight, CheckCircle2, CircleHelp, ShieldCheck } from "lucide-react";
+import type { PricingCta, PricingPageData } from "../lib/pricing";
+import type {
+  CanonicalBillingCadence,
+  CanonicalPlanCode
+} from "../lib/commercial-catalog";
 import {
-  EXPANSION_PATHS,
-  FOUNDING_RISK_AUDIT,
-  FOUNDING_RISK_AUDIT_AUDIENCE,
-  FOUNDING_RISK_AUDIT_DELIVERABLES,
-  FOUNDING_RISK_AUDIT_OUTCOMES,
-  FOUNDING_RISK_AUDIT_PROCESS,
+  EXECUTIVE_PROOF,
   PRICING_FAQ,
   PRICING_HERO,
-  PRICING_TRUST_SIGNALS
+  PRICING_SUMMARY,
+  PRICING_TRUST_SIGNALS,
+  ROI_POINTS,
+  SERVICE_OFFERS,
+  WHO_ITS_FOR
 } from "../lib/pricing-content";
 
-export function PricingPageClient({ data }: { data: PricingPageData }) {
-  const foundingOfferHref = data.marketingLinks.foundingRiskAuditHref;
-  const foundingCallHref = data.marketingLinks.foundingRiskAuditCallHref;
-  const foundingCallIsExternal = /^https?:\/\//.test(foundingCallHref);
+function appendBillingCadenceToHref(
+  href: string,
+  billingCadence: CanonicalBillingCadence
+) {
+  if (
+    !href.startsWith("/") ||
+    !(
+      href.startsWith("/signup") ||
+      href.startsWith("/start") ||
+      href.startsWith("/onboarding") ||
+      href.startsWith("/pricing")
+    )
+  ) {
+    return href;
+  }
+
+  const [pathWithQuery, hashFragment] = href.split("#", 2);
+  const [pathname, queryString = ""] = pathWithQuery.split("?", 2);
+  const searchParams = new URLSearchParams(queryString);
+
+  if (pathname === "/signup") {
+    const redirectTo = searchParams.get("redirectTo");
+    if (redirectTo?.startsWith("/") && !redirectTo.startsWith("//")) {
+      const [redirectPathWithQuery, redirectHashFragment] = redirectTo.split("#", 2);
+      const [redirectPathname, redirectQueryString = ""] =
+        redirectPathWithQuery.split("?", 2);
+      const redirectSearchParams = new URLSearchParams(redirectQueryString);
+      redirectSearchParams.set("billingCadence", billingCadence);
+      searchParams.set(
+        "redirectTo",
+        `${redirectPathname}?${redirectSearchParams.toString()}${
+          redirectHashFragment ? `#${redirectHashFragment}` : ""
+        }`
+      );
+
+      return `${pathname}?${searchParams.toString()}${
+        hashFragment ? `#${hashFragment}` : ""
+      }`;
+    }
+  }
+
+  searchParams.set("billingCadence", billingCadence);
+  return `${pathname}?${searchParams.toString()}${hashFragment ? `#${hashFragment}` : ""}`;
+}
+
+function PricingPlanAction({
+  cta,
+  billingCadence
+}: {
+  cta: PricingCta;
+  billingCadence: CanonicalBillingCadence;
+}) {
+  if (cta.kind === "link") {
+    const href = appendBillingCadenceToHref(cta.href, billingCadence);
+
+    return (
+      <Link
+        href={href as never}
+        className="inline-flex w-full items-center justify-center rounded-full bg-[#0f172a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#111f36]"
+      >
+        {cta.label}
+      </Link>
+    );
+  }
+
+  const isDisabled = cta.kind === "checkout" ? cta.disabled : false;
+
+  return (
+    <form action={cta.action} method="post" className="w-full">
+      {cta.kind === "checkout" ? (
+        <>
+          <input type="hidden" name="planCode" value={cta.planCode} />
+          <input type="hidden" name="billingCadence" value={billingCadence} />
+        </>
+      ) : null}
+      <button
+        type="submit"
+        disabled={isDisabled}
+        className="inline-flex w-full items-center justify-center rounded-full bg-[#0f172a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#111f36] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {cta.label}
+      </button>
+    </form>
+  );
+}
+
+export function PricingPageClient({
+  data,
+  selectedPlanCode,
+  selectedBillingCadence = "monthly"
+}: {
+  data: PricingPageData;
+  selectedPlanCode?: CanonicalPlanCode | null;
+  selectedBillingCadence?: CanonicalBillingCadence;
+}) {
+  const [billingCadence, setBillingCadence] =
+    useState<CanonicalBillingCadence>(selectedBillingCadence);
+  const readinessCallHref = data.marketingLinks.foundingRiskAuditCallHref;
+  const readinessCallIsExternal = /^https?:\/\//.test(readinessCallHref);
+  const highlightedPlanCode = selectedPlanCode ?? "starter";
+  const highlightedPlan =
+    data.plans.find((plan) => plan.code === highlightedPlanCode) ?? data.plans[0];
+  const highlightedCta = data.ctasByPlanCode[highlightedPlan.code];
+  const highlightedPrice = highlightedPlan.priceByCadence[billingCadence];
 
   return (
     <main className="grid gap-6">
@@ -34,59 +139,71 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
             {PRICING_HERO.body}
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3 text-sm text-white/[0.72]">
-            <span className="rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 font-semibold text-white">
-              {FOUNDING_RISK_AUDIT.title}
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 font-semibold text-white">
-              {FOUNDING_RISK_AUDIT.priceLabel}
-            </span>
-            <span className="rounded-full border border-[#8debf4]/30 bg-[#8debf4]/10 px-4 py-2 font-semibold text-[#8debf4]">
-              {FOUNDING_RISK_AUDIT.availability}
-            </span>
+            {PRICING_HERO.trustBadges.map((badge) => (
+              <span
+                key={badge}
+                className="rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 font-semibold text-white"
+              >
+                {badge}
+              </span>
+            ))}
           </div>
           <div className="mt-10 flex flex-wrap gap-3">
+            <div className="min-w-[220px]">
+              <PricingPlanAction cta={highlightedCta} billingCadence={billingCadence} />
+            </div>
             <Link
-              href={foundingOfferHref as never}
-              className="inline-flex items-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink"
+              href={"/contact-sales?intent=enterprise-plan&source=pricing-page" as never}
+              className="inline-flex items-center rounded-full border border-white/14 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white"
             >
-              {FOUNDING_RISK_AUDIT.ctas.primary}
+              Talk to Evolve Edge
             </Link>
-            {foundingCallIsExternal ? (
-              <a
-                href={foundingCallHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center rounded-full border border-white/14 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white"
-              >
-                {FOUNDING_RISK_AUDIT.ctas.secondary}
-              </a>
-            ) : (
-              <Link
-                href={foundingCallHref as never}
-                className="inline-flex items-center rounded-full border border-white/14 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white"
-              >
-                {FOUNDING_RISK_AUDIT.ctas.secondary}
-              </Link>
-            )}
           </div>
-          <p className="mt-4 text-sm font-medium text-[#8debf4]">{FOUNDING_RISK_AUDIT.availability}</p>
+          <p className="mt-4 text-sm text-white/[0.72]">
+            {highlightedPlan.name} is currently selected at {highlightedPrice.label}.
+          </p>
         </div>
 
         <div className="content-surface p-8 md:p-12">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
-            Outcomes
+            Pricing at a glance
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-            From Uncertainty to Clarity
+            Premium recurring packaging for advisory-led readiness work
           </h2>
           <p className="mt-4 text-sm leading-7 text-steel">
-            {FOUNDING_RISK_AUDIT.summary}
+            Evolve Edge is positioned as a premium recurring AI security, compliance, and executive risk visibility platform rather than a low-ticket checklist tool.
           </p>
+          <div className="mt-6 inline-flex rounded-full border border-line bg-white p-1">
+            {([
+              ["monthly", "Monthly"],
+              ["annual", "Annual"]
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setBillingCadence(value)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  billingCadence === value
+                    ? "bg-[#0f172a] text-white"
+                    : "text-steel hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="mt-8 space-y-4">
-            {FOUNDING_RISK_AUDIT_OUTCOMES.map((item) => (
-              <div key={item} className="flex items-start gap-3 rounded-[20px] border border-line bg-[#f8fafc] px-5 py-4">
+            {PRICING_SUMMARY.map((item) => (
+              <div
+                key={item.title}
+                className="flex items-start gap-3 rounded-[20px] border border-line bg-[#f8fafc] px-5 py-4"
+              >
                 <CheckCircle2 className="mt-0.5 h-5 w-5 text-accent" />
-                <span className="text-sm font-medium text-ink">{item}</span>
+                <div>
+                  <p className="text-sm font-semibold text-ink">{item.title}</p>
+                  <p className="mt-1 text-sm text-steel">{item.priceLabel}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -96,20 +213,102 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
       <section className="content-surface p-8 md:p-14">
         <div className="max-w-3xl">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
-            Founding offer
+            Plans
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-            Evolve Edge Founding Risk Audit
+            Choose the commercial path that fits your team
           </h2>
-          <p className="mt-4 text-xl font-semibold text-accent">{FOUNDING_RISK_AUDIT.priceLabel}</p>
-          <p className="mt-4 text-sm leading-7 text-steel">{FOUNDING_RISK_AUDIT.summary}</p>
+          <p className="mt-4 text-sm leading-7 text-steel">
+            Starter and Scale flow into the app-owned onboarding and recurring Stripe billing path. Enterprise stays sales-led so scope, rollout, and commercial terms remain explicit.
+          </p>
         </div>
         <div className="mt-8 grid gap-5 lg:grid-cols-3">
-          {FOUNDING_RISK_AUDIT_AUDIENCE.map((audience) => (
-            <article key={audience.title} className="content-surface-muted p-7">
+          {data.plans.map((plan) => {
+            const cta = data.ctasByPlanCode[plan.code];
+            return (
+              <article
+                key={plan.code}
+                className={`rounded-[28px] border p-7 ${
+                  plan.code === highlightedPlan.code
+                    ? "border-accent bg-[#f4fbfd] shadow-[0_18px_50px_rgba(19,79,97,0.12)]"
+                    : plan.isRecommended
+                    ? "border-accent/30 bg-[#f4fbfd] shadow-[0_18px_50px_rgba(19,79,97,0.08)]"
+                    : "border-line bg-white"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent">
+                      {plan.name}
+                    </p>
+                    <h3 className="mt-3 text-3xl font-semibold text-ink">
+                      {plan.priceByCadence[billingCadence].label}
+                    </h3>
+                    <p className="mt-2 text-sm text-steel">
+                      {plan.priceByCadence[billingCadence].helperText}
+                    </p>
+                  </div>
+                  {plan.recommendationLabel ? (
+                    <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+                      {plan.recommendationLabel}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-5 text-sm leading-7 text-steel">{plan.headline}</p>
+                <p className="mt-4 text-sm leading-7 text-ink">{plan.publicDescription}</p>
+                {billingCadence === "annual" && plan.annualSavingsLabel ? (
+                  <p className="mt-4 text-sm font-medium text-accent">
+                    {plan.annualSavingsLabel}
+                  </p>
+                ) : null}
+                <ul className="mt-6 space-y-3 text-sm leading-7 text-steel">
+                  {plan.highlights.map((highlight) => (
+                    <li key={highlight} className="flex items-start gap-3">
+                      <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-accent" />
+                      <span>{highlight}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-8">
+                  <PricingPlanAction cta={cta} billingCadence={billingCadence} />
+                  <p className="mt-3 text-sm text-steel">{cta.helperText}</p>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="content-surface p-8 md:p-14">
+        <div className="max-w-3xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
+            Services
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
+            Premium service packaging built for high-trust teams
+          </h2>
+          <p className="mt-4 text-sm leading-7 text-steel">
+            Evolve Edge combines AI-powered assessment, executive reporting, and security and compliance advisory to help organizations improve readiness before risk turns into costly delay.
+          </p>
+        </div>
+        <div className="mt-8 grid gap-5 lg:grid-cols-2">
+          {SERVICE_OFFERS.map((offer) => (
+            <article key={offer.title} className="content-surface-muted p-7">
               <ShieldCheck className="h-5 w-5 text-accent" />
-              <h3 className="mt-5 text-2xl font-semibold text-ink">{audience.title}</h3>
-              <p className="mt-4 text-sm leading-7 text-steel">{audience.body}</p>
+              <p className="mt-5 text-sm font-semibold uppercase tracking-[0.22em] text-accent">
+                {offer.priceLabel}
+              </p>
+              <h3 className="mt-3 text-2xl font-semibold text-ink">{offer.title}</h3>
+              <p className="mt-4 text-sm leading-7 text-steel">{offer.body}</p>
+              <p className="mt-4 text-sm leading-7 text-ink">{offer.audience}</p>
+              <ul className="mt-5 space-y-3 text-sm leading-7 text-steel">
+                {offer.deliverables.map((deliverable) => (
+                  <li key={deliverable} className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-accent" />
+                    <span>{deliverable}</span>
+                  </li>
+                ))}
+              </ul>
             </article>
           ))}
         </div>
@@ -118,19 +317,18 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
       <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         <div className="content-surface p-8 md:p-12">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
-            Deliverables
+            Who it is for
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-            What You Actually Receive
+            Teams that need trust before scale
           </h2>
           <p className="mt-4 text-sm leading-7 text-steel">
-            This is not just a PDF. It is a fast, executive-ready AI risk assessment designed to give leadership clarity, confidence, and a prioritized action plan.
+            The focus is on organizations that need stronger readiness, clearer risk visibility, and executive reporting that supports real decisions.
           </p>
           <div className="mt-8 grid gap-4">
-            {FOUNDING_RISK_AUDIT_DELIVERABLES.map((item) => (
-              <article key={item.title} className="content-surface-muted p-6">
-                <h3 className="text-lg font-semibold text-ink">{item.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-steel">{item.body}</p>
+            {WHO_ITS_FOR.map((item) => (
+              <article key={item} className="content-surface-muted p-6">
+                <p className="text-sm font-medium leading-7 text-ink">{item}</p>
               </article>
             ))}
           </div>
@@ -138,19 +336,18 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
 
         <div className="brand-surface p-8 md:p-12">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#8debf4]">
-            How it works
+            ROI positioning
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            How Evolve Edge Works
+            Why buyers invest before gaps get expensive
           </h2>
           <div className="mt-8 grid gap-4">
-            {FOUNDING_RISK_AUDIT_PROCESS.map((step) => (
-              <article key={step.step} className="rounded-[24px] border border-white/10 bg-white/[0.05] p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/[0.52]">
-                  Step {step.step}
-                </p>
-                <h3 className="mt-3 text-lg font-semibold text-white">{step.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-white/[0.72]">{step.body}</p>
+            {ROI_POINTS.map((point) => (
+              <article
+                key={point}
+                className="rounded-[24px] border border-white/10 bg-white/[0.05] p-6"
+              >
+                <p className="text-sm leading-7 text-white/[0.78]">{point}</p>
               </article>
             ))}
           </div>
@@ -168,29 +365,24 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
       </section>
 
       <section className="content-surface p-8 md:p-14">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
-              Expansion path
-            </p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
-              What Happens Next
-            </h2>
-            <p className="mt-4 text-sm leading-7 text-steel">
-              The Founding Risk Audit is designed to give you immediate clarity. From there, organizations can expand into deeper engagement based on their needs.
-            </p>
-            <p className="mt-4 text-sm font-semibold text-ink">Start with clarity. Expand with confidence.</p>
-          </div>
-          <Workflow className="h-6 w-6 text-accent" />
+        <div className="max-w-3xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
+            Why teams buy
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-ink">
+            Proof-oriented positioning for executive buyers
+          </h2>
+          <p className="mt-4 text-sm leading-7 text-steel">
+            Buyers are usually looking for clearer decisions, stronger diligence readiness, and a more credible way to communicate risk upward and outward.
+          </p>
         </div>
         <div className="mt-8 grid gap-5 lg:grid-cols-3">
-          {EXPANSION_PATHS.map((path) => (
-            <article key={path.title} className="content-surface-muted p-7">
+          {EXECUTIVE_PROOF.map((item) => (
+            <article key={item.title} className="content-surface-muted p-7">
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-accent">
-                {path.priceLabel}
+                {item.title}
               </p>
-              <h3 className="mt-4 text-2xl font-semibold text-ink">{path.title}</h3>
-              <p className="mt-4 text-sm leading-7 text-steel">{path.body}</p>
+              <p className="mt-4 text-sm leading-7 text-steel">{item.body}</p>
             </article>
           ))}
         </div>
@@ -217,32 +409,44 @@ export function PricingPageClient({ data }: { data: PricingPageData }) {
             Next step
           </p>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight">
-            Get Ahead of AI Risk Before It Becomes a Problem
+            Book an AI Security Readiness Call
           </h2>
           <p className="mt-4 text-sm leading-7 text-slate-300">
-            Join a limited group of founding clients and get a clear, executive-ready understanding of your AI risk posture.
+            Start with a focused conversation about readiness gaps, executive reporting needs, and the right engagement path for your environment.
           </p>
           <div className="mt-8 space-y-3">
+            <div className="w-full">
+              <PricingPlanAction cta={highlightedCta} billingCadence={billingCadence} />
+            </div>
+            {readinessCallIsExternal ? (
+              <a
+                href={readinessCallHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-center rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-white"
+              >
+                Book an AI Security Readiness Call
+              </a>
+            ) : (
+              <Link
+                href={readinessCallHref as never}
+                className="inline-flex w-full items-center justify-center rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-white"
+              >
+                Book an AI Security Readiness Call
+              </Link>
+            )}
             <Link
-              href={foundingOfferHref as never}
-              className="inline-flex w-full items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-ink"
-            >
-              Start Your Founding Risk Audit
-            </Link>
-            <a
-              href={foundingCallHref}
-              target={foundingCallIsExternal ? "_blank" : undefined}
-              rel={foundingCallIsExternal ? "noopener noreferrer" : undefined}
+              href={"/contact-sales?intent=enterprise-plan&source=pricing-page" as never}
               className="inline-flex w-full items-center justify-center rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-white"
             >
-              Book a Call
-            </a>
+              Contact sales
+            </Link>
           </div>
           <ul className="mt-8 space-y-3 text-sm text-slate-300">
             {[
-              FOUNDING_RISK_AUDIT.priceLabel,
-              "Executive-ready report plus live briefing",
-              "Expansion path into $10,000 and larger engagements"
+              "Premium recurring subscriptions with annual commitment options",
+              "Executive-ready reporting and remediation guidance",
+              "Custom enterprise pricing for complex environments"
             ].map((item) => (
               <li key={item} className="flex items-start gap-3">
                 <ArrowRight className="mt-0.5 h-4 w-4 text-[#99f6e4]" />

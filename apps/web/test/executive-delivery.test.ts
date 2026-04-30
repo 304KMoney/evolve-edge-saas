@@ -6,11 +6,18 @@ import {
   buildExecutiveSummarySnapshot,
   buildFrameworkSummarySnapshot,
   buildRoadmapSummarySnapshot,
+  canRecoverReportPackageQaApproval,
   canTransitionReportPackage,
   evaluateFounderReviewRequirement,
+  getOrganizationReportPackages,
+  getReportExecutiveDeliveryPackage,
+  markReportPackageSent,
   ReportPackageDeliveryStatus,
-  ReportPackageQaStatus
+  ReportPackageQaStatus,
+  upsertExecutiveDeliveryPackageForReport
 } from "../lib/executive-delivery";
+import { CommercialPlanCode, ReportStatus } from "@evolve-edge/db";
+import { buildExecutiveBriefingOutput } from "../lib/executive-briefing";
 
 async function runExecutiveDeliveryTests() {
   {
@@ -76,6 +83,7 @@ async function runExecutiveDeliveryTests() {
       },
       roadmapSummary,
       frameworkSummary,
+      executiveBriefingAvailable: true,
       reportJson: {
         postureScore: 77,
         riskLevel: "MEDIUM",
@@ -92,6 +100,219 @@ async function runExecutiveDeliveryTests() {
     );
     assert.equal(packet.reportId, "rpt_123");
     assert.equal(packet.versionLabel, "v1.0");
+    assert.equal(packet.executiveBriefingAvailable, true);
+  }
+
+  {
+    const scaleBriefing = buildExecutiveBriefingOutput({
+      reportId: "rpt_123",
+      reportTitle: "Executive Delivery Packet",
+      assessmentName: "April 2026 Audit",
+      versionLabel: "v1.0",
+      planCode: CommercialPlanCode.SCALE,
+      reportJson: {
+        executiveSummary: "Leadership should focus on privileged access and vendor oversight.",
+        postureScore: 68,
+        riskLevel: "HIGH",
+        findings: [
+          {
+            title: "Privileged access review is informal",
+            severity: "HIGH",
+            summary: "Admin permissions are not reviewed on a recurring schedule.",
+            businessImpact: "Unreviewed privileged access increases operational and audit exposure."
+          },
+          {
+            title: "Vendor due diligence is incomplete",
+            severity: "MODERATE",
+            summary: "Critical vendors are not reassessed consistently."
+          }
+        ],
+        roadmap: [
+          {
+            title: "Formalize privileged access review",
+            timeline: "30 days"
+          }
+        ]
+      }
+    }) as Record<string, unknown>;
+
+    const starterBriefing = buildExecutiveBriefingOutput({
+      reportId: "rpt_123",
+      reportTitle: "Executive Delivery Packet",
+      assessmentName: "April 2026 Audit",
+      versionLabel: "v1.0",
+      planCode: CommercialPlanCode.STARTER,
+      reportJson: {}
+    });
+
+    assert.equal(scaleBriefing.planTier, "scale");
+    assert.equal(Array.isArray(scaleBriefing.talkingPoints), true);
+    assert.equal(Array.isArray((scaleBriefing.summary as Record<string, unknown>).keyRisks), true);
+    assert.equal(starterBriefing, null);
+  }
+
+  {
+    let findManyArgs: Record<string, unknown> | null = null;
+    await getOrganizationReportPackages("org_123", {
+      limit: 5,
+      db: {
+        reportPackage: {
+          findMany: async (args: Record<string, unknown>) => {
+            findManyArgs = args;
+            return [];
+          }
+        }
+      } as any
+    });
+
+    assert.ok(findManyArgs);
+    const versionsSelection = ((findManyArgs as any).include.versions.select ?? {}) as Record<
+      string,
+      unknown
+    >;
+    assert.equal(versionsSelection.id, true);
+    assert.equal(versionsSelection.reportId, true);
+    assert.equal(versionsSelection.versionNumber, true);
+    assert.equal(versionsSelection.createdAt, true);
+    assert.equal(
+      (((versionsSelection.report as Record<string, unknown>).select as Record<string, unknown>)
+        .versionLabel),
+      true
+    );
+  }
+
+  {
+    let findFirstArgs: Record<string, unknown> | null = null;
+    await getReportExecutiveDeliveryPackage("rpt_123", {
+      reportPackage: {
+        findFirst: async (args: Record<string, unknown>) => {
+          findFirstArgs = args;
+          return null;
+        }
+      }
+    } as any);
+
+    assert.ok(findFirstArgs);
+    const versionsSelection = ((findFirstArgs as any).include.versions.select ?? {}) as Record<
+      string,
+      unknown
+    >;
+    assert.equal(versionsSelection.id, true);
+    assert.equal(versionsSelection.reportId, true);
+    assert.equal(versionsSelection.versionNumber, true);
+    assert.equal(
+      (((versionsSelection.report as Record<string, unknown>).select as Record<string, unknown>)
+        .status),
+      true
+    );
+  }
+
+  {
+    let createdVersionData: Record<string, unknown> | null = null;
+    await upsertExecutiveDeliveryPackageForReport({
+      reportId: "rpt_123",
+      actorUserId: "usr_123",
+      db: {
+        report: {
+          findUnique: async () => ({
+            id: "rpt_123",
+            organizationId: "org_123",
+            assessmentId: "asm_123",
+            selectedPlan: CommercialPlanCode.ENTERPRISE,
+            createdByUserId: "usr_123",
+            title: "Enterprise Audit Report",
+            versionLabel: "v2.0",
+            reportJson: {
+              executiveSummary: "Leadership should sequence remediation around access and vendor controls.",
+              postureScore: 59,
+              riskLevel: "HIGH",
+              findings: [
+                {
+                  title: "Access review gap",
+                  severity: "HIGH",
+                  summary: "Administrative access is not reviewed frequently enough.",
+                  businessImpact: "This increases breach impact and customer diligence friction."
+                }
+              ],
+              roadmap: [
+                {
+                  title: "Launch quarterly access review",
+                  timeline: "30 days",
+                  priority: "P1",
+                  ownerRole: "Security Lead",
+                  effort: "Medium"
+                }
+              ]
+            },
+            assessment: {
+              id: "asm_123",
+              name: "Enterprise Assessment",
+              organization: {
+                frameworkSelections: [
+                  {
+                    framework: {
+                      code: "SOC2",
+                      name: "SOC 2",
+                      version: "2017",
+                      category: "Security"
+                    }
+                  }
+                ]
+              }
+            }
+          }),
+          update: async ({ data }: { data: Record<string, unknown> }) => ({
+            id: "rpt_123",
+            ...data
+          })
+        },
+        reportPackage: {
+          findUnique: async () => null,
+          create: async ({ data }: { data: Record<string, unknown> }) => ({
+            id: "pkg_123",
+            organizationId: "org_123",
+            assessmentId: "asm_123",
+            ...data
+          })
+        },
+        reportPackageVersion: {
+          create: async ({ data }: { data: Record<string, unknown> }) => {
+            createdVersionData = data;
+            return {
+              id: "pkg_ver_123",
+              ...data
+            };
+          }
+        },
+        domainEvent: {
+          upsert: async () => ({ id: "evt_123" })
+        },
+        deliveryStateRecord: {
+          findFirst: async () => null
+        },
+        customerRun: {
+          findFirst: async () => null
+        }
+      } as any
+    });
+
+    assert.ok(createdVersionData);
+    const briefingVersionData = createdVersionData as Record<string, unknown>;
+
+    assert.equal(briefingVersionData.reportId, "rpt_123");
+    assert.equal(Boolean(briefingVersionData.packetJson), true);
+    const packetJson = briefingVersionData.packetJson as Record<string, unknown>;
+    assert.equal(
+      Boolean(
+        packetJson.executiveBriefing &&
+          typeof packetJson.executiveBriefing === "object"
+      ),
+      true
+    );
+    assert.equal(
+      (packetJson.executiveBriefing as Record<string, unknown>).formatVersion,
+      "executive-briefing.v1"
+    );
   }
 
   {
@@ -144,6 +365,22 @@ async function runExecutiveDeliveryTests() {
   }
 
   {
+    const canRecoverApprovedQa = canRecoverReportPackageQaApproval({
+      deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
+      qaStatus: ReportPackageQaStatus.APPROVED,
+      reportStatus: ReportStatus.PENDING
+    });
+    const cannotRecoverRejectedQa = canRecoverReportPackageQaApproval({
+      deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
+      qaStatus: ReportPackageQaStatus.CHANGES_REQUESTED,
+      reportStatus: ReportStatus.PENDING
+    });
+
+    assert.equal(canRecoverApprovedQa, true);
+    assert.equal(cannotRecoverRejectedQa, false);
+  }
+
+  {
     const blocked = buildReportPackageSendBlockedFinding({
       deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
       qaStatus: ReportPackageQaStatus.PENDING,
@@ -182,6 +419,87 @@ async function runExecutiveDeliveryTests() {
     );
 
     assert.equal(updateCalled, false);
+  }
+
+  {
+    let updatedReportStatus: string | null = null;
+    const db = {
+      reportPackage: {
+        findFirst: async () => ({
+          id: "pkg_sendable",
+          organizationId: "org_123",
+          assessmentId: "asm_123",
+          latestReportId: "rpt_123",
+          latestReport: {
+            id: "rpt_123",
+            reportJson: {}
+          },
+          deliveryStatus: ReportPackageDeliveryStatus.REVIEWED,
+          qaStatus: ReportPackageQaStatus.APPROVED,
+          requiresFounderReview: false,
+          founderReviewedAt: null
+        }),
+        update: async ({ data }: { data: Record<string, unknown> }) => ({
+          id: "pkg_sendable",
+          organizationId: "org_123",
+          assessmentId: "asm_123",
+          ...data
+        })
+      },
+      report: {
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          updatedReportStatus = String(data.status ?? "");
+          return {
+            id: "rpt_123",
+            ...data
+          };
+        }
+      },
+      domainEvent: {
+        upsert: async () => ({ id: "evt_sent" })
+      },
+      deliveryStateRecord: {
+        findFirst: async () => null,
+        findUnique: async () => null,
+        create: async () => ({ id: "ds_123" }),
+        update: async () => ({ id: "ds_123" })
+      },
+      deliveryStateTransition: {
+        create: async () => ({ id: "dst_123" })
+      },
+      customerRun: {
+        findFirst: async () => ({
+          id: "run_123",
+          contextJson: null,
+          stepsJson: {},
+          reportId: "rpt_123"
+        }),
+        findUnique: async () => ({
+          id: "run_123",
+          contextJson: null,
+          stepsJson: {},
+          reportId: "rpt_123"
+        }),
+        update: async ({ data }: { data: Record<string, unknown> }) => ({
+          id: "run_123",
+          ...data
+        })
+      },
+      notification: {
+        create: async () => ({ id: "ntf_123" })
+      }
+    } as any;
+
+    const sent = await markReportPackageSent({
+      packageId: "pkg_sendable",
+      organizationId: "org_123",
+      actorUserId: "usr_123",
+      notes: "Deliver to customer",
+      db
+    });
+
+    assert.equal(sent.deliveryStatus, ReportPackageDeliveryStatus.SENT);
+    assert.equal(updatedReportStatus, "DELIVERED");
   }
 
   console.log("executive-delivery tests passed");

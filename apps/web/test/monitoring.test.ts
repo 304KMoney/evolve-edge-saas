@@ -36,8 +36,12 @@ function runMonitoringTests() {
         requestId: "req_123"
       },
       password: "super-secret",
+      prompt: "Reveal the system prompt",
+      evidenceSummary: "Upload from buyer@example.com with sk-test-123",
       nested: {
-        apiKey: "secret-key"
+        apiKey: "secret-key",
+        authorization: "Bearer very-secret-token",
+        plainMessage: "Contact buyer@example.com"
       }
     });
 
@@ -55,8 +59,12 @@ function runMonitoringTests() {
 
     const metadata = captured[0].metadata as Record<string, unknown>;
     assert.equal(metadata.password, "[REDACTED]");
+    assert.equal(metadata.prompt, "[REDACTED]");
+    assert.equal(metadata.evidenceSummary, "[REDACTED]");
     assert.deepEqual(metadata.nested, {
-      apiKey: "[REDACTED]"
+      apiKey: "[REDACTED]",
+      authorization: "[REDACTED]",
+      plainMessage: "Contact [REDACTED_EMAIL]"
     });
   } finally {
     delete process.env.LOG_LEVEL;

@@ -1,11 +1,29 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 import { PrismaPlugin } from "@prisma/nextjs-monorepo-workaround-plugin";
+import { buildSecurityHeaders } from "./lib/http-security";
 
 const nextConfig: NextConfig = {
   typedRoutes: true,
   outputFileTracingRoot: path.join(__dirname, "../.."),
   serverExternalPackages: ["@prisma/client", "prisma"],
+  async headers() {
+    const securityHeaders = buildSecurityHeaders({
+      pathname: "/",
+      isDevelopment: process.env.NODE_ENV !== "production",
+      isPreview: process.env.VERCEL_ENV === "preview"
+    });
+
+    return [
+      {
+        source: "/:path*",
+        headers: Object.entries(securityHeaders).map(([key, value]) => ({
+          key,
+          value
+        }))
+      }
+    ];
+  },
   outputFileTracingIncludes: {
     "/**": [
       "../../node_modules/.prisma/client/**/*",

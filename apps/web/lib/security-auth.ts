@@ -11,6 +11,14 @@ export function getBearerTokenFromRequest(request: Request) {
     : "";
 }
 
+export function getServiceTokenFromRequest(request: Request) {
+  return (
+    request.headers.get("x-evolve-edge-service-token")?.trim() ||
+    request.headers.get("x-internal-service-token")?.trim() ||
+    ""
+  );
+}
+
 export function constantTimeEqual(value: string, expected: string) {
   const left = toBuffer(value);
   const right = toBuffer(expected);
@@ -24,4 +32,32 @@ export function isAuthorizedBearerRequest(request: Request, expectedSecret: stri
   }
 
   return constantTimeEqual(provided, expectedSecret);
+}
+
+export function isAuthorizedServiceTokenRequest(
+  request: Request,
+  expectedSecret: string
+) {
+  const provided = getServiceTokenFromRequest(request);
+  if (!provided || !expectedSecret) {
+    return false;
+  }
+
+  return constantTimeEqual(provided, expectedSecret);
+}
+
+export function isAuthorizedRequestWithSecrets(
+  request: Request,
+  expectedSecrets: string[]
+) {
+  const normalizedSecrets = expectedSecrets.filter((secret) => secret.trim().length > 0);
+  if (normalizedSecrets.length === 0) {
+    return false;
+  }
+
+  return normalizedSecrets.some(
+    (secret) =>
+      isAuthorizedBearerRequest(request, secret) ||
+      isAuthorizedServiceTokenRequest(request, secret)
+  );
 }

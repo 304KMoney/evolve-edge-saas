@@ -6,6 +6,7 @@ import {
 } from "../../lib/auth";
 import { PageAnalyticsTracker } from "../../components/page-analytics-tracker";
 import { signInAction } from "./actions";
+import type { Route } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -14,20 +15,24 @@ export const dynamic = "force-dynamic";
 export default async function SignInPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string; redirectTo?: string }>;
+  searchParams: Promise<{ error?: string; redirectTo?: string; reset?: string }>;
 }) {
-  const existingSession = await getOptionalCurrentSession();
-  if (existingSession?.authMode === "password") {
-    redirect("/dashboard");
-  }
-
   const params = await searchParams;
-  const errorMessage = getSignInErrorMessage(params.error);
-  const { email, isComplete } = getPasswordAuthConfig();
+  const existingSession = await getOptionalCurrentSession();
   const redirectTo =
     typeof params.redirectTo === "string" && params.redirectTo.startsWith("/")
       ? params.redirectTo
       : "";
+  const passwordResetSuccess = params.reset === "success";
+
+  if (existingSession) {
+    redirect((redirectTo || "/dashboard") as never);
+  }
+  const errorMessage = getSignInErrorMessage(params.error);
+  const { email, isComplete } = getPasswordAuthConfig();
+  const signupHref = redirectTo
+    ? `/signup?redirectTo=${encodeURIComponent(redirectTo)}`
+    : "/signup";
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-10">
@@ -60,6 +65,12 @@ export default async function SignInPage({
           Use your workspace credentials to access the live governance,
           compliance, assessment, and reporting workflows.
         </p>
+
+        {passwordResetSuccess ? (
+          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+            Your password has been reset. Sign in with your new credentials.
+          </div>
+        ) : null}
 
         {!isPasswordAuthEnabled() ? (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-danger">
@@ -97,7 +108,15 @@ export default async function SignInPage({
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-ink">Password</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-ink">Password</span>
+                <Link
+                  href={"/forgot-password" as Route}
+                  className="text-xs font-medium text-accent transition hover:opacity-80"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 name="password"
                 type="password"
@@ -116,7 +135,10 @@ export default async function SignInPage({
           </form>
         ) : null}
 
-        <div className="mt-6 text-sm text-steel">
+        <div className="mt-6 flex items-center justify-between gap-4 text-sm text-steel">
+          <Link href={signupHref as Route} className="font-semibold text-accent">
+            Create an account
+          </Link>
           <Link href="/" className="font-semibold text-accent">
             Back to home
           </Link>

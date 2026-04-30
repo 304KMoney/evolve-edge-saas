@@ -10,6 +10,8 @@ export const metadata: Metadata = {
     "Review how Evolve Edge captures intake, evidence, scope, and executive reporting inputs."
 };
 
+export const dynamic = "force-dynamic";
+
 const intakeSteps = [
   {
     icon: ClipboardList,
@@ -38,7 +40,7 @@ export default async function IntakePage() {
       ? "/onboarding"
       : "/dashboard/assessments"
     : isPasswordAuthEnabled()
-      ? "/sign-in"
+      ? "/signup"
       : "/dashboard/assessments";
 
   return (
@@ -116,11 +118,11 @@ export default async function IntakePage() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </TrackedCtaLink>
                 <TrackedCtaLink
-                  href="/contact"
+                  href="/contact-sales"
                   eventPayload={{
                     ctaKey: "book-demo",
                     location: "intake-page",
-                    href: "/contact"
+                    href: "/contact-sales"
                   }}
                   source="intake-page"
                   className="inline-flex items-center rounded-full border border-white/[0.14] bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white"

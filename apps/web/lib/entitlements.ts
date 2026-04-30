@@ -168,7 +168,7 @@ const CANONICAL_ENTITLEMENT_TEMPLATES: Record<
       "monitoring.view": true,
       "monitoring.manage": false,
       "executive.reviews": false,
-      "executive.delivery": true,
+      "executive.delivery": false,
       "frameworks.view": true,
       "frameworks.manage": true,
       "custom.frameworks": false,
@@ -177,13 +177,13 @@ const CANONICAL_ENTITLEMENT_TEMPLATES: Record<
     },
     limits: {
       users: 3,
-      audits: 2,
+      audits: 1,
       uploads: 50,
       monitoring_assets: 10,
       frameworks: 3,
-      reports_generated: 12,
+      reports_generated: 1,
       storage_bytes: 500_000_000,
-      ai_processing_runs: 12
+      ai_processing_runs: 1
     }
   },
   [CanonicalPlanKey.GROWTH]: {
@@ -201,7 +201,7 @@ const CANONICAL_ENTITLEMENT_TEMPLATES: Record<
       "monitoring.view": true,
       "monitoring.manage": true,
       "executive.reviews": false,
-      "executive.delivery": true,
+      "executive.delivery": false,
       "frameworks.view": true,
       "frameworks.manage": true,
       "custom.frameworks": false,
@@ -233,13 +233,13 @@ const CANONICAL_ENTITLEMENT_TEMPLATES: Record<
       "uploads.manage": true,
       "monitoring.view": true,
       "monitoring.manage": true,
-      "executive.reviews": true,
-      "executive.delivery": true,
+      "executive.reviews": false,
+      "executive.delivery": false,
       "frameworks.view": true,
       "frameworks.manage": true,
       "custom.frameworks": true,
       "api.access": false,
-      "priority.support": true
+      "priority.support": false
     },
     limits: {
       users: 15,
@@ -324,6 +324,78 @@ function getDefaultCanonicalEntitlements(
   return CANONICAL_ENTITLEMENT_TEMPLATES[
     canonicalPlanKey ?? CanonicalPlanKey.STARTER
   ];
+}
+
+function getStrictCommercialPlanControls(
+  canonicalPlanKey: CanonicalPlanKey | null | undefined
+) {
+  const canonicalPlanCode = mapCanonicalPlanKeyToCanonicalPlanCode(canonicalPlanKey);
+
+  switch (canonicalPlanCode) {
+    case "enterprise":
+      return {
+        features: {
+          "executive.reviews": true,
+          "executive.delivery": true,
+          "priority.support": true,
+          "custom.frameworks": true,
+          "api.access": true
+        },
+        limits: {}
+      } satisfies {
+        features: Partial<Record<EntitlementFeatureKey, boolean>>;
+        limits: Partial<Record<EntitlementLimitKey, number | null>>;
+      };
+    case "scale":
+      return {
+        features: {
+          "executive.reviews": false,
+          "executive.delivery": false,
+          "priority.support": false,
+          "custom.frameworks": true,
+          "api.access": false
+        },
+        limits: {}
+      } satisfies {
+        features: Partial<Record<EntitlementFeatureKey, boolean>>;
+        limits: Partial<Record<EntitlementLimitKey, number | null>>;
+      };
+    case "starter":
+    default:
+      return {
+        features: {
+          "executive.reviews": false,
+          "executive.delivery": false,
+          "priority.support": false,
+          "custom.frameworks": false,
+          "api.access": false
+        },
+        limits: {
+          audits: 1,
+          reports_generated: 1,
+          ai_processing_runs: 1
+        }
+      } satisfies {
+        features: Partial<Record<EntitlementFeatureKey, boolean>>;
+        limits: Partial<Record<EntitlementLimitKey, number | null>>;
+      };
+  }
+}
+
+function applyStrictCommercialPlanControls(input: {
+  canonicalPlanKey: CanonicalPlanKey | null | undefined;
+  featureAccess: Record<EntitlementFeatureKey, boolean>;
+  limits: Record<EntitlementLimitKey, number | null>;
+}) {
+  const controls = getStrictCommercialPlanControls(input.canonicalPlanKey);
+
+  for (const [key, value] of Object.entries(controls.features)) {
+    input.featureAccess[key as EntitlementFeatureKey] = value;
+  }
+
+  for (const [key, value] of Object.entries(controls.limits)) {
+    input.limits[key as EntitlementLimitKey] = value;
+  }
 }
 
 function parseOverrideLimit(value: string | null | undefined) {
@@ -543,6 +615,12 @@ export function resolveEntitlementConfig(input: {
     featureAccess["api.access"] = revenuePlan.features.apiAccess;
     featureAccess["priority.support"] = revenuePlan.features.prioritySupport;
   }
+
+  applyStrictCommercialPlanControls({
+    canonicalPlanKey,
+    featureAccess,
+    limits
+  });
 
   const activeOverrides =
     input.overrides?.filter(

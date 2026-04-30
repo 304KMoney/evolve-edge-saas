@@ -40,7 +40,7 @@ export const CANONICAL_INTEGRATION_EVENT_TYPES = [
 export type CanonicalIntegrationEventType =
   (typeof CANONICAL_INTEGRATION_EVENT_TYPES)[number];
 
-export const CANONICAL_DIFY_FIELD_KEYS = [
+export const CANONICAL_AI_EXECUTION_FIELD_KEYS = [
   "company_name",
   "contact_name",
   "contact_email",
@@ -53,7 +53,11 @@ export const CANONICAL_DIFY_FIELD_KEYS = [
   "processing_depth"
 ] as const;
 
-export type CanonicalDifyFieldKey = (typeof CANONICAL_DIFY_FIELD_KEYS)[number];
+export const CANONICAL_DIFY_FIELD_KEYS = CANONICAL_AI_EXECUTION_FIELD_KEYS;
+
+export type CanonicalAiExecutionFieldKey =
+  (typeof CANONICAL_AI_EXECUTION_FIELD_KEYS)[number];
+export type CanonicalDifyFieldKey = CanonicalAiExecutionFieldKey;
 
 export const CANONICAL_BILLING_MOTIONS = [
   "stripe_checkout",
@@ -61,6 +65,10 @@ export const CANONICAL_BILLING_MOTIONS = [
 ] as const;
 
 export type CanonicalBillingMotion = (typeof CANONICAL_BILLING_MOTIONS)[number];
+
+export const CANONICAL_BILLING_CADENCES = ["monthly", "annual"] as const;
+
+export type CanonicalBillingCadence = (typeof CANONICAL_BILLING_CADENCES)[number];
 
 export const CANONICAL_HOSTINGER_CTA_TARGETS = [
   "stripe_checkout",
@@ -82,22 +90,59 @@ export type CanonicalProcessingDepth =
 
 export const CANONICAL_PUBLIC_PRICING = {
   starter: {
-    usd: 2500,
-    label: "$2,500 one-time"
+    usd: 5000,
+    label: "Starting at $5,000 / month",
+    cadence: {
+      monthly: {
+        usd: 5000,
+        label: "$5,000 / month"
+      },
+      annual: {
+        usd: 48000,
+        label: "$48,000 / year"
+      }
+    }
   },
   scale: {
-    usd: 7500,
-    label: "$7,500 one-time"
+    usd: 18500,
+    label: "Starting at $18,500 / month",
+    cadence: {
+      monthly: {
+        usd: 18500,
+        label: "$18,500 / month"
+      },
+      annual: {
+        usd: 180000,
+        label: "$180,000 / year"
+      }
+    }
   },
   enterprise: {
     usd: null,
-    label: "Custom"
+    label: "Custom",
+    cadence: {
+      monthly: {
+        usd: null,
+        label: "Custom"
+      },
+      annual: {
+        usd: null,
+        label: "Custom"
+      }
+    }
   }
 } as const satisfies Record<
   CanonicalPlanCode,
   {
     usd: number | null;
     label: string;
+    cadence: Record<
+      CanonicalBillingCadence,
+      {
+        usd: number | null;
+        label: string;
+      }
+    >;
   }
 >;
 
@@ -130,6 +175,11 @@ export const CANONICAL_ENV_KEYS = {
   n8nWebhookSecret: "N8N_WEBHOOK_SECRET",
   n8nCallbackSecret: "N8N_CALLBACK_SECRET",
   n8nWritebackSecret: "N8N_WRITEBACK_SECRET",
+  aiExecutionProvider: "AI_EXECUTION_PROVIDER",
+  openAiApiKey: "OPENAI_API_KEY",
+  openAiModel: "OPENAI_MODEL",
+  openAiReasoningModel: "OPENAI_REASONING_MODEL",
+  aiExecutionTimeoutMs: "AI_EXECUTION_TIMEOUT_MS",
   difyApiBaseUrl: "DIFY_API_BASE_URL",
   difyApiKey: "DIFY_API_KEY",
   difyWorkflowId: "DIFY_WORKFLOW_ID",
@@ -162,6 +212,11 @@ export const CANONICAL_SERVER_ONLY_ENV_KEYS = [
   CANONICAL_ENV_KEYS.n8nWebhookSecret,
   CANONICAL_ENV_KEYS.n8nCallbackSecret,
   CANONICAL_ENV_KEYS.n8nWritebackSecret,
+  CANONICAL_ENV_KEYS.aiExecutionProvider,
+  CANONICAL_ENV_KEYS.openAiApiKey,
+  CANONICAL_ENV_KEYS.openAiModel,
+  CANONICAL_ENV_KEYS.openAiReasoningModel,
+  CANONICAL_ENV_KEYS.aiExecutionTimeoutMs,
   CANONICAL_ENV_KEYS.difyApiBaseUrl,
   CANONICAL_ENV_KEYS.difyApiKey,
   CANONICAL_ENV_KEYS.difyWorkflowId,
@@ -203,6 +258,11 @@ export const CANONICAL_ENV_GROUPS = {
     CANONICAL_ENV_KEYS.n8nWebhookSecret,
     CANONICAL_ENV_KEYS.n8nCallbackSecret,
     CANONICAL_ENV_KEYS.n8nWritebackSecret,
+    CANONICAL_ENV_KEYS.aiExecutionProvider,
+    CANONICAL_ENV_KEYS.openAiApiKey,
+    CANONICAL_ENV_KEYS.openAiModel,
+    CANONICAL_ENV_KEYS.openAiReasoningModel,
+    CANONICAL_ENV_KEYS.aiExecutionTimeoutMs,
     CANONICAL_ENV_KEYS.difyApiBaseUrl,
     CANONICAL_ENV_KEYS.difyApiKey,
     CANONICAL_ENV_KEYS.difyWorkflowId,
@@ -249,8 +309,44 @@ export function getCanonicalPublicPriceUsd(planCode: CanonicalPlanCode) {
   return CANONICAL_PUBLIC_PRICING[planCode].usd;
 }
 
-export function getCanonicalPublicPriceLabel(planCode: CanonicalPlanCode) {
-  return CANONICAL_PUBLIC_PRICING[planCode].label;
+export function getCanonicalPublicPriceLabel(
+  planCode: CanonicalPlanCode,
+  cadence?: CanonicalBillingCadence | null
+) {
+  if (!cadence) {
+    return CANONICAL_PUBLIC_PRICING[planCode].label;
+  }
+
+  return CANONICAL_PUBLIC_PRICING[planCode].cadence[cadence].label;
+}
+
+export function getCanonicalPublicPriceUsdForCadence(
+  planCode: CanonicalPlanCode,
+  cadence: CanonicalBillingCadence
+) {
+  return CANONICAL_PUBLIC_PRICING[planCode].cadence[cadence].usd;
+}
+
+export function getCanonicalPublicPriceLabelForCadence(
+  planCode: CanonicalPlanCode,
+  cadence: CanonicalBillingCadence
+) {
+  return CANONICAL_PUBLIC_PRICING[planCode].cadence[cadence].label;
+}
+
+export function isCanonicalBillingCadence(
+  value: string | null | undefined
+): value is CanonicalBillingCadence {
+  return CANONICAL_BILLING_CADENCES.includes(
+    (value ?? "").trim().toLowerCase() as CanonicalBillingCadence
+  );
+}
+
+export function resolveCanonicalBillingCadence(
+  value: string | null | undefined,
+  fallback: CanonicalBillingCadence = "annual"
+) {
+  return isCanonicalBillingCadence(value) ? value : fallback;
 }
 
 export function getCanonicalStripePriceEnvVar(planCode: CanonicalPlanCode) {

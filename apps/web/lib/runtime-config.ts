@@ -38,8 +38,122 @@ export function getDifyBaseUrl() {
   return readEnvWithAliases(CANONICAL_ENV_KEYS.difyApiBaseUrl, ["DIFY_BASE_URL"]);
 }
 
+export function getAiExecutionProvider() {
+  const configured = readEnv("AI_EXECUTION_PROVIDER").toLowerCase();
+  return configured === "dify" ? "dify" : "openai_langgraph";
+}
+
+export function getOpenAIApiKey() {
+  return requireEnv("OPENAI_API_KEY");
+}
+
+export function getOpenAIModel() {
+  return readEnv("OPENAI_MODEL") || "gpt-4o-2024-08-06";
+}
+
+export function getOpenAICheapModel() {
+  return readEnv("OPENAI_CHEAP_MODEL") || getOpenAIModel();
+}
+
+export function getOpenAIReasoningModel() {
+  return readEnv("OPENAI_REASONING_MODEL") || null;
+}
+
+export function getOpenAIStrongModel() {
+  return readEnv("OPENAI_STRONG_MODEL") || getOpenAIReasoningModel() || getOpenAIModel();
+}
+
+export function getAiExecutionTimeoutMs() {
+  const parsed = Number(readEnv("AI_EXECUTION_TIMEOUT_MS"));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 20_000;
+}
+
+export function getAiExecutionMaxInputChars() {
+  const parsed = Number(readEnv("AI_EXECUTION_MAX_INPUT_CHARS"));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 24_000;
+}
+
+export function getAiExecutionStarterMaxInputChars() {
+  const parsed = Number(readEnv("AI_EXECUTION_STARTER_MAX_INPUT_CHARS"));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 12_000;
+}
+
+export function getAiExecutionScaleMaxInputChars() {
+  const parsed = Number(readEnv("AI_EXECUTION_SCALE_MAX_INPUT_CHARS"));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 24_000;
+}
+
+export function getAiExecutionEnterpriseMaxInputChars() {
+  const parsed = Number(readEnv("AI_EXECUTION_ENTERPRISE_MAX_INPUT_CHARS"));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 40_000;
+}
+
+export function getAiExecutionMaxConcurrency() {
+  return readPositiveIntegerEnv("AI_EXECUTION_MAX_CONCURRENCY", 4);
+}
+
+export function getAiExecutionMaxConcurrentPerOrg() {
+  return readPositiveIntegerEnv("AI_EXECUTION_MAX_CONCURRENT_PER_ORG", 2);
+}
+
+export function getAiExecutionOrgRateLimitWindowMs() {
+  return readPositiveIntegerEnv("AI_EXECUTION_ORG_RATE_LIMIT_WINDOW_MS", 60_000);
+}
+
+export function getAiExecutionOrgRateLimitMaxRequests() {
+  return readPositiveIntegerEnv("AI_EXECUTION_ORG_RATE_LIMIT_MAX_REQUESTS", 10);
+}
+
+export function getAiExecutionWorkflowRateLimitWindowMs() {
+  return readPositiveIntegerEnv("AI_EXECUTION_WORKFLOW_RATE_LIMIT_WINDOW_MS", 60_000);
+}
+
+export function getAiExecutionWorkflowRateLimitMaxRequests() {
+  return readPositiveIntegerEnv("AI_EXECUTION_WORKFLOW_RATE_LIMIT_MAX_REQUESTS", 3);
+}
+
+export function getReportRetentionDays() {
+  return readPositiveIntegerEnv("REPORT_RETENTION_DAYS", 365);
+}
+
+export function getAssessmentRetentionDays() {
+  return readPositiveIntegerEnv("ASSESSMENT_RETENTION_DAYS", 365);
+}
+
+export function getAuditLogRetentionDays() {
+  return readPositiveIntegerEnv("AUDIT_LOG_RETENTION_DAYS", 90);
+}
+
+export function getWorkflowTraceRetentionDays() {
+  return readPositiveIntegerEnv("WORKFLOW_TRACE_RETENTION_DAYS", 30);
+}
+
+export function getOpenAICheapModelInputCostPer1M() {
+  const parsed = Number(readEnv("OPENAI_CHEAP_MODEL_INPUT_COST_PER_1M_TOKENS"));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+export function getOpenAICheapModelOutputCostPer1M() {
+  const parsed = Number(readEnv("OPENAI_CHEAP_MODEL_OUTPUT_COST_PER_1M_TOKENS"));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+export function getOpenAIStrongModelInputCostPer1M() {
+  const parsed = Number(readEnv("OPENAI_STRONG_MODEL_INPUT_COST_PER_1M_TOKENS"));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+export function getOpenAIStrongModelOutputCostPer1M() {
+  const parsed = Number(readEnv("OPENAI_STRONG_MODEL_OUTPUT_COST_PER_1M_TOKENS"));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+export function isAiDebugModeEnabled() {
+  return readEnv("AI_DEBUG_MODE").toLowerCase() === "true";
+}
+
 export function getSalesContactEmail() {
-  return readEnv(CANONICAL_ENV_KEYS.salesContactEmail) || "sales@evolveedge.ai";
+  return readEnv(CANONICAL_ENV_KEYS.salesContactEmail) || "k.green@evolveedgeai.com";
 }
 
 export function getContactSalesUrl() {
@@ -49,7 +163,11 @@ export function getContactSalesUrl() {
   );
 }
 
-export function getFoundingRiskAuditUrl() {
+export function getFoundingRiskAuditOfferUrl() {
+  return "/pricing?plan=starter&billingCadence=monthly";
+}
+
+export function getFoundingRiskAuditCallUrl() {
   const configured = readEnv(CANONICAL_ENV_KEYS.foundingRiskAuditUrl);
   if (
     configured &&
@@ -59,19 +177,32 @@ export function getFoundingRiskAuditUrl() {
     return configured;
   }
 
-  return "/contact?intent=founding-risk-audit&source=marketing-site";
+  return "https://meetings-na2.hubspot.com/kiel-green";
 }
 
 export function getHostingerReferenceUrl() {
   return (
     readEnv(CANONICAL_ENV_KEYS.hostingerReferenceUrl) ||
-    "https://evolveedge.ai/pricing"
+    "https://evolveedgeai.com/pricing"
   );
 }
 
 export function getAuthMode() {
   const mode = readEnv(CANONICAL_ENV_KEYS.authMode);
   return mode === "demo" ? "demo" : "password";
+}
+
+export function isPreviewGuestAccessEnabled() {
+  const configured = readEnv("PREVIEW_GUEST_ACCESS_ENABLED").toLowerCase();
+  if (configured === "true") {
+    return true;
+  }
+
+  if (configured === "false") {
+    return false;
+  }
+
+  return getRuntimeEnvironment() === "preview";
 }
 
 export function isPasswordAuthMode() {
@@ -81,6 +212,13 @@ export function isPasswordAuthMode() {
 export function getOptionalEnv(name: string) {
   const value = readEnv(name);
   return value || null;
+}
+
+export function getUpstashRedisConfig() {
+  return {
+    url: getOptionalEnv("UPSTASH_REDIS_REST_URL") ?? null,
+    token: getOptionalEnv("UPSTASH_REDIS_REST_TOKEN") ?? null,
+  };
 }
 
 export function requireEnv(name: string) {
@@ -244,7 +382,7 @@ export function getCanonicalCommercialRuntimeConfig() {
     environment: getRuntimeEnvironment(),
     appUrl: getAppUrl(),
     contactSalesUrl: getContactSalesUrl(),
-    foundingRiskAuditUrl: getFoundingRiskAuditUrl(),
+    foundingRiskAuditUrl: getFoundingRiskAuditCallUrl(),
     salesContactEmail: getSalesContactEmail(),
     hostingerReferenceUrl: getHostingerReferenceUrl(),
     authMode: getAuthMode(),

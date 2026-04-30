@@ -16,6 +16,7 @@ import {
 } from "../../../../../lib/report-records";
 import { applyRouteRateLimit } from "../../../../../lib/security-rate-limit";
 import { parseJsonRequestBody, ValidationError } from "../../../../../lib/security-validation";
+import { validateWorkflowWritebackTargetBinding } from "../../../../../lib/workflow-writeback-target";
 import { isAuthorizedWorkflowWritebackRequest } from "../../../../../lib/workflow-dispatch";
 import {
   malformedWritebackPayloadError,
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
       requestContext
     });
 
-    const rateLimited = applyRouteRateLimit(request, {
+    const rateLimited = await applyRouteRateLimit(request, {
       key: "internal-workflows-report-writeback",
       category: "webhook"
     });
@@ -169,6 +170,7 @@ export async function POST(request: Request) {
       }
     });
 
+    let writebackTargetFailureReason: string | null = null;
     const updatedReport = await prisma.$transaction(async (tx) => {
       const reportCandidate = await getReportRecordForWriteback({
         db: tx,
@@ -177,6 +179,20 @@ export async function POST(request: Request) {
       });
 
       if (!reportCandidate) {
+        writebackTargetFailureReason = "report_not_found";
+        return null;
+      }
+
+      const targetBinding = await validateWorkflowWritebackTargetBinding({
+        db: tx,
+        dispatchId: payload.dispatchId,
+        payloadOrganizationId: payload.organizationId,
+        payloadReportReference: payload.reportReference,
+        reportCandidate
+      });
+
+      if (!targetBinding.valid) {
+        writebackTargetFailureReason = targetBinding.reason;
         return null;
       }
 
@@ -288,7 +304,9 @@ export async function POST(request: Request) {
 
     if (!updatedReport) {
       const error = unknownWritebackTargetError(
-        "Report could not be resolved for workflow writeback."
+        writebackTargetFailureReason === "report_not_found"
+          ? "Report could not be resolved for workflow writeback."
+          : "Report writeback target is not bound to the expected workflow dispatch."
       );
       logServerEvent("warn", "workflow.callback.report_writeback.report_not_found", {
         dispatch_id: payload.dispatchId,
@@ -301,7 +319,8 @@ export async function POST(request: Request) {
           errorCode: error.code,
           errorClass: error.errorClass,
           retryable: error.retryable,
-          operatorVisible: error.operatorVisible
+          operatorVisible: error.operatorVisible,
+          writebackTargetFailureReason
         }
       });
       return toWorkflowWritebackErrorResponse(error);

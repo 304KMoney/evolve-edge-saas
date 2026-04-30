@@ -105,24 +105,27 @@ Blocking if:
 
 - payment succeeds but no durable grant is issued
 
-### 6. Intake submission to n8n
+### 6. Intake completion and app-owned dispatch
 
 Check:
 
-- app computes routing
-- `WorkflowDispatch` is queued and sent to the configured n8n destination
+- app validates onboarding/intake completion
+- app computes routing from backend-owned plan state
+- `WorkflowDispatch` is queued and, when configured, sent to n8n
 
 Expected outcome:
 
 - `RoutingSnapshot` exists
 - `WorkflowDispatch` exists
 - dispatch payload uses normalized app-owned fields
+- incomplete intake blocks dispatch and redirects the customer to `/onboarding`
 
 Blocking if:
 
 - no routing snapshot
 - no workflow dispatch
 - n8n would need to infer pricing or customer state from raw Stripe values
+- a workflow can dispatch before intake is complete
 
 ### 7. n8n writeback to app
 

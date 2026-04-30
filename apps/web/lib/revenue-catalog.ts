@@ -161,7 +161,7 @@ export const REVENUE_PLAN_CATALOG: readonly RevenuePlanDefinition[] = [
     billingInterval: "monthly",
     billingIntervalMode: BillingInterval.MONTHLY,
     billingProvider: BillingProvider.STRIPE,
-    priceCents: 5_000,
+    priceCents: 500_000,
     trialDays: 14,
     sortOrder: 1,
     isActive: true,
@@ -210,14 +210,14 @@ export const REVENUE_PLAN_CATALOG: readonly RevenuePlanDefinition[] = [
     version: 1,
     name: "Starter Annual",
     description:
-      "Annual entry tier for lighter regulated programs that need a plan-aware but lower-depth workflow.",
+      "Annual premium subscription for lighter regulated programs that need a recurring AI governance operating path with a strong retained-services posture.",
     publicDescription:
-      "For lean teams that want a lower-cost recurring compliance operating baseline with annual commitment.",
+      "For lean regulated teams that want a premium recurring governance program with executive-ready reporting and a stronger annual commitment.",
     currency: "USD",
     billingInterval: "annual",
     billingIntervalMode: BillingInterval.ANNUAL,
     billingProvider: BillingProvider.STRIPE,
-    priceCents: 48_000,
+    priceCents: 5_400_000,
     trialDays: 14,
     sortOrder: 3,
     isActive: true,
@@ -239,13 +239,13 @@ export const REVENUE_PLAN_CATALOG: readonly RevenuePlanDefinition[] = [
     },
     adminMetadata: {
       supportTier: "standard",
-      targetBuyer: "Entry annual buyer with limited workflow complexity",
+      targetBuyer: "Entry buyer with limited workflow complexity and a retained recurring operating motion",
       investorNarrative:
-        "Lower-priced annual tier that expands addressable market while keeping premium workflow branches reserved for higher tiers.",
+        "Premium annual entry tier that improves retention and ACV while keeping deeper workflow branches reserved for higher tiers.",
       recommendedFor: [
         "Lean compliance operating systems",
-        "Entry annual procurement paths",
-        "Lower-volume recurring assessments"
+        "Founders preparing for enterprise procurement",
+        "Teams standardizing recurring governance reviews"
       ],
       upgradeTo: [
         "growth-monthly",
@@ -370,7 +370,7 @@ export const REVENUE_PLAN_CATALOG: readonly RevenuePlanDefinition[] = [
     billingInterval: "monthly",
     billingIntervalMode: BillingInterval.MONTHLY,
     billingProvider: BillingProvider.STRIPE,
-    priceCents: 18_500,
+    priceCents: 1_850_000,
     trialDays: 14,
     sortOrder: 12,
     isActive: true,
@@ -415,14 +415,14 @@ export const REVENUE_PLAN_CATALOG: readonly RevenuePlanDefinition[] = [
     version: 1,
     name: "Scale Annual",
     description:
-      "Annual premium SaaS tier for growing governance programs that need deeper reporting and expanded monitoring capacity.",
+      "Annual premium subscription for regulated programs that need deeper reporting, stronger posture visibility, and broader workflow coverage.",
     publicDescription:
-      "For higher-growth regulated teams that need enhanced monitoring and control depth without bespoke enterprise contracting.",
+      "For higher-growth regulated teams that need a deeper recurring AI governance program without bespoke enterprise contracting.",
     currency: "USD",
     billingInterval: "annual",
     billingIntervalMode: BillingInterval.ANNUAL,
     billingProvider: BillingProvider.STRIPE,
-    priceCents: 180_000,
+    priceCents: 20_400_000,
     trialDays: 14,
     sortOrder: 14,
     isActive: true,
@@ -448,13 +448,13 @@ export const REVENUE_PLAN_CATALOG: readonly RevenuePlanDefinition[] = [
     },
     adminMetadata: {
       supportTier: "priority",
-      targetBuyer: "Annual premium SaaS buyer with advanced governance workflow needs",
+      targetBuyer: "Premium buyer with advanced governance workflow needs and a recurring operating budget",
       investorNarrative:
-        "Premium annual tier positioned between core self-serve and enterprise, improving expansion and retention options.",
+        "Premium annual operating tier positioned between entry self-serve and enterprise, improving ACV, retention, and advisory follow-on options.",
       recommendedFor: [
         "Advanced monitoring programs",
         "Larger governance teams",
-        "Scored control-review workflows"
+        "Executive-ready control-review workflows"
       ],
       upgradeTo: ["enterprise-monthly", "enterprise-annual"],
       downgradeTo: [
@@ -480,8 +480,8 @@ export const REVENUE_PLAN_CATALOG: readonly RevenuePlanDefinition[] = [
     billingInterval: "monthly",
     billingIntervalMode: BillingInterval.MONTHLY,
     billingProvider: BillingProvider.STRIPE,
-    priceCents: 25_000,
-    trialDays: 14,
+    priceCents: 0,
+    trialDays: 0,
     sortOrder: 15,
     isActive: true,
     isPublic: true,
@@ -533,8 +533,8 @@ export const REVENUE_PLAN_CATALOG: readonly RevenuePlanDefinition[] = [
     billingInterval: "annual",
     billingIntervalMode: BillingInterval.ANNUAL,
     billingProvider: BillingProvider.STRIPE,
-    priceCents: 240_000,
-    trialDays: 14,
+    priceCents: 0,
+    trialDays: 0,
     sortOrder: 20,
     isActive: true,
     isPublic: true,
@@ -598,6 +598,12 @@ export function getRevenuePlanDefinition(planCode: string | null | undefined) {
   }
 
   return REVENUE_PLAN_CATALOG.find((plan) => plan.code === planCode) ?? null;
+}
+
+export function getBillingCadenceForRevenuePlanCode(
+  planCode: string | null | undefined
+) {
+  return getRevenuePlanDefinition(planCode)?.billingInterval ?? null;
 }
 
 export function getCanonicalPlanKeyFromPlanCode(planCode: string | null | undefined) {

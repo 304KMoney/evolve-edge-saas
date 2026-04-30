@@ -34,6 +34,7 @@ import {
 } from "./dify-adapter";
 import { getAppUrl, getDifyBaseUrl, getOptionalEnv, requireEnv } from "./runtime-config";
 import { listOrganizationWorkflowRoutingDecisions, type NormalizedWorkflowHints } from "./workflow-routing";
+import { isAuditIntakeCompleteFromRegulatoryProfile } from "./audit-intake";
 
 const DIFY_ANALYSIS_CONTRACT_VERSION = "assessment-analysis.v1";
 const DEFAULT_DIFY_TIMEOUT_MS = 20_000;
@@ -42,9 +43,9 @@ const DEFAULT_ANALYSIS_STALE_MINUTES = 30;
 
 type DifyDbClient = Prisma.TransactionClient | typeof prisma;
 
-// Dify calls are server-only and flow through this module. Request payloads are
-// assembled from app-owned assessment and routing state, and raw Dify outputs
-// must pass adapter validation before they are persisted or allowed to affect
+// Deprecated rollback-only Dify execution path. Request payloads are assembled
+// from app-owned assessment and routing state, and raw Dify outputs must pass
+// adapter validation before they are persisted or allowed to affect
 // report-generation state.
 
 export function getDifyWorkflowVersion() {
@@ -120,6 +121,13 @@ async function buildAssessmentPayload(
 
   if (!assessment) {
     throw new Error("Assessment not found for Dify execution.");
+  }
+
+  if (
+    !assessment.organization.onboardingCompletedAt ||
+    !isAuditIntakeCompleteFromRegulatoryProfile(assessment.organization.regulatoryProfile)
+  ) {
+    throw new Error("Required onboarding intake must be completed before Dify execution.");
   }
 
   const routingDecision =

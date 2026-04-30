@@ -4,9 +4,17 @@
   "packageManager": "pnpm@10.8.1",
   "scripts": {
     "build": "pnpm --filter @evolve-edge/db prisma:generate && turbo run build",
+    "ci:env:validate": "node scripts/validate-required-env.js ci",
+    "ci:env:validate:preview": "node scripts/validate-required-env.js preview",
+    "ci:env:validate:production": "node scripts/validate-required-env.js production",
     "dev": "turbo run dev --parallel",
+    "typecheck": "pnpm --filter @evolve-edge/db prisma:generate && turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "test:ai": "pnpm --filter @evolve-edge/web test:ai",
+    "ai:eval": "pnpm --filter @evolve-edge/web ai:eval",
+    "ai:eval:live": "pnpm --filter @evolve-edge/web ai:eval:live",
+    "integration:status": "pnpm --filter @evolve-edge/web integration:status",
     "preflight:first-customer:env": "pnpm --filter @evolve-edge/web preflight:first-customer:env",
     "preflight:first-customer": "pnpm --filter @evolve-edge/web preflight:first-customer",
     "db:generate": "pnpm --filter @evolve-edge/db generate",
@@ -17,5 +25,14 @@
   "devDependencies": {
     "turbo": "^2.9.5",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@sentry/nextjs": "10"
+  },
+  "pnpm": {
+    "overrides": {
+      "langsmith": ">=0.5.19",
+      "postcss": ">=8.5.10"
+    }
   }
 }

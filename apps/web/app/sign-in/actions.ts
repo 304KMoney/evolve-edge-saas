@@ -5,6 +5,7 @@ import {
   authenticateUser,
   buildCookieSettings,
   createUserSession,
+  getPostAuthRedirectPath,
   isPasswordAuthEnabled,
   revokeSession,
   sanitizeInternalRedirect
@@ -145,6 +146,9 @@ export async function signInAction(formData: FormData) {
   });
 
   redirect(
-    (redirectTo || (membershipCount > 0 ? "/dashboard" : "/onboarding")) as never
+    getPostAuthRedirectPath({
+      redirectTo,
+      membershipCount
+    }) as never
   );
 }

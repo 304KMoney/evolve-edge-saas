@@ -1,11 +1,14 @@
 import {
   EmailNotificationStatus,
+  InboundWebhookReceiptStatus,
   OperationsQueueSeverity,
   OperationsQueueSourceSystem,
   OperationsQueueType,
+  Prisma,
   prisma
 } from "@evolve-edge/db";
 import { NextResponse } from "next/server";
+import { maskEmail } from "../../../../lib/intake-observability";
 import { logAndCaptureServerError } from "../../../../lib/observability";
 import { sendOperationalAlert } from "../../../../lib/monitoring";
 import { recordOperationalFinding } from "../../../../lib/operations-queues";
@@ -15,36 +18,8 @@ import { verifySvixWebhookSignature } from "../../../../lib/security-webhooks";
 
 export const runtime = "nodejs";
 
-const PROCESSED_WEBHOOK_IDS = new Map<string, number>();
-const DEDUPE_TTL_MS = 1000 * 60 * 60 * 24;
-
-function hasRecentlyProcessedWebhook(messageId: string) {
-  const existing = PROCESSED_WEBHOOK_IDS.get(messageId);
-  if (!existing) {
-    return false;
-  }
-
-  if (Date.now() > existing + DEDUPE_TTL_MS) {
-    PROCESSED_WEBHOOK_IDS.delete(messageId);
-    return false;
-  }
-
-  return true;
-}
-
-function markWebhookProcessed(messageId: string) {
-  PROCESSED_WEBHOOK_IDS.set(messageId, Date.now());
-
-  if (PROCESSED_WEBHOOK_IDS.size > 5_000) {
-    const cutoff = Date.now() - DEDUPE_TTL_MS;
-    for (const [id, processedAt] of PROCESSED_WEBHOOK_IDS.entries()) {
-      if (processedAt < cutoff) {
-        PROCESSED_WEBHOOK_IDS.delete(id);
-      }
-    }
-  }
-}
-
+const RESEND_PROVIDER = "resend";
+const STALE_PROCESSING_WINDOW_MS = 10 * 60 * 1000;
 
 type ResendWebhookEvent = {
   type: string;
@@ -83,9 +58,105 @@ function isFailureEvent(eventType: string) {
   return ["email.bounced", "email.complained", "email.delivery_delayed"].includes(eventType);
 }
 
+async function claimResendWebhookReceipt(input: {
+  messageId: string;
+  event: ResendWebhookEvent;
+}) {
+  const receipt = await prisma.inboundWebhookReceipt.upsert({
+    where: {
+      provider_messageId: {
+        provider: RESEND_PROVIDER,
+        messageId: input.messageId
+      }
+    },
+    update: {},
+    create: {
+      provider: RESEND_PROVIDER,
+      messageId: input.messageId,
+      eventType: input.event.type,
+      status: InboundWebhookReceiptStatus.PENDING,
+      payload: input.event as unknown as Prisma.InputJsonValue
+    },
+    select: {
+      id: true,
+      status: true,
+      processedAt: true
+    }
+  });
+
+  if (receipt.status === InboundWebhookReceiptStatus.PROCESSED && receipt.processedAt) {
+    return { claimed: false as const, reason: "processed" as const, receipt };
+  }
+
+  const staleBefore = new Date(Date.now() - STALE_PROCESSING_WINDOW_MS);
+  const claimed = await prisma.inboundWebhookReceipt.updateMany({
+    where: {
+      id: receipt.id,
+      OR: [
+        { status: InboundWebhookReceiptStatus.PENDING },
+        { status: InboundWebhookReceiptStatus.FAILED },
+        {
+          status: InboundWebhookReceiptStatus.PROCESSING,
+          OR: [
+            { processingStartedAt: null },
+            { processingStartedAt: { lt: staleBefore } }
+          ]
+        }
+      ]
+    },
+    data: {
+      eventType: input.event.type,
+      status: InboundWebhookReceiptStatus.PROCESSING,
+      processingStartedAt: new Date(),
+      failedAt: null,
+      lastError: null,
+      payload: input.event as unknown as Prisma.InputJsonValue
+    }
+  });
+
+  return {
+    claimed: claimed.count > 0,
+    reason: claimed.count > 0 ? ("claimed" as const) : ("in-flight" as const),
+    receipt
+  };
+}
+
+async function markResendWebhookReceiptProcessed(messageId: string) {
+  await prisma.inboundWebhookReceipt.updateMany({
+    where: {
+      provider: RESEND_PROVIDER,
+      messageId,
+      status: InboundWebhookReceiptStatus.PROCESSING
+    },
+    data: {
+      status: InboundWebhookReceiptStatus.PROCESSED,
+      processingStartedAt: null,
+      processedAt: new Date(),
+      failedAt: null,
+      lastError: null
+    }
+  });
+}
+
+async function markResendWebhookReceiptFailed(messageId: string, error: unknown) {
+  await prisma.inboundWebhookReceipt.updateMany({
+    where: {
+      provider: RESEND_PROVIDER,
+      messageId,
+      status: InboundWebhookReceiptStatus.PROCESSING
+    },
+    data: {
+      status: InboundWebhookReceiptStatus.FAILED,
+      processingStartedAt: null,
+      failedAt: new Date(),
+      lastError: error instanceof Error ? error.message.slice(0, 1000) : "Unknown error"
+    }
+  });
+}
+
 export async function POST(request: Request) {
   const route = "api.webhooks.resend";
-  const rateLimited = applyRouteRateLimit(request, {
+  const rateLimited = await applyRouteRateLimit(request, {
     key: "webhooks-resend",
     category: "webhook"
   });
@@ -100,10 +171,6 @@ export async function POST(request: Request) {
     const timestamp = readHeader(request.headers, "svix-timestamp");
     const signature = readHeader(request.headers, "svix-signature");
 
-    if (hasRecentlyProcessedWebhook(messageId)) {
-      return NextResponse.json({ ok: true, deduped: true, messageId });
-    }
-
     verifySvixWebhookSignature({
       payload,
       messageId,
@@ -113,6 +180,16 @@ export async function POST(request: Request) {
     });
 
     const event = parseResendEvent(payload);
+    const claimedReceipt = await claimResendWebhookReceipt({ messageId, event });
+    if (!claimedReceipt.claimed) {
+      return NextResponse.json({
+        ok: true,
+        deduped: claimedReceipt.reason === "processed",
+        processing: claimedReceipt.reason === "in-flight",
+        messageId
+      });
+    }
+
     const providerMessageId = event.data?.email_id ?? null;
     const notification = providerMessageId
       ? await prisma.emailNotification.findFirst({
@@ -134,7 +211,7 @@ export async function POST(request: Request) {
         });
       }
 
-      markWebhookProcessed(messageId);
+      await markResendWebhookReceiptProcessed(messageId);
       return NextResponse.json({ ok: true, eventType: event.type, messageId });
     }
 
@@ -169,8 +246,7 @@ export async function POST(request: Request) {
           metadata: {
             eventType: event.type,
             providerMessageId,
-            recipient: event.data?.to?.[0] ?? null,
-            subject: event.data?.subject ?? null,
+            recipientMasked: maskEmail(event.data?.to?.[0]),
             bounceType: event.data?.bounce?.type ?? null,
             occurredAt: event.created_at ?? null
           }
@@ -185,18 +261,23 @@ export async function POST(request: Request) {
           eventType: event.type,
           messageId,
           providerMessageId,
-          recipient: event.data?.to?.[0] ?? null,
+          recipientMasked: maskEmail(event.data?.to?.[0]),
           organizationId: notification?.orgId ?? null
         }
       });
 
-      markWebhookProcessed(messageId);
+      await markResendWebhookReceiptProcessed(messageId);
       return NextResponse.json({ ok: true, eventType: event.type, messageId });
     }
 
-    markWebhookProcessed(messageId);
+    await markResendWebhookReceiptProcessed(messageId);
     return NextResponse.json({ ok: true, ignored: true, eventType: event.type, messageId });
   } catch (error) {
+    const messageId = request.headers.get("svix-id");
+    if (messageId) {
+      await markResendWebhookReceiptFailed(messageId, error);
+    }
+
     await logAndCaptureServerError({
       route,
       event: "webhooks.resend.failed",

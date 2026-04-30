@@ -46,11 +46,9 @@ export function logReportGenerationValidationFallback(input: {
     status: "fallback",
     source: "report.generate",
     requestContext: input.requestContext ?? undefined,
-    metadata: {
-      assessmentId: input.assessmentId,
-      analysisJobId: input.analysisJobId,
-      classification: "report_generation.validation_fallback"
-    }
+    assessmentId: input.assessmentId,
+    analysisJobId: input.analysisJobId,
+    classification: "report_generation.validation_fallback"
   });
 }
 
@@ -74,13 +72,11 @@ export function logReportGenerationFailure(input: {
     status: "failed",
     source: "report.generate",
     requestContext: input.requestContext ?? undefined,
-    metadata: {
-      assessmentId: input.assessmentId,
-      reportId: input.reportId ?? null,
-      routingDecisionId: input.routingDecisionId ?? null,
-      classification: getReportGenerationFailureClassification(input.stage),
-      stage: input.stage,
-      message: normalizeErrorMessage(input.error)
-    }
+    assessmentId: input.assessmentId,
+    reportId: input.reportId ?? null,
+    routingDecisionId: input.routingDecisionId ?? null,
+    classification: getReportGenerationFailureClassification(input.stage),
+    stage: input.stage,
+    message: normalizeErrorMessage(input.error)
   });
 }
