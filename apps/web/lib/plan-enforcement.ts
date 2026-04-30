@@ -114,7 +114,7 @@ export function resolveStrictPlanAccess(
         maxAudits: entitlements.limits.audits,
         reportDepth: "expanded",
         analysisDepth: "deeper",
-        briefingAllowed: false,
+        briefingAllowed: entitlements.featureAccess["executive.delivery"],
         priorityAllowed: false
       };
     case "starter":
