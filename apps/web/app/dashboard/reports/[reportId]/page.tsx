@@ -325,9 +325,12 @@ export default async function ReportDetailPage({
             {reportFinalization.canDownload ? (
               <a
                 href={`/api/reports/${report.id}/export`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Opens in a new tab — use your browser's Print → Save as PDF to export"
                 className="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink"
               >
-                Download HTML
+                Export PDF
               </a>
             ) : canShowRetryControl ? (
               <form action={requestReportRegenerationAction}>

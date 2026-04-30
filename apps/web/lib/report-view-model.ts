@@ -761,6 +761,14 @@ export function buildExecutiveReportHtml(model: ExecutiveReportViewModel) {
       .empty-state { margin-top: 24px; background: #fff6e8; }
       .empty { color: #5f6b77; }
       @media (max-width: 900px) { .grid, .section-grid { grid-template-columns: 1fr; } }
+      @media print {
+        body { background: #fff; margin: 0; }
+        main { padding: 0; max-width: 100%; }
+        .panel { border: none; border-radius: 0; padding: 24px; }
+        .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .section-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .stat, .section, .card, .empty-state { break-inside: avoid; }
+      }
     </style>
   </head>
   <body>

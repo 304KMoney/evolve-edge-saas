@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { getExecutiveBriefingById } from "../../../lib/executive-briefing";
 import { requireOrganizationPermissionForOrganization } from "../../../lib/auth";
+import { ExportPdfButton } from "./export-pdf-button";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function BriefingPage({
   );
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#e8fbff,transparent_34%),linear-gradient(135deg,#f8f4ea,#eef7f7)] px-5 py-8 text-ink">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#e8fbff,transparent_34%),linear-gradient(135deg,#f8f4ea,#eef7f7)] px-5 py-8 text-ink print:bg-white print:px-0 print:py-0">
       <div className="mx-auto max-w-5xl">
         <div className="rounded-[32px] border border-white/70 bg-white/90 p-6 shadow-panel backdrop-blur md:p-9">
           <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
@@ -50,13 +51,8 @@ export default async function BriefingPage({
                 {briefing.assessmentName} - Created {formatDate(briefing.createdAt)}
               </p>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <a
-                href={`/api/briefings/${briefing.id}/export`}
-                className="rounded-full bg-[linear-gradient(135deg,#102a43,#315f72)] px-4 py-2 text-sm font-semibold text-white"
-              >
-                Export Markdown
-              </a>
+            <div className="flex flex-wrap gap-3 print:hidden">
+              <ExportPdfButton />
               <Link
                 href={`/dashboard/reports/${briefing.reportId}` as Route}
                 className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink"
@@ -92,7 +88,7 @@ export default async function BriefingPage({
             ))}
           </section>
 
-          <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-7 text-warning">
+          <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-7 text-warning print:hidden">
             This briefing is derived from the validated report only. It is advisory
             material for client walkthroughs and does not replace legal,
             compliance, or certification review.
