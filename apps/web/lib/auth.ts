@@ -51,8 +51,8 @@ export type AppSession = {
 };
 
 export const AUTH_SESSION_COOKIE = "evolve_edge_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 12;
-const SESSION_INACTIVITY_TIMEOUT_SECONDS = 60 * 60 * 2;
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const SESSION_INACTIVITY_TIMEOUT_SECONDS = 60 * 60 * 24 * 7; // 7 days — match TTL, no inactivity kick
 const MAX_ACTIVE_SESSIONS = 5;
 const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 const LOGIN_LOCKOUT_MINUTES = 15;
