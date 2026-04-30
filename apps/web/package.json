@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "prebuild": "cd ../.. && pnpm --filter @evolve-edge/db prisma:generate","build": "next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
