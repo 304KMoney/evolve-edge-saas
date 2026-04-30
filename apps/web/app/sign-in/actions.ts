@@ -51,6 +51,18 @@ export async function signInAction(formData: FormData) {
     redirect("/sign-in?error=config");
   }
 
+  // Temporary: surface real error in production for debugging
+  try {
+    return await _signInActionImpl(formData);
+  } catch (err: unknown) {
+    // Re-throw redirect signals (Next.js uses thrown redirects internally)
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    console.error("[signInAction] Unhandled error:", err);
+    throw err;
+  }
+}
+
+async function _signInActionImpl(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const redirectTo = sanitizeInternalRedirect(
