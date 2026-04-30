@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "AuditWorkflowCheckpoint_workflowDispatchId_nodeOrder_createdAt_" RENAME TO "AuditWorkflowCheckpoint_workflowDispatchId_nodeOrder_create_idx";
